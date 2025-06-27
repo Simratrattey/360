@@ -37,24 +37,6 @@ export default function LoginPage() {
   const { login, googleLogin, error, clearError } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const handleGoogleSignIn = useGoogleLogin({
-    onSuccess: async credentialResponse => {
-      try {
-        // this is your existing AuthContext.googleLogin()
-        await googleLogin(credentialResponse.credential);
-        navigate('/');
-      } catch (err) {
-        console.error('Google login failed', err);
-        alert('Google login error');
-      }
-    },
-    onError: () => {
-      console.error('Google login encountered an error');
-      alert('Google login failed');
-    },
-    flow: 'implicit', // popup-based flow
-  });
-
   // Animate features on mount
   useEffect(() => {
     const timer = setTimeout(() => setShowFeatures(true), 500);
