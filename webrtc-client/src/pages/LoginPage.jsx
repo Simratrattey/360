@@ -50,6 +50,7 @@ export default function LoginPage() {
       google.accounts.id.initialize({
         client_id: clientId,
         callback: handleGoogleResponse,
+        ux_mode: 'popup',
       });
     }
   }, []);
