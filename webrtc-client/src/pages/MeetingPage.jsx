@@ -38,8 +38,8 @@ export default function MeetingPage() {
   const chatRef = useRef(null);
 
   useEffect(() => {
-    if (roomId && user && !hasJoinedRef.current) {
-      hasJoinedRef.current = true;
+    if (roomId && user) {
+      console.log('Calling joinMeeting for room:', roomId);
       joinMeeting(roomId);
     }
     return () => leaveMeeting();
