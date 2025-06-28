@@ -72,9 +72,6 @@ export async function googleAuth(req, res, next) {
 
     // 3) If still no user, create a brand-new one
     if (!user) {
-      user.googleId   = payload.sub;
-      user.avatarUrl  = payload.picture;
-    } else {
       user = new User({
         email:      payload.email,
         fullName:   payload.name,
