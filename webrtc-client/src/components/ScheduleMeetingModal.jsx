@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { scheduleMeeting } from '../services/meetingService';
-import { fetchContacts } from '../services/userService'; // your GET /api/users
+import { fetchContacts } from '../api/userService.js';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
