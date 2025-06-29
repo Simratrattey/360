@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 
@@ -40,6 +41,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState([]);
   const [messageNotifications, setMessageNotifications] = useState([]);
+  const [scheduling, setScheduling] = useState(false);
 
   useEffect(() => {
     // Fetch active rooms
@@ -315,8 +317,9 @@ export default function DashboardPage() {
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setScheduling(true)}
+            className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
           >
             <Users className="h-7 w-7 mb-2" />
             Add Contact
@@ -331,6 +334,10 @@ export default function DashboardPage() {
           </motion.button>
         </div>
       </motion.div>
+      <ScheduleMeetingModal
+        open={scheduling}
+        onClose={() => setScheduling(false)}
+      />
     </div>
   );
 } 

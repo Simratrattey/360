@@ -28,10 +28,12 @@ import conversationRoutes from './src/routes/conversation.js';
 import messageRoutes from './src/routes/message.js';
 import userRoutes from './src/routes/user.js';
 import fileRoutes from './src/routes/file.js';
+import meetingRoutes from './src/routes/meetings.js';
 
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { connectDB } from './src/config/database.js';
+
 
 const app = express();
 app.set('trust proxy', 1);
@@ -768,6 +770,7 @@ app.get('/api/rooms', (req, res) => {
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 // Serve uploaded message files statically from /uploads/messages at /uploads/messages/*.
 app.use('/uploads/messages', (req, res, next) => {
