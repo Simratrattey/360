@@ -1,6 +1,6 @@
 // src/controllers/meetingController.js
 import Meeting from '../models/meeting.js';
-import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 
 export const createMeeting = async (req, res, next) => {
   try {
@@ -13,7 +13,7 @@ export const createMeeting = async (req, res, next) => {
       recurrence
     } = req.body;
 
-    const roomId = nanoid(10);
+    const roomId = randomUUID();
     const meeting = await Meeting.create({
       title,
       description,
