@@ -1,12 +1,14 @@
-// routes/meetings.js
-const express = require('express');
-const { createMeeting, getUpcomingMeetings, getMeetingById } = require('../controllers/meetingController');
-const auth = require('../middleware/auth');  // your JWT-check middleware
+import express from 'express';
+import {
+  createMeeting,
+  getUpcomingMeetings,
+  getMeetingById
+} from '../controllers/meetingController.js';
+
 const router = express.Router();
-
-router.use(auth);
-router.post('/', createMeeting);
+router.post('/',        createMeeting);
 router.get('/upcoming', getUpcomingMeetings);
-router.get('/:id', getMeetingById);
+router.get('/:id',      getMeetingById);
 
-module.exports = router;
+// ← add this if it isn’t there already:
+export default router;
