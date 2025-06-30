@@ -1,5 +1,5 @@
 // src/services/meetingService.js
-import api from './api'; // or wherever your axios/http instance lives
+import api from '../api/client.js';
 
 export const scheduleMeeting = data =>
   api.post('/meetings', data).then(r => r.data);
