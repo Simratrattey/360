@@ -1,14 +1,14 @@
 // src/pages/MeetingsPage.jsx
 import { useEffect, useState } from 'react';
 import { fetchUpcomingMeetings } from '../services/meetingService';
-import { Button } from '../components/ui/button.jsx';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardHeader,
   CardTitle,
   CardContent,
   CardFooter,
-} from '../components/ui/card.jsx';
+} from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar as CalendarIcon } from 'lucide-react';
