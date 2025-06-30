@@ -318,7 +318,10 @@ export default function DashboardPage() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setScheduling(true)}
+            onClick={() => {
+              console.log('🔔 Schedule clicked! scheduling →', !scheduling);
+              setScheduling(true)
+            }}
             className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
           >
             <Users className="h-7 w-7 mb-2" />
