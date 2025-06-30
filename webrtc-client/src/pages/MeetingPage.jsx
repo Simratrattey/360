@@ -75,7 +75,14 @@ export default function MeetingPage() {
       setRecvTransport(recvT);
 
       // d) Publish Local Media
-      const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      let local;
+      try {
+        local = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      } catch (err) {
+        console.error('🛑 getUserMedia failed:', err);
+        alert('Camera & microphone access is required to join the meeting. Please allow permissions in your browser.');
+        return;
+      }
       setLocalStream(local);
       local.getTracks().forEach(track => sendT.produce({ track }));
 
