@@ -318,10 +318,7 @@ export default function DashboardPage() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              console.log('🔔 Schedule clicked! scheduling →', !scheduling);
-              setScheduling(true)
-            }}
+            onClick={() => navigate('/meetings')}
             className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
           >
             <Users className="h-7 w-7 mb-2" />
@@ -329,8 +326,9 @@ export default function DashboardPage() {
           </motion.button>
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate('/messages')}
+            className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
           >
             <Calendar className="h-7 w-7 mb-2" />
             Schedule
