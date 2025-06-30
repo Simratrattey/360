@@ -26,25 +26,37 @@ export default function MeetingsPage() {
   const reload = () => fetchUpcomingMeetings().then(setMeetings);
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 p-6">
-      {/* Left: Calendar + Schedule */}
+    <div className="flex flex-col md:flex-row gap-8 p-6">
+      {/* Left: Calendar & Button */}
       <div className="w-full md:w-1/3 space-y-6">
-        <div className="rounded-md border p-4 bg-white">
-          <h2 className="text-lg font-semibold mb-4">Calendar</h2>
-          <Calendar mode="single" selected={new Date()} onSelect={() => {}} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Calendar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Calendar
+              mode="single"
+              selected={new Date()}
+              className="rounded-md border"
+              onSelect={() => {}}
+            />
+          </CardContent>
+        </Card>
         <Button className="w-full" onClick={() => setIsModalOpen(true)}>
-          Schedule Meeting
+          + Schedule Meeting
         </Button>
       </div>
 
       {/* Right: Upcoming Meetings */}
-      <div className="w-full md:w-2/3 space-y-6">
-        <h2 className="text-xl font-bold">Upcoming Meetings</h2>
+      <div className="w-full md:w-2/3">
+        <h2 className="text-xl font-bold mb-4">Upcoming Meetings</h2>
         {meetings.length === 0 ? (
-          <div className="text-secondary-500 text-center mt-12">
-            <CalendarIcon className="w-12 h-12 mx-auto mb-4" />
-            <p className="text-lg">No upcoming meetings.</p>
+          <div className="flex flex-col items-center justify-center h-[50vh] text-center text-muted-foreground">
+            <CalendarIcon className="w-12 h-12 mb-4" />
+            <p className="text-lg font-medium">No upcoming meetings.</p>
+            <p className="text-sm text-secondary-500 mt-1">
+              All your scheduled meetings will show up here.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -64,15 +76,18 @@ export default function MeetingsPage() {
                       </CardTitle>
                     </CardHeader>
 
-                    <CardContent className="flex-grow space-y-2">
-                      <p className="text-sm text-secondary-500">
-                        {new Date(m.startTime).toLocaleString()} &middot; {m.durationMinutes} min
+                    <CardContent className="flex-grow space-y-2 text-sm text-muted-foreground">
+                      <p>
+                        {new Date(m.startTime).toLocaleString()} &middot;{' '}
+                        {m.durationMinutes} min
                       </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Organizer:</span> {m.organizer.fullName}
+                      <p>
+                        <span className="font-medium text-primary">Organizer:</span>{' '}
+                        {m.organizer.fullName}
                       </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Participants:</span> {m.participants.map(p => p.fullName).join(', ')}
+                      <p>
+                        <span className="font-medium text-primary">Participants:</span>{' '}
+                        {m.participants.map((p) => p.fullName).join(', ')}
                       </p>
                     </CardContent>
 

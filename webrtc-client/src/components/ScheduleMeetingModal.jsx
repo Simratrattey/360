@@ -28,38 +28,45 @@ export default function ScheduleMeetingModal({ open, onClose }) {
   const [selected, setSelected] = useState([]);
 
   useEffect(() => {
-    API.get('/api/users')
-      .then(res => setContacts(res.data || []))
-      .catch(console.error);
-  }, []);
+    if (open) {
+      API.get('/api/users')
+        .then(res => setContacts(res.data || []))
+        .catch(console.error);
+    }
+  }, [open]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await scheduleMeeting({
+      title,
+      description: desc,
+      startTime: start.toISOString(),
+      durationMinutes: duration,
+      recurrence: recurrence === 'none' ? null : { frequency: recurrence, interval: 1 },
+      participants: selected.map((u) => u._id),
+    });
+    // Reset form
+    setTitle('');
+    setDesc('');
+    setStart(new Date());
+    setDuration(60);
+    setRecurrence('none');
+    setSelected([]);
+    onClose();
+  };
 
   if (!open) return null;
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Schedule Meeting</DialogTitle>
+          <DialogTitle>Schedule a Meeting</DialogTitle>
         </DialogHeader>
 
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            await scheduleMeeting({
-              title,
-              description: desc,
-              startTime: start.toISOString(),
-              durationMinutes: duration,
-              recurrence: { frequency: recurrence, interval: 1 },
-              participants: selected.map((u) => u._id),
-            });
-            onClose();
-          }}
-          className="space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <Label htmlFor="title">
-              Title<span className="text-red-500">*</span>
-            </Label>
+            <Label htmlFor="title">Title<span className="text-red-500">*</span></Label>
             <Input
               id="title"
               value={title}
@@ -78,22 +85,21 @@ export default function ScheduleMeetingModal({ open, onClose }) {
             />
           </div>
 
-          <div>
-            <Label>
-              When<span className="text-red-500">*</span>
-            </Label>
-            <DateTimePicker value={start} onChange={setStart} />
-          </div>
-
-          <div>
-            <Label htmlFor="duration">Duration (minutes)</Label>
-            <Input
-              id="duration"
-              type="number"
-              min={1}
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Start Time</Label>
+              <DateTimePicker value={start} onChange={setStart} />
+            </div>
+            <div>
+              <Label htmlFor="duration">Duration (minutes)</Label>
+              <Input
+                id="duration"
+                type="number"
+                min={1}
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              />
+            </div>
           </div>
 
           <div>
@@ -111,7 +117,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
 
           <div>
             <Label>Participants</Label>
-            <div className="max-h-40 overflow-auto space-y-1">
+            <div className="max-h-48 overflow-y-auto rounded-md border p-2 space-y-1">
               {contacts.map((u) => (
                 <div key={u._id} className="flex items-center">
                   <Checkbox
@@ -124,7 +130,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
                       );
                     }}
                   />
-                  <span className="ml-2">
+                  <span className="ml-2 text-sm text-muted-foreground">
                     {u.fullName || u.username} ({u.email})
                   </span>
                 </div>
@@ -132,11 +138,11 @@ export default function ScheduleMeetingModal({ open, onClose }) {
             </div>
           </div>
 
-          <DialogFooter className="justify-end space-x-2">
-            <Button variant="outline" onClick={onClose}>
+          <DialogFooter className="pt-4 space-x-2">
+            <Button variant="outline" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit">Schedule</Button>
           </DialogFooter>
         </form>
       </DialogContent>
