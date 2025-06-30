@@ -30,7 +30,17 @@ export default function ScheduleMeetingModal({ open, onClose }) {
   useEffect(() => {
     if (open) {
       API.get('/api/users')
-        .then(res => setContacts(res.data || []))
+        .then(res => {
+          console.log('Fetched users:', res.data);
+          if (Array.isArray(res.data)) {
+            setContacts(res.data);
+          } else if (Array.isArray(res.data.users)) {
+            setContacts(res.data.users);
+          } else {
+            console.error('Invalid contacts format:', res.data);
+            setContacts([]);
+          }
+        })
         .catch(console.error);
     }
   }, [open]);
@@ -59,7 +69,8 @@ export default function ScheduleMeetingModal({ open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent aria-describedby="schedule-desc" id="schedule-dialog" className="max-w-2xl">
+      <DialogContent aria-describedby="schedule-desc">
+        <p id="schedule-desc" className="sr-only">Form to schedule a new meeting.</p>
         <DialogHeader>
           <DialogTitle>Schedule a Meeting</DialogTitle>
         </DialogHeader>
@@ -118,7 +129,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
           <div>
             <Label>Participants</Label>
             <div className="max-h-48 overflow-y-auto rounded-md border p-2 space-y-1">
-              {(contacts || []).map((u) => (
+              {Array.isArray(contacts) && contacts.map((u) => (
                 <div key={u._id} className="flex items-center">
                   <Checkbox
                     checked={selected.some((s) => s._id === u._id)}
