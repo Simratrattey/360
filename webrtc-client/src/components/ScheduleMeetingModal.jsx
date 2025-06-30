@@ -30,16 +30,9 @@ export default function ScheduleMeetingModal({ open, onClose }) {
   useEffect(() => {
     if (open) {
       API.get('/api/users')
-        .then(res => {
+        .then((res) => {
           console.log('Fetched users:', res.data);
-          if (Array.isArray(res.data)) {
-            setContacts(res.data);
-          } else if (Array.isArray(res.data.users)) {
-            setContacts(res.data.users);
-          } else {
-            console.error('Invalid contacts format:', res.data);
-            setContacts([]);
-          }
+          setContacts(Array.isArray(res.data.users) ? res.data.users : []);
         })
         .catch(console.error);
     }
@@ -70,7 +63,9 @@ export default function ScheduleMeetingModal({ open, onClose }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent aria-describedby="schedule-desc">
-        <p id="schedule-desc" className="sr-only">Form to schedule a new meeting.</p>
+        <p id="schedule-desc" className="sr-only">
+          Form to schedule a new meeting.
+        </p>
         <DialogHeader>
           <DialogTitle>Schedule a Meeting</DialogTitle>
         </DialogHeader>
