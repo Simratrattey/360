@@ -8,6 +8,7 @@ import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import MeetingPage from './pages/MeetingPage.jsx';
+import MeetingsPage from './pages/MeetingsPage.jsx';
 import ContactsPage from './pages/ContactsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
@@ -35,7 +36,7 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/meetings" element={<LandingPage />} />
+          <Route path="/meetings" element={<MeetingsPage />} />
           <Route path="/meeting/:roomId" element={<MeetingPage />} />
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
