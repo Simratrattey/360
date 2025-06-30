@@ -90,6 +90,8 @@ app.use('/api/auth', authRoutes);
 
 // File routes should be accessible to authenticated users, so register before auth middleware
 app.use('/api/files', fileRoutes);
+app.use('/api/sfu', sfuRoutes);
+
 
 app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
@@ -126,7 +128,6 @@ async function initMediasoup() {
 initMediasoup();
 
 import sfuRoutes from './src/routes/sfu.js';
-app.use('/api/sfu', sfuRoutes);
 
 // ─── Recording upload endpoint ────────────────────────────────────────────
 // Temporarily store uploads, then move into a per-session folder
