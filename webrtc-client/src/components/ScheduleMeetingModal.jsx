@@ -59,7 +59,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent aria-describedby="schedule-desc" id="schedule-dialog" className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Schedule a Meeting</DialogTitle>
         </DialogHeader>
@@ -118,7 +118,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
           <div>
             <Label>Participants</Label>
             <div className="max-h-48 overflow-y-auto rounded-md border p-2 space-y-1">
-              {contacts.map((u) => (
+              {(contacts || []).map((u) => (
                 <div key={u._id} className="flex items-center">
                   <Checkbox
                     checked={selected.some((s) => s._id === u._id)}
