@@ -3,8 +3,20 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import API from '../api/client.js';
 import { scheduleMeeting } from '../api/meetings.js';
-import ReactDatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectTrigger, SelectContent, SelectItem } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DateTimePicker } from '@/components/ui/DateTimePicker';
 
 export default function ScheduleMeetingModal({ open, onClose }) {
   const [title, setTitle] = useState('');
@@ -23,128 +35,111 @@ export default function ScheduleMeetingModal({ open, onClose }) {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-lg w-full p-6 relative">
-        {/* close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 hover:text-gray-800"
-        >
-          <X className="h-5 w-5 text-gray-600" />
-        </button>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Schedule Meeting</DialogTitle>
+        </DialogHeader>
 
-        <h2 className="text-xl font-semibold mb-4">Schedule Meeting</h2>
         <form
-          onSubmit={async e => {
+          onSubmit={async (e) => {
             e.preventDefault();
             await scheduleMeeting({
               title,
               description: desc,
-              startTime: start,
+              startTime: start.toISOString(),
               durationMinutes: duration,
               recurrence: { frequency: recurrence, interval: 1 },
-              participants: selected.map(u => u._id),
+              participants: selected.map((u) => u._id),
             });
             onClose();
           }}
           className="space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium mb-1">Title<span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              className="w-full border rounded p-2"
+            <Label htmlFor="title">
+              Title<span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="title"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <textarea
-              className="w-full border rounded p-2"
+            <Label htmlFor="desc">Description</Label>
+            <Textarea
+              id="desc"
               value={desc}
-              onChange={e => setDesc(e.target.value)}
+              onChange={(e) => setDesc(e.target.value)}
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">When<span className="text-red-500">*</span></label>
-            <ReactDatePicker
-              selected={start}
-              onChange={setStart}
-              showTimeSelect
-              dateFormat="Pp"
-              className="w-full border rounded p-2"
-            />
+            <Label>
+              When<span className="text-red-500">*</span>
+            </Label>
+            <DateTimePicker value={start} onChange={setStart} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
-            <input
+            <Label htmlFor="duration">Duration (minutes)</Label>
+            <Input
+              id="duration"
               type="number"
-              className="w-full border rounded p-2"
+              min={1}
               value={duration}
-              onChange={e => setDuration(Number(e.target.value))}
+              onChange={(e) => setDuration(Number(e.target.value))}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Recurrence</label>
-            <select
-              className="w-full border rounded p-2"
-              value={recurrence}
-              onChange={e => setRecurrence(e.target.value)}
-            >
-              <option value="none">None</option>
-              <option value="weekly">Weekly</option>
-              <option value="biweekly">Bi-weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
+            <Label>Recurrence</Label>
+            <Select value={recurrence} onValueChange={setRecurrence}>
+              <SelectTrigger className="w-full" />
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Participants</label>
-            <div className="max-h-40 overflow-auto border rounded p-2">
-              {contacts.map(u => (
-                <label key={u._id} className="flex items-center mb-1">
-                  <input
-                    type="checkbox"
-                    className="mr-2"
-                    checked={selected.some(s => s._id === u._id)}
-                    onChange={() => {
-                      setSelected(sel =>
-                        sel.some(s => s._id === u._id)
-                          ? sel.filter(s => s._id !== u._id)
-                          : [...sel, u]
+            <Label>Participants</Label>
+            <div className="max-h-40 overflow-auto space-y-1">
+              {contacts.map((u) => (
+                <div key={u._id} className="flex items-center">
+                  <Checkbox
+                    checked={selected.some((s) => s._id === u._id)}
+                    onCheckedChange={(checked) => {
+                      setSelected((sel) =>
+                        checked
+                          ? [...sel, u]
+                          : sel.filter((s) => s._id !== u._id)
                       );
                     }}
                   />
-                  <span className="text-sm">{u.fullName || u.username} ({u.email})</span>
-                </label>
+                  <span className="ml-2">
+                    {u.fullName || u.username} ({u.email})
+                  </span>
+                </div>
               ))}
             </div>
           </div>
 
-          <div className="flex justify-end space-x-2 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded hover:bg-gray-100"
-            >
+          <DialogFooter className="justify-end space-x-2">
+            <Button variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn-primary px-4 py-2"
-            >
-              Save
-            </button>
-          </div>
+            </Button>
+            <Button type="submit">Save</Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
