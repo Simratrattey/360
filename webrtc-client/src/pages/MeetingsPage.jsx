@@ -37,7 +37,6 @@ export default function MeetingsPage() {
             <Calendar
               mode="single"
               selected={new Date()}
-              className="rounded-md border"
               onSelect={() => {}}
             />
           </CardContent>
@@ -49,15 +48,15 @@ export default function MeetingsPage() {
 
       {/* Right: Upcoming Meetings */}
       <div className="w-full md:w-2/3">
-        <h2 className="text-xl font-bold mb-4">Upcoming Meetings</h2>
+        <h2 className="text-2xl font-semibold mb-4">Upcoming Meetings</h2>
         {meetings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[50vh] text-center text-muted-foreground">
+          <Card className="flex flex-col items-center justify-center h-[300px] text-center text-muted-foreground p-6">
             <CalendarIcon className="w-12 h-12 mb-4" />
             <p className="text-lg font-medium">No upcoming meetings.</p>
             <p className="text-sm text-secondary-500 mt-1">
               All your scheduled meetings will show up here.
             </p>
-          </div>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {meetings.map((m) => {
