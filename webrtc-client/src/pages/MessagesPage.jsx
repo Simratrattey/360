@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Users, Hash, Plus, Search, MoreVertical, Settings, Star, Trash2, Send, Paperclip, Smile, MessageCircle, X, Check } from 'lucide-react';
 import SidebarConversation from '../components/messages/SidebarConversation';
 import ChatWindow from '../components/messages/ChatWindow';
@@ -112,6 +112,23 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
+  const windowFocused = useRef(true);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (window.Notification && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    // Track window focus
+    const onFocus = () => (windowFocused.current = true);
+    const onBlur = () => (windowFocused.current = false);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
 
   // Fetch conversations on mount (REST)
   useEffect(() => {
@@ -160,6 +177,17 @@ export default function MessagesPage() {
     // New message
     chatSocket.on('chat:new', msg => {
       setMessages(prev => [...prev, msg]);
+      // Show browser notification if message is not from current user
+      if (
+        window.Notification &&
+        Notification.permission === 'granted' &&
+        msg.senderId !== user.id &&
+        windowFocused.current
+      ) {
+        const title = msg.senderName || 'New Message';
+        const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
+        new Notification(title, { body });
+      }
     });
     // Edit message
     chatSocket.on('chat:edit', ({ messageId, text }) => {
