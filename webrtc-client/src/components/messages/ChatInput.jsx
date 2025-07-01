@@ -25,16 +25,14 @@ export default function ChatInput({
     // Send typing indicator
     if (onTyping) {
       onTyping(true);
-      
       // Clear previous timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      
-      // Stop typing after 2 seconds of no input
-      typingTimeoutRef.current = setTimeout(() => {
+      // Stop typing instantly when input is cleared
+      if (e.target.value === '') {
         onTyping(false);
-      }, 2000);
+      }
     }
   };
 

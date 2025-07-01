@@ -93,10 +93,10 @@ export default function ConversationDetailsModal({
       setIsEditingName(false);
       setSuccess('Name updated successfully');
       onConversationUpdated();
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to update name');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 
@@ -106,10 +106,10 @@ export default function ConversationDetailsModal({
       setIsEditingDescription(false);
       setSuccess('Description updated successfully');
       onConversationUpdated();
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to update description');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 
@@ -119,11 +119,11 @@ export default function ConversationDetailsModal({
       setSuccess('Admin added successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       console.error('Admin add error:', error);
       setError(error.response?.data?.message || 'Failed to add admin');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 
@@ -133,11 +133,11 @@ export default function ConversationDetailsModal({
       setSuccess('Admin removed successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       console.error('Admin remove error:', error);
       setError(error.response?.data?.message || 'Failed to remove admin');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 
@@ -147,10 +147,10 @@ export default function ConversationDetailsModal({
       setSuccess('Member removed successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to remove member');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 
@@ -163,10 +163,10 @@ export default function ConversationDetailsModal({
       onConversationUpdated();
       setShowAddMemberModal(false);
       setSelectedUserToAdd(null);
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(null);
     } catch (error) {
       setError(error.response?.data?.message || 'Failed to add member');
-      setTimeout(() => setError(null), 3000);
+      setError(null);
     }
   };
 

@@ -351,15 +351,15 @@ export default function MessagesPage() {
       }
       
       setNotification({
-        message: 'Conversation deleted successfully'
+        message: 'Conversation deleted successfully!'
       });
-      setTimeout(() => setNotification(null), 3000);
+      setNotification(null);
     } catch (error) {
       console.error('Error deleting conversation:', error);
       setNotification({
         message: error.response?.data?.message || 'Failed to delete conversation'
       });
-      setTimeout(() => setNotification(null), 3000);
+      setNotification(null);
     }
   };
 
@@ -383,7 +383,7 @@ export default function MessagesPage() {
     setNotification({
       message: 'Conversation created successfully!'
     });
-    setTimeout(() => setNotification(null), 3000);
+    setNotification(null);
   };
 
   const handleConversationUpdated = () => {
@@ -393,7 +393,7 @@ export default function MessagesPage() {
     setNotification({
       message: 'Conversation updated successfully!'
     });
-    setTimeout(() => setNotification(null), 3000);
+    setNotification(null);
   };
 
   const handleConversationDeleted = (conversationId) => {
@@ -412,7 +412,7 @@ export default function MessagesPage() {
     setNotification({
       message: 'Conversation deleted successfully!'
     });
-    setTimeout(() => setNotification(null), 3000);
+    setNotification(null);
   };
 
   const handleUserSelect = async (selectedUser) => {
@@ -435,14 +435,13 @@ export default function MessagesPage() {
       setNotification({
         message: response.data.message || 'Conversation created successfully!'
       });
-      
-      setTimeout(() => setNotification(null), 3000);
+      setNotification(null);
     } catch (error) {
       console.error('Error creating conversation:', error);
       setNotification({
         message: error.response?.data?.message || 'Failed to create conversation'
       });
-      setTimeout(() => setNotification(null), 3000);
+      setNotification(null);
     }
   };
 
