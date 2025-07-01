@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
 import { Picker } from 'emoji-mart';
-import 'emoji-mart/css/emoji-mart.css';
 
 export default function ChatInput({
   input,
