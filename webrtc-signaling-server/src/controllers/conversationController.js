@@ -83,13 +83,12 @@ export async function createConversation(req, res, next) {
       if (!name || !name.trim()) {
         return res.status(400).json({ message: 'Community name is required' });
       }
-      
-      // Check for duplicate community name
+      const trimmedName = name.trim();
+      // Check for duplicate community name (case-insensitive)
       const existingCommunity = await Conversation.findOne({
         type: 'community',
-        name: name.trim()
+        name: { $regex: `^${trimmedName}$`, $options: 'i' }
       });
-
       if (existingCommunity) {
         return res.status(400).json({ message: 'A community with this name already exists' });
       }
@@ -289,22 +288,19 @@ export async function updateConversation(req, res, next) {
 
     if (name !== undefined) {
       const trimmedName = name.trim();
-      
       // Check for duplicate names for groups and communities
       if (conversation.type === 'group' || conversation.type === 'community') {
         const existingConversation = await Conversation.findOne({
           _id: { $ne: conversationId }, // Exclude current conversation
           type: conversation.type,
-          name: trimmedName
+          name: { $regex: `^${trimmedName}$`, $options: 'i' }
         });
-
         if (existingConversation) {
           return res.status(400).json({ 
             message: `A ${conversation.type} with this name already exists` 
           });
         }
       }
-      
       conversation.name = trimmedName;
     }
 
