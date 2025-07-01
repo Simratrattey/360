@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
-import { Picker } from 'emoji-mart';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
 
 export default function ChatInput({
   input,
@@ -73,7 +74,7 @@ export default function ChatInput({
     };
   }, []);
 
-  // Insert emoji at cursor position
+  // Insert emoji at cursor position (emoji-mart v5+)
   const handleEmojiSelect = (emoji) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -180,15 +181,15 @@ export default function ChatInput({
           >
             <Smile className="h-5 w-5" />
           </button>
-          {/* Emoji picker popover */}
+          {/* Emoji picker popover (emoji-mart v5+) */}
           {showEmojiPicker && (
             <div className="absolute bottom-12 right-0 z-50">
               <Picker
-                onSelect={handleEmojiSelect}
+                data={data}
+                onEmojiSelect={handleEmojiSelect}
                 theme="light"
-                showPreview={false}
-                showSkinTones={false}
-                style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}
+                previewPosition="none"
+                skinTonePosition="none"
               />
             </div>
           )}
