@@ -150,6 +150,11 @@ export default function SidebarConversation({
               <typeConfig.icon className="h-3 w-3 text-white" />
             </div>
           )}
+
+          {/* Blue dot for unread messages */}
+          {conv?.unread > 0 && (
+            <span className="absolute -top-1 -left-1 h-3 w-3 rounded-full bg-blue-500 border-2 border-white shadow-md z-10"></span>
+          )}
         </div>
 
         {/* Content */}

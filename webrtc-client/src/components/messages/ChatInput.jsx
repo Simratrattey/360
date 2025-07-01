@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
+import { Picker } from 'emoji-mart';
+import 'emoji-mart/css/emoji-mart.css';
 
 export default function ChatInput({
   input,
@@ -14,6 +16,8 @@ export default function ChatInput({
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef(null);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -70,6 +74,21 @@ export default function ChatInput({
     };
   }, []);
 
+  // Insert emoji at cursor position
+  const handleEmojiSelect = (emoji) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newValue = input.slice(0, start) + emoji.native + input.slice(end);
+    setInput(newValue);
+    setShowEmojiPicker(false);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + emoji.native.length;
+    }, 0);
+  };
+
   return (
     <div className="p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
       {/* File error message */}
@@ -123,7 +142,7 @@ export default function ChatInput({
       )}
 
       {/* Input area */}
-      <div className="flex items-end space-x-3">
+      <div className="flex items-end space-x-3 relative">
         {/* File upload button */}
         <label className="cursor-pointer p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105" title="Upload any file type (max 50MB)">
           <Paperclip className="h-5 w-5" />
@@ -138,6 +157,7 @@ export default function ChatInput({
         {/* Text input */}
         <div className="flex-1 relative">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={handleInputChange}
             onKeyDown={e => { 
@@ -154,11 +174,25 @@ export default function ChatInput({
           
           {/* Emoji button */}
           <button 
-            onClick={onShowEmojiPicker} 
+            type="button"
+            onClick={() => setShowEmojiPicker(v => !v)} 
             className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full hover:bg-gray-100 transition-all duration-200 text-gray-400 hover:text-gray-600"
+            tabIndex={-1}
           >
             <Smile className="h-5 w-5" />
           </button>
+          {/* Emoji picker popover */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-12 right-0 z-50">
+              <Picker
+                onSelect={handleEmojiSelect}
+                theme="light"
+                showPreview={false}
+                showSkinTones={false}
+                style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Send button */}
