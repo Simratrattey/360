@@ -58,6 +58,13 @@ export default function SettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [microphoneDevices, setMicrophoneDevices] = useState([]);
+  const [testingCamera, setTestingCamera] = useState(false);
+  const [testingMic, setTestingMic] = useState(false);
+  const [testStream, setTestStream] = useState(null);
+  const videoRef = React.useRef();
+  const audioRef = React.useRef();
 
   useEffect(() => {
     async function fetchSettings() {
@@ -83,6 +90,31 @@ export default function SettingsPage() {
     }
     fetchSettings();
   }, []);
+
+  // Enumerate devices on mount
+  useEffect(() => {
+    async function getDevices() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); // ask permission
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setCameraDevices(devices.filter(d => d.kind === 'videoinput'));
+        setMicrophoneDevices(devices.filter(d => d.kind === 'audioinput'));
+      } catch (err) {
+        setCameraDevices([]);
+        setMicrophoneDevices([]);
+      }
+    }
+    getDevices();
+  }, []);
+
+  // Clean up test stream
+  useEffect(() => {
+    return () => {
+      if (testStream) {
+        testStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [testStream]);
 
   const updateSetting = (section, key, value) => {
     setSettings(prev => ({
@@ -158,6 +190,45 @@ export default function SettingsPage() {
     } catch (err) {
       setSaveStatus('error');
     }
+  };
+
+  const handleTestCamera = async () => {
+    setTestingCamera(true);
+    setTestingMic(false);
+    if (testStream) testStream.getTracks().forEach(track => track.stop());
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: settings.media.defaultCamera !== 'default' ? { exact: settings.media.defaultCamera } : undefined },
+        audio: false
+      });
+      setTestStream(stream);
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) {
+      alert('Could not access camera');
+    }
+  };
+
+  const handleTestMic = async () => {
+    setTestingMic(true);
+    setTestingCamera(false);
+    if (testStream) testStream.getTracks().forEach(track => track.stop());
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: settings.media.defaultMicrophone !== 'default' ? { exact: settings.media.defaultMicrophone } : undefined },
+        video: false
+      });
+      setTestStream(stream);
+      if (audioRef.current) audioRef.current.srcObject = stream;
+    } catch (err) {
+      alert('Could not access microphone');
+    }
+  };
+
+  const handleStopTest = () => {
+    setTestingCamera(false);
+    setTestingMic(false);
+    if (testStream) testStream.getTracks().forEach(track => track.stop());
+    setTestStream(null);
   };
 
   const renderProfileSection = () => {
@@ -365,61 +436,102 @@ export default function SettingsPage() {
     </div>
   );
 
-  const renderMediaSection = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-2">Default Camera</label>
-          <select
-            value={settings.media.defaultCamera}
-            onChange={(e) => updateSetting('media', 'defaultCamera', e.target.value)}
-            className="input-field"
-          >
-            <option value="default">Default Camera</option>
-            <option value="front">Front Camera</option>
-            <option value="back">Back Camera</option>
-          </select>
+  const renderMediaSection = () => {
+    if (!settings) return <div className="text-center py-8 text-gray-400">Loading...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Default Camera</label>
+            <select
+              value={settings.media.defaultCamera}
+              onChange={e => updateSetting('media', 'defaultCamera', e.target.value)}
+              className="input-field"
+            >
+              <option value="default">System Default</option>
+              {cameraDevices.map(device => (
+                <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${device.deviceId}`}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Default Microphone</label>
+            <select
+              value={settings.media.defaultMicrophone}
+              onChange={e => updateSetting('media', 'defaultMicrophone', e.target.value)}
+              className="input-field"
+            >
+              <option value="default">System Default</option>
+              {microphoneDevices.map(device => (
+                <option key={device.deviceId} value={device.deviceId}>{device.label || `Microphone ${device.deviceId}`}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Video Quality</label>
+            <select
+              value={settings.media.videoQuality}
+              onChange={e => updateSetting('media', 'videoQuality', e.target.value)}
+              className="input-field"
+            >
+              <option value="360p">360p</option>
+              <option value="480p">480p</option>
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Audio Quality</label>
+            <select
+              value={settings.media.audioQuality}
+              onChange={e => updateSetting('media', 'audioQuality', e.target.value)}
+              className="input-field"
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-2">Video Quality</label>
-          <select
-            value={settings.media.videoQuality}
-            onChange={(e) => updateSetting('media', 'videoQuality', e.target.value)}
-            className="input-field"
-          >
-            <option value="360p">360p</option>
-            <option value="480p">480p</option>
-            <option value="720p">720p</option>
-            <option value="1080p">1080p</option>
-          </select>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Camera className="h-5 w-5 text-secondary-600" />
+              <div>
+                <h4 className="font-medium text-secondary-900">Test Camera</h4>
+                <p className="text-sm text-secondary-600">Check your camera settings</p>
+              </div>
+            </div>
+            <button className="btn-outline text-sm" onClick={handleTestCamera} disabled={testingCamera}>Test</button>
+          </div>
+          {testingCamera && (
+            <div className="p-4 bg-secondary-100 rounded-lg flex flex-col items-center">
+              <video ref={videoRef} autoPlay playsInline style={{ width: 240, height: 180, background: '#222', borderRadius: 8 }} />
+              <button className="btn-outline mt-2" onClick={handleStopTest}>Stop</button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Mic className="h-5 w-5 text-secondary-600" />
+              <div>
+                <h4 className="font-medium text-secondary-900">Test Microphone</h4>
+                <p className="text-sm text-secondary-600">Check your microphone settings</p>
+              </div>
+            </div>
+            <button className="btn-outline text-sm" onClick={handleTestMic} disabled={testingMic}>Test</button>
+          </div>
+          {testingMic && (
+            <div className="p-4 bg-secondary-100 rounded-lg flex flex-col items-center">
+              <audio ref={audioRef} autoPlay controls style={{ width: 240, background: '#222', borderRadius: 8 }} />
+              <button className="btn-outline mt-2" onClick={handleStopTest}>Stop</button>
+            </div>
+          )}
         </div>
       </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
-          <div className="flex items-center space-x-3">
-            <Camera className="h-5 w-5 text-secondary-600" />
-            <div>
-              <h4 className="font-medium text-secondary-900">Test Camera</h4>
-              <p className="text-sm text-secondary-600">Check your camera settings</p>
-            </div>
-          </div>
-          <button className="btn-outline text-sm">Test</button>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
-          <div className="flex items-center space-x-3">
-            <Mic className="h-5 w-5 text-secondary-600" />
-            <div>
-              <h4 className="font-medium text-secondary-900">Test Microphone</h4>
-              <p className="text-sm text-secondary-600">Check your microphone settings</p>
-            </div>
-          </div>
-          <button className="btn-outline text-sm">Test</button>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderSectionContent = () => {
     switch (activeSection) {
