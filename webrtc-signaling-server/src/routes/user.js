@@ -9,6 +9,16 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+const avatarUpload = multer({
+  dest: path.join(process.cwd(), 'uploads', 'avatars'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only image files are allowed'));
+  }
+});
+
 // Settings endpoints (must come before /:id)
 router.get('/settings', ctrl.getUserSettings);
 router.put('/settings', ctrl.updateUserSettings);
