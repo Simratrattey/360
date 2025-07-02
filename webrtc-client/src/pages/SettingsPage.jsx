@@ -110,6 +110,26 @@ export default function SettingsPage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    setAvatarUploading(true);
+    try {
+      // Remove avatar in backend (set avatarUrl to empty string)
+      await updateSettings({
+        ...settings,
+        profile: {
+          ...settings.profile,
+          avatarUrl: ''
+        }
+      });
+      updateSetting('profile', 'avatarUrl', '');
+      setAvatarPreview('');
+    } catch (err) {
+      alert('Failed to remove avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaveStatus(null);
     try {
@@ -145,9 +165,21 @@ export default function SettingsPage() {
     return (
       <div className="space-y-6">
         <div className="flex items-center space-x-4">
-          <div className="h-20 w-20 bg-primary-100 rounded-full flex items-center justify-center overflow-hidden">
+          <div className="h-20 w-20 bg-primary-100 rounded-full flex items-center justify-center overflow-hidden relative">
             {avatarPreview ? (
-              <img src={avatarPreview} alt="Profile" className="h-20 w-20 object-cover" />
+              <>
+                <img src={avatarPreview} alt="Profile" className="h-20 w-20 object-cover" />
+                <button
+                  className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 shadow hover:bg-red-100 transition"
+                  onClick={handleRemoveAvatar}
+                  disabled={avatarUploading}
+                  title="Remove avatar"
+                  style={{ zIndex: 2 }}
+                >
+                  <span className="sr-only">Remove</span>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </>
             ) : (
               <User className="h-8 w-8 text-primary-600" />
             )}
@@ -178,8 +210,8 @@ export default function SettingsPage() {
             <input
               type="text"
               value={settings.profile.username}
-              onChange={(e) => updateSetting('profile', 'username', e.target.value)}
-              className="input-field"
+              readOnly
+              className="input-field bg-gray-100 cursor-not-allowed"
             />
           </div>
           <div>
@@ -187,8 +219,8 @@ export default function SettingsPage() {
             <input
               type="email"
               value={settings.profile.email}
-              onChange={(e) => updateSetting('profile', 'email', e.target.value)}
-              className="input-field"
+              readOnly
+              className="input-field bg-gray-100 cursor-not-allowed"
             />
           </div>
           <div>
