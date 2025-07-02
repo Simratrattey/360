@@ -91,11 +91,10 @@ export default function SettingsPage() {
     fetchSettings();
   }, []);
 
-  // Enumerate devices on mount
+  // Enumerate devices on mount (no camera/mic access by default)
   useEffect(() => {
     async function getDevices() {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); // ask permission
         const devices = await navigator.mediaDevices.enumerateDevices();
         setCameraDevices(devices.filter(d => d.kind === 'videoinput'));
         setMicrophoneDevices(devices.filter(d => d.kind === 'audioinput'));
@@ -563,68 +562,82 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-secondary-900">Settings</h1>
-        <p className="text-secondary-600 mt-1">Manage your account preferences</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <div className="card">
-            <nav className="space-y-2">
-              {settingsSections.map((section) => (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                    activeSection === section.id
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-secondary-600 hover:bg-secondary-100'
-                  }`}
-                >
-                  <section.icon className="h-5 w-5" />
-                  <div>
-                    <p className="font-medium">{section.title}</p>
-                    <p className="text-xs opacity-75">{section.description}</p>
-                  </div>
-                </button>
-              ))}
-            </nav>
-          </div>
-        </div>
-
-        <div className="lg:col-span-3">
-          <div className="card">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-secondary-900">
-                  {settingsSections.find(s => s.id === activeSection)?.title}
-                </h2>
-                <p className="text-secondary-600 mt-1">
-                  {settingsSections.find(s => s.id === activeSection)?.description}
-                </p>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="btn-primary flex items-center space-x-2"
-                onClick={handleSave}
-              >
-                <Save className="h-4 w-4" />
-                <span>Save Changes</span>
-              </motion.button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 py-10 px-2 md:px-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Sidebar Navigation */}
+          <aside className="md:w-64 w-full flex-shrink-0">
+            <div className="sticky top-10">
+              <nav className="space-y-2 bg-white/80 rounded-2xl shadow-lg p-4 border border-gray-100">
+                {settingsSections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActiveSection(section.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left transition-all duration-200 font-medium text-lg group focus:outline-none focus:ring-2 focus:ring-primary-400 focus:bg-primary-50/80
+                      ${activeSection === section.id
+                        ? 'bg-gradient-to-r from-blue-100 to-purple-100 text-primary-700 shadow-md'
+                        : 'text-secondary-700 hover:bg-secondary-50 hover:shadow'}
+                    `}
+                  >
+                    <section.icon className={`h-6 w-6 flex-shrink-0 ${activeSection === section.id ? 'text-primary-600' : 'text-secondary-400 group-hover:text-primary-500'}`} />
+                    <span>{section.title}</span>
+                  </button>
+                ))}
+              </nav>
             </div>
+          </aside>
 
-            {renderSectionContent()}
+          {/* Main Content */}
+          <main className="flex-1">
+            <motion.div
+              key={activeSection}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white/90 rounded-2xl shadow-2xl border border-gray-100 p-8 mb-8"
+            >
+              <div className="flex items-center mb-8 gap-4">
+                {settingsSections.find(s => s.id === activeSection)?.icon && (
+                  <span className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-gradient-to-br from-blue-100 to-purple-100 text-primary-600 shadow">
+                    {React.createElement(settingsSections.find(s => s.id === activeSection).icon, { className: 'h-7 w-7' })}
+                  </span>
+                )}
+                <div>
+                  <h2 className="text-2xl font-bold text-secondary-900 mb-1">
+                    {settingsSections.find(s => s.id === activeSection)?.title}
+                  </h2>
+                  <p className="text-secondary-600 text-base">
+                    {settingsSections.find(s => s.id === activeSection)?.description}
+                  </p>
+                </div>
+              </div>
 
-            {saveStatus === 'success' && (
-              <div className="mt-4 text-green-600 font-medium">Settings saved successfully!</div>
-            )}
-            {saveStatus && saveStatus !== 'success' && (
-              <div className="mt-4 text-red-600 font-medium">{typeof saveStatus === 'string' ? saveStatus : 'Failed to save settings. Please try again.'}</div>
-            )}
-          </div>
+              <div className="transition-all duration-300">
+                {renderSectionContent()}
+              </div>
+
+              <div className="flex justify-end mt-8 gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="btn-primary flex items-center space-x-2 px-6 py-3 rounded-xl text-lg shadow-md focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  onClick={handleSave}
+                  disabled={saveStatus === 'saving'}
+                >
+                  <Save className="h-5 w-5" />
+                  <span>Save Changes</span>
+                </motion.button>
+                {/* Optionally add a Cancel/Reset button here */}
+              </div>
+
+              {saveStatus === 'success' && (
+                <div className="mt-4 text-green-600 font-medium">Settings saved successfully!</div>
+              )}
+              {saveStatus && saveStatus !== 'success' && (
+                <div className="mt-4 text-red-600 font-medium">{typeof saveStatus === 'string' ? saveStatus : 'Failed to save settings. Please try again.'}</div>
+              )}
+            </motion.div>
+          </main>
         </div>
       </div>
     </div>
