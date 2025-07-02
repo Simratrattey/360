@@ -16,6 +16,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { uploadAvatar } from '../api/userService';
 
 const settingsSections = [
   {
@@ -58,7 +59,8 @@ export default function SettingsPage() {
       fullName: user?.fullName || '',
       username: user?.username || '',
       email: user?.email || '',
-      bio: 'Software engineer passionate about building great products.'
+      bio: 'Software engineer passionate about building great products.',
+      avatarUrl: user?.avatarUrl || ''
     },
     notifications: {
       emailNotifications: true,
@@ -83,6 +85,8 @@ export default function SettingsPage() {
       audioQuality: 'high'
     }
   });
+  const [avatarPreview, setAvatarPreview] = useState(settings.profile.avatarUrl);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const updateSetting = (section, key, value) => {
     setSettings(prev => ({
@@ -94,19 +98,40 @@ export default function SettingsPage() {
     }));
   };
 
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarUploading(true);
+    try {
+      const { avatarUrl } = await uploadAvatar(file);
+      updateSetting('profile', 'avatarUrl', avatarUrl);
+      setAvatarPreview(avatarUrl);
+    } catch (err) {
+      alert('Failed to upload avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   const renderProfileSection = () => (
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
-        <div className="h-20 w-20 bg-primary-100 rounded-full flex items-center justify-center">
-          <User className="h-8 w-8 text-primary-600" />
+        <div className="h-20 w-20 bg-primary-100 rounded-full flex items-center justify-center overflow-hidden">
+          {avatarPreview ? (
+            <img src={avatarPreview} alt="Profile" className="h-20 w-20 object-cover" />
+          ) : (
+            <User className="h-8 w-8 text-primary-600" />
+          )}
         </div>
         <div>
           <h3 className="text-lg font-semibold text-secondary-900">Profile Picture</h3>
           <p className="text-sm text-secondary-600">Upload a new profile picture</p>
-          <button className="btn-outline text-sm mt-2">
+          <label className="btn-outline text-sm mt-2 cursor-pointer">
             <Camera className="h-4 w-4 mr-2" />
-            Change Photo
-          </button>
+            {avatarUploading ? 'Uploading...' : 'Change Photo'}
+            <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+          </label>
         </div>
       </div>
 

@@ -101,4 +101,7 @@ router.get('/:filename', (req, res) => {
   }
 });
 
+// Serve avatar files
+router.use('/avatars', express.static(path.join(process.cwd(), 'uploads', 'avatars')));
+
 export default router; 
