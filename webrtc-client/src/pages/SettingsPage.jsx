@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Settings, 
@@ -16,7 +16,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import { uploadAvatar, updateSettings } from '../api/userService';
+import { uploadAvatar, updateSettings, getUserSettings } from '../api/userService';
 
 const settingsSections = [
   {
@@ -88,6 +88,31 @@ export default function SettingsPage() {
   const [avatarPreview, setAvatarPreview] = useState(settings.profile.avatarUrl);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
+
+  useEffect(() => {
+    async function fetchSettings() {
+      try {
+        const data = await getUserSettings();
+        setSettings({
+          profile: {
+            fullName: data.profile.fullName || '',
+            username: data.profile.username || '',
+            email: data.profile.email || '',
+            bio: data.profile.bio || '',
+            avatarUrl: data.profile.avatarUrl || ''
+          },
+          notifications: data.notifications || {},
+          privacy: data.privacy || {},
+          appearance: data.appearance || {},
+          media: data.media || {}
+        });
+        setAvatarPreview(data.profile.avatarUrl || '');
+      } catch (err) {
+        // Optionally show error
+      }
+    }
+    fetchSettings();
+  }, []);
 
   const updateSetting = (section, key, value) => {
     setSettings(prev => ({

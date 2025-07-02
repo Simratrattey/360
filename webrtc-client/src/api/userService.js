@@ -12,4 +12,9 @@ export async function uploadAvatar(file) {
 export async function updateSettings(settings) {
   const response = await API.put('/api/users/settings', settings);
   return response.data;
+}
+
+export async function getUserSettings() {
+  const response = await API.get('/api/users/settings');
+  return response.data;
 } 
