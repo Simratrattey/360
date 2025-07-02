@@ -1,4 +1,5 @@
 import User from '../models/user.js';
+export { User };
 
 // Get all users (for conversation creation)
 export async function getAllUsers(req, res, next) {
