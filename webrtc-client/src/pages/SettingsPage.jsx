@@ -143,9 +143,13 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaveStatus(null);
     try {
-      await updateSettings(settings);
-      await fetchSettings();
-      setSaveStatus('success');
+      const result = await updateSettings(settings);
+      if (result.success) {
+        await fetchSettings();
+        setSaveStatus('success');
+      } else {
+        setSaveStatus(result.error || 'error');
+      }
     } catch (err) {
       setSaveStatus('error');
     }
@@ -461,8 +465,8 @@ export default function SettingsPage() {
             {saveStatus === 'success' && (
               <div className="mt-4 text-green-600 font-medium">Settings saved successfully!</div>
             )}
-            {saveStatus === 'error' && (
-              <div className="mt-4 text-red-600 font-medium">Failed to save settings. Please try again.</div>
+            {saveStatus && saveStatus !== 'success' && (
+              <div className="mt-4 text-red-600 font-medium">{typeof saveStatus === 'string' ? saveStatus : 'Failed to save settings. Please try again.'}</div>
             )}
           </div>
         </div>

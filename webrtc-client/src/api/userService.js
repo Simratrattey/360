@@ -10,8 +10,15 @@ export async function uploadAvatar(file) {
 }
 
 export async function updateSettings(settings) {
-  const response = await API.put('/api/users/settings', settings);
-  return response.data;
+  try {
+    const response = await API.put('/api/users/settings', settings);
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message || 'Failed to save settings'
+    };
+  }
 }
 
 export async function getUserSettings() {
