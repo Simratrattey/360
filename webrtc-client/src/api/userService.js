@@ -7,4 +7,9 @@ export async function uploadAvatar(file) {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
   return response.data; // { avatarUrl: ... }
+}
+
+export async function updateSettings(settings) {
+  const response = await API.put('/api/users/settings', settings);
+  return response.data;
 } 

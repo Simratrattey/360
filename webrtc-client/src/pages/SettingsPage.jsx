@@ -16,7 +16,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
-import { uploadAvatar } from '../api/userService';
+import { uploadAvatar, updateSettings } from '../api/userService';
 
 const settingsSections = [
   {
@@ -87,6 +87,7 @@ export default function SettingsPage() {
   });
   const [avatarPreview, setAvatarPreview] = useState(settings.profile.avatarUrl);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
 
   const updateSetting = (section, key, value) => {
     setSettings(prev => ({
@@ -111,6 +112,16 @@ export default function SettingsPage() {
       alert('Failed to upload avatar');
     } finally {
       setAvatarUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaveStatus(null);
+    try {
+      await updateSettings(settings);
+      setSaveStatus('success');
+    } catch (err) {
+      setSaveStatus('error');
     }
   };
 
@@ -412,6 +423,7 @@ export default function SettingsPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="btn-primary flex items-center space-x-2"
+                onClick={handleSave}
               >
                 <Save className="h-4 w-4" />
                 <span>Save Changes</span>
@@ -419,6 +431,13 @@ export default function SettingsPage() {
             </div>
 
             {renderSectionContent()}
+
+            {saveStatus === 'success' && (
+              <div className="mt-4 text-green-600 font-medium">Settings saved successfully!</div>
+            )}
+            {saveStatus === 'error' && (
+              <div className="mt-4 text-red-600 font-medium">Failed to save settings. Please try again.</div>
+            )}
           </div>
         </div>
       </div>
