@@ -375,66 +375,84 @@ export default function SettingsPage() {
     );
   };
 
-  const renderAppearanceSection = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="p-4 bg-secondary-50 rounded-lg">
-          <h4 className="font-medium text-secondary-900 mb-2">Theme</h4>
-          <div className="flex space-x-4">
-            <button
-              onClick={() => updateSetting('appearance', 'theme', 'light')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
-                settings.appearance.theme === 'light' 
-                  ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                  : 'border-secondary-300 bg-white text-secondary-700'
-              }`}
-            >
-              <Sun className="h-4 w-4" />
-              <span>Light</span>
-            </button>
-            <button
-              onClick={() => updateSetting('appearance', 'theme', 'dark')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
-                settings.appearance.theme === 'dark' 
-                  ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                  : 'border-secondary-300 bg-white text-secondary-700'
-              }`}
-            >
-              <Moon className="h-4 w-4" />
-              <span>Dark</span>
-            </button>
-            <button
-              onClick={() => updateSetting('appearance', 'theme', 'auto')}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
-                settings.appearance.theme === 'auto' 
-                  ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                  : 'border-secondary-300 bg-white text-secondary-700'
-              }`}
-            >
-              <Smartphone className="h-4 w-4" />
-              <span>Auto</span>
-            </button>
+  const renderAppearanceSection = () => {
+    if (!settings) return <div className="text-center py-8 text-gray-400">Loading...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="p-4 bg-secondary-50 rounded-lg">
+            <h4 className="font-medium text-secondary-900 mb-2">Theme</h4>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => updateSetting('appearance', 'theme', 'light')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
+                  settings.appearance.theme === 'light' 
+                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                    : 'border-secondary-300 bg-white text-secondary-700'
+                }`}
+              >
+                <Sun className="h-4 w-4" />
+                <span>Light</span>
+              </button>
+              <button
+                onClick={() => updateSetting('appearance', 'theme', 'dark')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
+                  settings.appearance.theme === 'dark' 
+                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                    : 'border-secondary-300 bg-white text-secondary-700'
+                }`}
+              >
+                <Moon className="h-4 w-4" />
+                <span>Dark</span>
+              </button>
+              <button
+                onClick={() => updateSetting('appearance', 'theme', 'auto')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg border ${
+                  settings.appearance.theme === 'auto' 
+                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
+                    : 'border-secondary-300 bg-white text-secondary-700'
+                }`}
+              >
+                <Smartphone className="h-4 w-4" />
+                <span>Auto</span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
-          <div>
-            <h4 className="font-medium text-secondary-900">Compact Mode</h4>
-            <p className="text-sm text-secondary-600">Use a more compact layout</p>
+          <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
+            <div>
+              <h4 className="font-medium text-secondary-900">Compact Mode</h4>
+              <p className="text-sm text-secondary-600">Use a more compact layout</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!settings.appearance.compactMode}
+                onChange={e => updateSetting('appearance', 'compactMode', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.appearance.compactMode}
-              onChange={(e) => updateSetting('appearance', 'compactMode', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <div className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">
+            <div>
+              <h4 className="font-medium text-secondary-900">Show Animations</h4>
+              <p className="text-sm text-secondary-600">Enable or disable UI animations</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!settings.appearance.showAnimations}
+                onChange={e => updateSetting('appearance', 'showAnimations', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-secondary-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-secondary-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+            </label>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderMediaSection = () => {
     if (!settings) return <div className="text-center py-8 text-gray-400">Loading...</div>;
