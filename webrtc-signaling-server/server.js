@@ -844,6 +844,16 @@ app.use('/uploads/messages', (req, res, next) => {
   }
 }));
 
+// ─── ICE Servers endpoint for WebRTC ─────────────────────────────
+app.get('/api/ice', (req, res) => {
+  res.json({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' }
+      // Add TURN servers here if you have them
+    ]
+  });
+});
+
 // Listen on the port Render (or local) specifies
 const PORT = process.env.PORT || 8181;
 server.listen(PORT, () => {
