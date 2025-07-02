@@ -144,6 +144,7 @@ export default function SettingsPage() {
     setSaveStatus(null);
     try {
       await updateSettings(settings);
+      await fetchSettings();
       setSaveStatus('success');
     } catch (err) {
       setSaveStatus('error');

@@ -854,6 +854,10 @@ app.get('/api/ice', (req, res) => {
   });
 });
 
+// Ensure uploads/avatars directory exists
+const avatarDir = path.join(process.cwd(), 'uploads', 'avatars');
+if (!fs.existsSync(avatarDir)) fs.mkdirSync(avatarDir, { recursive: true });
+
 // Listen on the port Render (or local) specifies
 const PORT = process.env.PORT || 8181;
 server.listen(PORT, () => {
