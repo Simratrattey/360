@@ -39,7 +39,7 @@ export default function Layout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 dark:bg-gray-950 dark:text-secondary-100">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 dark:from-gray-900 dark:to-gray-900 dark:text-gray-100">
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
@@ -47,7 +47,7 @@ export default function Layout({ children }) {
           initial={{ x: -300 }}
           animate={{ x: 0 }}
           exit={{ x: -300 }}
-          className="fixed left-0 top-0 h-full w-72 bg-secondary-900 dark:bg-secondary-900 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-secondary-800 dark:border-secondary-800"
+          className="fixed left-0 top-0 h-full w-72 bg-white/20 dark:bg-gray-900/80 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20 dark:border-gray-800"
         >
           <div className="flex h-20 items-center justify-between px-8">
             <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent tracking-tight">Comm360</h1>
@@ -99,7 +99,7 @@ export default function Layout({ children }) {
 
       {/* Desktop sidebar */}
       <div className={`hidden lg:fixed lg:inset-y-0 lg:flex ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} lg:flex-col z-30 transition-all duration-300`}>
-        <div className="flex flex-col flex-grow bg-secondary-900 dark:bg-secondary-900 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-secondary-800 dark:border-secondary-800 h-full transition-all duration-300">
+        <div className="flex flex-col flex-grow bg-white/20 dark:bg-gray-900/80 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20 dark:border-gray-800 h-full transition-all duration-300">
           <div className={`flex h-20 items-center ${sidebarCollapsed ? 'px-2 justify-center' : 'px-8'} transition-all duration-300`}>
             <h1 className={`text-2xl font-extrabold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent tracking-tight transition-all duration-300 ${sidebarCollapsed ? 'hidden' : 'block'}`}>Comm360</h1>
             <button
@@ -156,7 +156,7 @@ export default function Layout({ children }) {
       {/* Main content */}
       <div className={`${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all duration-300`}>
         {/* Header */}
-        <header className="backdrop-blur-xl bg-secondary-900 dark:bg-secondary-900 shadow-xl border-b border-secondary-800 dark:border-secondary-800 relative z-20">
+        <header className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/80 bg-gradient-to-r from-blue-100/60 via-white/60 to-purple-100/60 dark:from-gray-900/80 dark:via-gray-900/80 dark:to-gray-900/80 shadow-xl border-b border-white/30 dark:border-gray-800 relative z-20">
           <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative">
             {/* Mobile sidebar button */}
             <button
@@ -203,7 +203,7 @@ export default function Layout({ children }) {
         </header>
 
         {/* Page content */}
-        <main className="p-4 sm:p-6 lg:p-8 bg-gray-950 dark:bg-gray-950 min-h-screen text-secondary-100">
+        <main className="p-4 sm:p-6 lg:p-8 dark:bg-gray-900 min-h-screen">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

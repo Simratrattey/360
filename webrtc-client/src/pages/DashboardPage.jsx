@@ -113,14 +113,14 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="relative space-y-8 bg-gray-950 dark:bg-gray-950 dark:text-secondary-100">
+    <div className="relative space-y-8 dark:text-gray-100">
       {/* Hero background illustration */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div className="absolute left-1/2 top-0 -translate-x-1/2 w-[80vw] h-[40vh] bg-gradient-to-br from-blue-400/30 via-purple-400/20 to-pink-400/10 rounded-full blur-3xl opacity-60 animate-pulse" />
         <div className="absolute right-0 bottom-0 w-64 h-64 bg-gradient-to-br from-purple-400/30 to-blue-400/10 rounded-full blur-2xl opacity-40" />
       </div>
       {/* Welcome Section */}
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-8 flex items-center justify-between bg-secondary-900 dark:bg-secondary-900 shadow-2xl rounded-2xl border border-secondary-800 dark:border-secondary-800 text-secondary-100">
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-8 flex items-center justify-between bg-white/70 dark:bg-secondary-900/80 shadow-2xl rounded-2xl border border-white/30 dark:border-gray-800">
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
             <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
@@ -140,7 +140,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Message Notifications Section */}
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-secondary-900 dark:bg-secondary-900 shadow-xl rounded-2xl p-6 border border-secondary-800 dark:border-secondary-800 text-secondary-100">
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/80 dark:bg-secondary-900/80 shadow-xl rounded-2xl p-6 border border-white/30 dark:border-gray-800">
         <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
           <MessageSquare className="h-6 w-6 text-blue-400" />
           Message Notifications
@@ -153,7 +153,7 @@ export default function DashboardPage() {
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
-                className="flex items-center gap-4 p-4 bg-secondary-800 rounded-xl border border-secondary-700 shadow hover:scale-105 transition-transform cursor-pointer"
+                className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
               >
                 <div className="relative">
                   {notif.avatar ? (
@@ -191,7 +191,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.12, duration: 0.6 }}
-            className="glass-effect bg-secondary-900 dark:bg-secondary-900 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-secondary-800 dark:border-secondary-800 hover:scale-105 hover:shadow-2xl transition-transform duration-200 text-secondary-100"
+            className="glass-effect bg-white/70 dark:bg-secondary-900/80 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 dark:border-gray-800 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
           >
             <div>
               <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
@@ -213,7 +213,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Active Rooms */}
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-secondary-900 dark:bg-secondary-900 shadow-xl rounded-2xl p-6 border border-secondary-800 dark:border-secondary-800 text-secondary-100">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 dark:bg-secondary-900/80 shadow-xl rounded-2xl p-6 border border-white/30 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-primary-800">Active Rooms</h2>
             <Activity className="h-6 w-6 text-blue-400" />
@@ -233,7 +233,7 @@ export default function DashboardPage() {
                 <motion.div
                   key={room.roomId}
                   whileHover={{ scale: 1.03 }}
-                  className="flex items-center justify-between p-4 bg-secondary-800 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-secondary-700 shadow"
+                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => joinMeeting(room.roomId)}
                 >
                   <div>
@@ -261,14 +261,14 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Recent Meetings */}
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-secondary-900 dark:bg-secondary-900 shadow-xl rounded-2xl p-6 border border-secondary-800 dark:border-secondary-800 text-secondary-100">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 dark:bg-secondary-900/80 shadow-xl rounded-2xl p-6 border border-white/30 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-primary-800">Recent Meetings</h2>
             <TrendingUp className="h-6 w-6 text-blue-400" />
           </div>
           <div className="space-y-3">
             {recentMeetings.map((meeting) => (
-              <div key={meeting.id} className="flex items-center justify-between p-4 bg-secondary-800 rounded-xl border border-secondary-700 shadow">
+              <div key={meeting.id} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
                     <Video className="h-5 w-5 text-white" />
@@ -293,7 +293,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-secondary-900 dark:bg-secondary-900 shadow-xl rounded-2xl p-6 border border-secondary-800 dark:border-secondary-800 text-secondary-100">
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 dark:bg-secondary-900/80 shadow-xl rounded-2xl p-6 border border-white/30 dark:border-gray-800">
         <h2 className="text-xl font-bold text-primary-800 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.button

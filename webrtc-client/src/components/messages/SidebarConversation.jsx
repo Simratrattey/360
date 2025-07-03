@@ -124,8 +124,8 @@ export default function SidebarConversation({
     <div
       className={`group relative mx-3 mb-2 p-4 rounded-xl cursor-pointer transition-all duration-300 ${
         isActive 
-          ? `bg-secondary-800 border-2 border-secondary-700 shadow-lg transform scale-[1.02] text-secondary-100` 
-          : 'hover:bg-secondary-800 border-2 border-transparent hover:border-secondary-700 hover:shadow-md text-secondary-100'
+          ? `bg-gradient-to-r ${typeConfig.bgGradient} border-2 ${typeConfig.borderColor} shadow-lg transform scale-[1.02] dark:bg-secondary-800/80 dark:border-gray-800` 
+          : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200 hover:shadow-md dark:hover:bg-secondary-800/60 dark:hover:border-gray-800'
       }`}
       onClick={onSelect}
     >

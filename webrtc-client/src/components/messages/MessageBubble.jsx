@@ -266,7 +266,7 @@ export default function MessageBubble({
           {(reactions || msg.reactions || []).map((reaction, i) => (
             <span
               key={i}
-              className="text-base cursor-pointer hover:scale-110 transition-transform bg-secondary-800 border border-secondary-700 rounded-full px-1.5 py-0.5 shadow-sm text-secondary-100"
+              className="text-base cursor-pointer hover:scale-110 transition-transform bg-white/80 border border-gray-200 rounded-full px-1.5 py-0.5 shadow-sm"
               style={{ fontSize: '1.1rem' }}
             >
               {reaction.emoji}
@@ -302,8 +302,8 @@ export default function MessageBubble({
         )}
         <div className={`max-w-sm px-3 py-2 rounded-2xl relative shadow-sm ${
           isOwn
-            ? 'bg-primary-900 border border-primary-800 text-primary-100'
-            : 'bg-secondary-800 border border-secondary-700 text-secondary-100'
+            ? 'bubble-dark-own'
+            : 'bubble-dark'
         }`}>
           {/* Sender name and timestamp */}
           <div className="flex items-center justify-between mb-2 min-w-0">
@@ -323,8 +323,8 @@ export default function MessageBubble({
                 {renderStatusIndicator()}
                 {/* Read receipts tooltip/modal */}
                 {showReadTooltip && messageStatus && messageStatus[messageId]?.recipients?.length > 0 && (
-                  <div className="absolute right-0 top-6 z-30 bg-secondary-800 border border-secondary-700 rounded-xl shadow-lg px-4 py-2 text-xs text-secondary-100 min-w-[120px] animate-in fade-in duration-200">
-                    <div className="font-semibold mb-1 text-primary-200">Read by:</div>
+                  <div className="absolute right-0 top-6 z-30 bg-secondary-900 border border-secondary-700 rounded-xl shadow-lg px-4 py-2 text-xs text-secondary-200 min-w-[120px] animate-in fade-in duration-200">
+                    <div className="font-semibold mb-1 text-primary-400">Read by:</div>
                     <ul>
                       {messageStatus[messageId].recipients.map(uid => {
                         const user = getUserObj(uid);
@@ -343,14 +343,14 @@ export default function MessageBubble({
           </div>
 
           {/* Reply context */}
-          {(replyContext || msg.replyTo) && (
+          {(replyContext || msg.replyTo) && (replyContext?.text || replyContext?.file || msg.replyTo?.text || msg.replyTo?.file) && (
             <div className={`text-xs mb-2 p-2 rounded-lg break-words ${
-              isOwn ? 'bg-primary-950 text-primary-200' : 'bg-secondary-900 text-secondary-200'
+              isOwn ? 'bg-blue-900/40' : 'bg-secondary-800/80 text-secondary-300'
             }`}>
-              <span className={`font-medium ${isOwn ? 'text-primary-200' : 'text-secondary-200'}`}>
+              <span className={`font-medium ${isOwn ? 'text-primary-200' : 'text-secondary-300'}`}>
                 Replying to: 
               </span>
-              <span className={`italic ${isOwn ? 'text-primary-200' : 'text-secondary-300'}`}>
+              <span className={`italic ${isOwn ? 'text-primary-200' : 'text-secondary-400'}`}>
                 {((replyContext || msg.replyTo)?.text || (replyContext || msg.replyTo)?.file?.name || '').slice(0, 50)}{((replyContext || msg.replyTo)?.text || (replyContext || msg.replyTo)?.file?.name || '').length > 50 ? '...' : ''}
               </span>
             </div>
