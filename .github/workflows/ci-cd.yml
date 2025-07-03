@@ -164,7 +164,7 @@ jobs:
   deploy-staging:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     environment: staging
     
     steps:
@@ -251,7 +251,7 @@ jobs:
   performance-test:
     needs: deploy-staging
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/develop' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     
     steps:
     - name: Checkout code
