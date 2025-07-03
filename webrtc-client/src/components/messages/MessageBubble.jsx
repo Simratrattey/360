@@ -28,6 +28,7 @@ export default function MessageBubble({
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
+  const [imgError, setImgError] = useState(false);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -115,8 +116,6 @@ export default function MessageBubble({
     const fileSize = formatFileSize(msg.file.size || 0);
 
     if (isImage) {
-      // Track if image failed to load
-      const [imgError, setImgError] = useState(false);
       return (
         <div className="mt-3 relative group">
           <div className="relative inline-block">
