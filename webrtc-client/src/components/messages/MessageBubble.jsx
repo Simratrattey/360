@@ -20,10 +20,14 @@ export default function MessageBubble({
   handleEditCancel,
   replyContext,
   messageStatus,
+  onlineUsers,
+  currentUserId,
 }) {
   const messageId = msg._id || msg.id;
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showReadTooltip, setShowReadTooltip] = useState(false);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -67,6 +71,32 @@ export default function MessageBubble({
       return <div className="h-3 w-3 border border-current rounded-full" />;
     }
     return null;
+  };
+
+  // Helper: highlight mentions in text
+  const renderTextWithMentions = (text) => {
+    if (!text) return null;
+    // Regex for @username (alphanumeric, underscore, dot)
+    return text.split(/(\s+)/).map((part, i) => {
+      if (/^@\w[\w.]*$/.test(part)) {
+        const username = part.slice(1);
+        // Highlight if it's the current user
+        const isMe = username.toLowerCase() === (onlineUsers?.find(u => u._id === currentUserId)?.username?.toLowerCase() || '');
+        return (
+          <span
+            key={i}
+            className={
+              isMe
+                ? 'bg-gradient-to-r from-yellow-300 to-pink-300 text-pink-900 font-bold px-1 py-0.5 rounded'
+                : 'bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded'
+            }
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
   };
 
   const renderFilePreview = () => {
@@ -275,7 +305,31 @@ export default function MessageBubble({
               <span className="text-xs whitespace-nowrap">
                 {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
-              {renderStatusIndicator()}
+              <span
+                className="relative"
+                onMouseEnter={() => setShowReadTooltip(true)}
+                onMouseLeave={() => setShowReadTooltip(false)}
+                tabIndex={0}
+              >
+                {renderStatusIndicator()}
+                {/* Read receipts tooltip/modal */}
+                {showReadTooltip && messageStatus && messageStatus[messageId]?.recipients?.length > 0 && (
+                  <div className="absolute right-0 top-6 z-30 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2 text-xs text-gray-700 min-w-[120px] animate-in fade-in duration-200">
+                    <div className="font-semibold mb-1 text-gray-900">Read by:</div>
+                    <ul>
+                      {messageStatus[messageId].recipients.map(uid => {
+                        const user = onlineUsers?.find(u => u._id === uid);
+                        return (
+                          <li key={uid} className="flex items-center gap-2 py-0.5">
+                            <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+                            <span>{user?.fullName || user?.username || uid}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </span>
             </div>
           </div>
 
@@ -320,7 +374,7 @@ export default function MessageBubble({
             <>
               {/* Message text */}
               <div className={`text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'}`}>
-                {msg.text}
+                {renderTextWithMentions(msg.text)}
               </div>
 
               {/* File attachments */}
@@ -357,7 +411,7 @@ export default function MessageBubble({
                       </button>
                     )}
                     <button 
-                      onClick={() => onDelete(messageId)} 
+                      onClick={() => setShowDeleteConfirm(true)} 
                       className="p-1 hover:bg-white hover:bg-opacity-30 rounded transition-colors"
                       title="Delete"
                     >
@@ -395,6 +449,30 @@ export default function MessageBubble({
           </div>
         )}
       </div>
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-xs w-full flex flex-col items-center">
+            <Trash2 className="h-8 w-8 text-red-500 mb-2" />
+            <h3 className="text-lg font-bold mb-2 text-gray-900">Delete Message?</h3>
+            <p className="text-gray-600 mb-4 text-center">Are you sure you want to delete this message? This action cannot be undone.</p>
+            <div className="flex gap-4 w-full">
+              <button
+                className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow"
+                onClick={() => { setShowDeleteConfirm(false); onDelete(messageId); }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

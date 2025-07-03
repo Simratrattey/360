@@ -13,15 +13,26 @@ export default function ChatInput({
   onRemoveFile,
   onShowEmojiPicker,
   onTyping,
+  members = [],
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const textareaRef = useRef(null);
+  const [mentionDropdown, setMentionDropdown] = useState({ open: false, query: '', start: 0 });
+  const [mentionIndex, setMentionIndex] = useState(0);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
-    
+    // Mention detection
+    const cursor = e.target.selectionStart;
+    const value = e.target.value;
+    const match = value.slice(0, cursor).match(/@([\w.]*)$/);
+    if (match) {
+      setMentionDropdown({ open: true, query: match[1], start: cursor - match[1].length - 1 });
+    } else {
+      setMentionDropdown({ open: false, query: '', start: 0 });
+    }
     // Send typing indicator
     if (onTyping) {
       onTyping(true);
@@ -85,6 +96,48 @@ export default function ChatInput({
       textarea.focus();
       textarea.selectionStart = textarea.selectionEnd = start + emoji.native.length;
     }, 0);
+  };
+
+  // Filter members for mention
+  const mentionOptions = mentionDropdown.open
+    ? members.filter(m => {
+        const uname = m.username || m.fullName || '';
+        return uname.toLowerCase().includes(mentionDropdown.query.toLowerCase());
+      })
+    : [];
+
+  // Insert mention at cursor
+  const insertMention = (member) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const before = input.slice(0, mentionDropdown.start);
+    const after = input.slice(textarea.selectionStart);
+    const mentionText = `@${member.username || member.fullName || ''} `;
+    const newValue = before + mentionText + after;
+    setInput(newValue);
+    setMentionDropdown({ open: false, query: '', start: 0 });
+    setTimeout(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = before.length + mentionText.length;
+    }, 0);
+  };
+
+  // Keyboard navigation for mention dropdown
+  const handleKeyDown = (e) => {
+    if (mentionDropdown.open && mentionOptions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(i => (i + 1) % mentionOptions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(i => (i - 1 + mentionOptions.length) % mentionOptions.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        insertMention(mentionOptions[mentionIndex]);
+      } else if (e.key === 'Escape') {
+        setMentionDropdown({ open: false, query: '', start: 0 });
+      }
+    }
   };
 
   return (
@@ -158,10 +211,11 @@ export default function ChatInput({
             ref={textareaRef}
             value={input}
             onChange={handleInputChange}
-            onKeyDown={e => { 
-              if (e.key === 'Enter' && !e.shiftKey) {
+            onKeyDown={e => {
+              handleKeyDown(e);
+              if (!mentionDropdown.open && e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSend(); 
+                handleSend();
               }
             }}
             placeholder="Type a message..."
@@ -189,6 +243,25 @@ export default function ChatInput({
                 previewPosition="none"
                 skinTonePosition="none"
               />
+            </div>
+          )}
+          {/* Mention dropdown */}
+          {mentionDropdown.open && mentionOptions.length > 0 && (
+            <div className="absolute left-0 bottom-14 z-50 bg-white border border-gray-200 rounded-xl shadow-lg w-64 max-h-60 overflow-y-auto animate-in fade-in duration-100">
+              {mentionOptions.map((m, i) => (
+                <div
+                  key={m._id || m.username || m.fullName}
+                  className={`px-4 py-2 cursor-pointer flex items-center gap-2 hover:bg-blue-50 ${i === mentionIndex ? 'bg-blue-100' : ''}`}
+                  onMouseDown={e => { e.preventDefault(); insertMention(m); }}
+                  onMouseEnter={() => setMentionIndex(i)}
+                >
+                  <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white font-bold text-sm">
+                    {(m.fullName || m.username || '?')[0]}
+                  </span>
+                  <span className="font-medium text-gray-900">{m.fullName || m.username}</span>
+                  {m.username && <span className="text-xs text-gray-500 ml-2">@{m.username}</span>}
+                </div>
+              ))}
             </div>
           )}
         </div>

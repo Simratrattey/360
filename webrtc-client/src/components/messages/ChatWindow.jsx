@@ -35,6 +35,12 @@ export default function ChatWindow({
   const typingUsers = Object.keys(typing || {}).filter(userId => 
     typing[userId] && userId !== currentUserId
   );
+  const typingNames = typingUsers
+    .map(uid => {
+      const user = onlineUsers?.find(u => u._id === uid);
+      return user?.fullName || user?.username || 'Someone';
+    })
+    .filter(Boolean);
 
   return (
     <div ref={chatRef} className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
@@ -90,9 +96,13 @@ export default function ChatWindow({
               <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
             </div>
             <span className="text-sm text-gray-700 font-medium">
-              {typingUsers.length === 1 ? 'Someone is typing...' : 
-               typingUsers.length === 2 ? '2 people are typing...' : 
-               `${typingUsers.length} people are typing...`}
+              {typingNames.length === 1
+                ? `${typingNames[0]} is typing...`
+                : typingNames.length === 2
+                ? `${typingNames[0]} and ${typingNames[1]} are typing...`
+                : typingNames.length > 2
+                ? `${typingNames.slice(0, 2).join(', ')} and ${typingNames.length - 2} others are typing...`
+                : ''}
             </span>
           </div>
         )}

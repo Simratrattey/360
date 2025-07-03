@@ -697,6 +697,7 @@ export default function MessagesPage() {
           onRemoveFile={handleRemoveFile}
           onShowEmojiPicker={() => setShowEmojiPicker('input')}
           onTyping={handleTyping}
+          members={selected?.members || []}
         />
 
         {/* Notification */}
