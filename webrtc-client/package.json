@@ -13,6 +13,8 @@
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@react-oauth/google": "^0.12.2",
+    "@react-three/drei": "^9.56.15",
+    "@react-three/fiber": "^8.13.7",
     "axios": "^1.4.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
@@ -24,7 +26,8 @@
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.8.1",
     "socket.io-client": "^4.6.1",
-    "tailwind-merge": "^1.14.0"
+    "tailwind-merge": "^1.14.0",
+    "three": "^0.152.2"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
