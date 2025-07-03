@@ -156,39 +156,46 @@ export default function Layout({ children }) {
       {/* Main content */}
       <div className={`${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all duration-300`}>
         {/* Header */}
-        <header className="bg-white shadow-sm border-b border-secondary-200">
-          <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+        <header className="backdrop-blur-xl bg-white/60 bg-gradient-to-r from-blue-100/60 via-white/60 to-purple-100/60 shadow-xl border-b border-white/30 relative z-20">
+          <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative">
+            {/* Mobile sidebar button */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-secondary-600 hover:bg-secondary-100"
+              className="lg:hidden p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
             >
-              <Menu className="h-6 w-6" />
+              <Menu className="h-7 w-7" />
             </button>
-            
-            <div className="flex-1 max-w-lg mx-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
+
+            {/* Floating logo/title */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3 select-none pointer-events-none">
+              <span className="text-3xl font-extrabold bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-clip-text text-transparent drop-shadow-lg tracking-tight animate-gradient-x">Comm360</span>
+            </div>
+
+            {/* Search bar */}
+            <div className="flex-1 flex justify-center">
+              <div className="relative w-full max-w-md">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-400/80" />
                 <input
                   type="text"
                   placeholder="Search meetings, contacts..."
-                  className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-2 rounded-full bg-white/70 border border-blue-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder:text-blue-300 text-blue-900 text-base"
                 />
               </div>
             </div>
 
+            {/* Right icons */}
             <div className="flex items-center space-x-4">
-              <button className="p-2 rounded-lg text-secondary-600 hover:bg-secondary-100 relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
+              <button className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative animate-pulse-once group">
+                <Bell className="h-6 w-6" />
+                <span className="absolute -top-1 -right-1 h-3 w-3 bg-gradient-to-tr from-pink-500 to-red-500 rounded-full border-2 border-white animate-ping group-hover:animate-none"></span>
               </button>
-              
               <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 bg-primary-100 rounded-full flex items-center justify-center">
-                  <User className="h-4 w-4 text-primary-600" />
+                <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform cursor-pointer">
+                  <User className="h-5 w-5 text-white" />
                 </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-secondary-900">{user?.fullName || user?.username}</p>
-                  <p className="text-xs text-secondary-500">{user?.email}</p>
+                <div className="hidden sm:block text-right">
+                  <p className="text-base font-bold text-blue-900 leading-tight">{user?.fullName || user?.username}</p>
+                  <p className="text-xs text-blue-400">{user?.email}</p>
                 </div>
               </div>
             </div>
