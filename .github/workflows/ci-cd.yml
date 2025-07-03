@@ -89,6 +89,10 @@ jobs:
     needs: [test-frontend, test-backend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+      actions: read
     
     steps:
     - name: Checkout code
@@ -108,6 +112,19 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Debug registry info
+      run: |
+        echo "Registry: ${{ env.REGISTRY }}"
+        echo "Username: ${{ github.actor }}"
+        echo "Repository: ${{ env.LOWERCASE_REPO }}"
+        echo "Full image name: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}-frontend"
+    
+    - name: Test registry access
+      run: |
+        echo "Testing access to GitHub Container Registry..."
+        docker pull hello-world
+        echo "Docker access confirmed"
     
     - name: Extract metadata
       id: meta
