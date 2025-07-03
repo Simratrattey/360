@@ -43,14 +43,14 @@ export default function ChatWindow({
     .filter(Boolean);
 
   return (
-    <div ref={chatRef} className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-900">
+    <div ref={chatRef} className="flex-1 overflow-y-auto bg-gray-950 dark:bg-gray-950 text-secondary-100">
       <div className="p-6 space-y-8">
         {Object.entries(grouped).map(([date, msgs]) => (
           <div key={date} className="space-y-6">
             {/* Date separator with modern styling */}
             <div className="flex items-center justify-center my-8">
-              <div className="bg-white/80 dark:bg-secondary-800/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-gray-200 dark:border-secondary-700">
-                <span className="text-sm font-bold text-gray-700 dark:text-secondary-200 tracking-wide">{date}</span>
+              <div className="bg-secondary-800 px-6 py-3 rounded-full shadow-lg border border-secondary-700">
+                <span className="text-sm font-bold text-secondary-100 tracking-wide">{date}</span>
               </div>
             </div>
             
