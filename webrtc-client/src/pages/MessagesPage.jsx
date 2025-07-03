@@ -502,7 +502,7 @@ export default function MessagesPage() {
   const grouped = groupMessagesByDate(messages);
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-gray-950 dark:bg-gray-950 text-gray-900 dark:text-secondary-100">
+    <div className="flex h-[80vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
       {/* Sidebar */}
       <div className="w-80 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col">
         {/* Header */}
