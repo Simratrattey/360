@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AuthContext } from '../context/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Stars, Sphere, MeshDistortMaterial } from '@react-three/drei';
 
 import { 
   Mail, 
@@ -142,333 +144,146 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex">
-      {/* Left Side - Features */}
-      <motion.div 
-        className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-12 text-white relative overflow-hidden"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <motion.div
-            className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full"
-            animate={{
-              scale: [1, 1.2, 1],
-              rotate: [0, 180, 360],
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-          />
-          <motion.div
-            className="absolute -bottom-40 -left-40 w-60 h-60 bg-white/5 rounded-full"
-            animate={{
-              scale: [1.2, 1, 1.2],
-              rotate: [360, 180, 0],
-            }}
-            transition={{
-              duration: 15,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-          />
+    <div className="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900">
+      {/* Left: Hero with Interactive Globe */}
+      <div className="relative flex-1 flex flex-col justify-center items-center p-8 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <Canvas camera={{ position: [0, 0, 3.5], fov: 50 }} style={{ width: '100%', height: '100%' }}>
+            <ambientLight intensity={0.7} />
+            <directionalLight position={[5, 5, 5]} intensity={1.2} />
+            <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={2} />
+            <Sphere args={[1, 64, 64]} position={[0, 0, 0]}>
+              <MeshDistortMaterial
+                color="#4f46e5"
+                attach="material"
+                distort={0.25}
+                speed={2}
+                roughness={0.2}
+                metalness={0.7}
+              />
+            </Sphere>
+            <OrbitControls enableZoom={false} autoRotate autoRotateSpeed={1.5} enablePan={false} />
+          </Canvas>
         </div>
-
-        <div className="relative z-10 w-full">
-          <motion.div variants={itemVariants} className="mb-8">
-            <div className="flex items-center space-x-3 mb-4">
-              <motion.div
-                className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <span className="text-2xl font-bold">360</span>
-              </motion.div>
-              <h1 className="text-3xl font-bold">Comm360</h1>
-            </div>
-            <p className="text-blue-100 text-lg">Professional video conferencing platform</p>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="space-y-6">
-            {features.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                className="flex items-start space-x-4 p-4 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20"
-                variants={featureVariants}
-                initial="hidden"
-                animate={showFeatures ? "visible" : "hidden"}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ 
-                  scale: 1.02,
-                  backgroundColor: "rgba(255, 255, 255, 0.15)"
-                }}
-              >
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <feature.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">{feature.title}</h3>
-                  <p className="text-blue-100 text-sm">{feature.description}</p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-
-          <motion.div 
-            variants={itemVariants}
-            className="mt-12 p-6 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20"
-          >
-            <div className="flex items-center space-x-3 mb-3">
-              <CheckCircle className="w-5 h-5 text-green-300" />
-              <span className="font-semibold">Trusted by 10,000+ users</span>
-            </div>
-            <p className="text-blue-100 text-sm">
-              Join thousands of professionals who trust Comm360 for their video conferencing needs.
+        <div className="relative z-10 flex flex-col items-center justify-center text-center text-white max-w-xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+            <h1 className="text-5xl md:text-6xl font-extrabold mb-6 drop-shadow-xl leading-tight">
+              Welcome to <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Comm360</span>
+            </h1>
+            <p className="text-xl md:text-2xl font-medium mb-8 text-blue-100/90">
+              The <span className="font-bold text-white">all-in-one</span> platform for <span className="font-bold text-white">meetings</span>, <span className="font-bold text-white">chat</span>, and <span className="font-bold text-white">collaboration</span>.<br/>
+              <span className="text-blue-200">Connect the world. Work from anywhere. Experience the future of communication.</span>
             </p>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5, duration: 0.7 }}>
+              <span className="inline-block bg-white/10 px-6 py-3 rounded-full text-lg font-semibold shadow-lg backdrop-blur-md border border-white/20 animate-pulse">
+                "The most addictive way to connect and create."
+              </span>
+            </motion.div>
           </motion.div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* Right Side - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      {/* Right: Login Form */}
+      <div className="flex-1 flex flex-col justify-center items-center p-8 bg-white/10 backdrop-blur-2xl relative z-20 min-h-screen md:min-h-0">
         <motion.div
-          className="w-full max-w-md"
-          variants={formVariants}
-          initial="hidden"
-          animate="visible"
+          className="w-full max-w-md bg-white/80 rounded-2xl shadow-2xl p-8 border border-white/30 glass-effect"
+          initial={{ opacity: 0, x: 60 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
         >
-          {/* Mobile Logo */}
-          <motion.div 
-            className="lg:hidden text-center mb-8"
-            variants={itemVariants}
-          >
-            <motion.div
-              className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              whileHover={{ scale: 1.1, rotate: 5 }}
-              transition={{ type: "spring", stiffness: 300 }}
-            >
-              <span className="text-white text-2xl font-bold">360</span>
-            </motion.div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Sign in to your account to continue</p>
-          </motion.div>
-
-          {/* Login Form */}
-          <motion.div
-            className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border border-white/20"
-            variants={itemVariants}
-            whileHover={{ y: -5 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <motion.div
-                variants={itemVariants}
-                className="relative"
-              >
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <motion.div
-                    className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
-                    animate={{
-                      scale: activeField === 'email' ? 1.1 : 1,
-                      color: activeField === 'email' ? '#3B82F6' : '#9CA3AF'
-                    }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Mail className="h-5 w-5" />
-                  </motion.div>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    onFocus={() => handleFieldFocus('email')}
-                    onBlur={handleFieldBlur}
-                    required
-                    className="block w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                    placeholder="Enter your email"
-                  />
-                  <motion.div
-                    className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
-                    animate={{
-                      borderColor: activeField === 'email' ? '#3B82F6' : 'transparent'
-                    }}
-                    transition={{ duration: 0.2 }}
-                  />
-                </div>
-              </motion.div>
-
-              {/* Password Field */}
-              <motion.div
-                variants={itemVariants}
-                className="relative"
-              >
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <motion.div
-                    className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
-                    animate={{
-                      scale: activeField === 'password' ? 1.1 : 1,
-                      color: activeField === 'password' ? '#3B82F6' : '#9CA3AF'
-                    }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Lock className="h-5 w-5" />
-                  </motion.div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    onFocus={() => handleFieldFocus('password')}
-                    onBlur={handleFieldBlur}
-                    required
-                    className="block w-full pl-12 pr-12 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
-                    placeholder="Enter your password"
-                  />
-                  <motion.button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <AnimatePresence mode="wait">
-                      {showPassword ? (
-                        <motion.div
-                          key="eye-off"
-                          initial={{ opacity: 0, rotate: -90 }}
-                          animate={{ opacity: 1, rotate: 0 }}
-                          exit={{ opacity: 0, rotate: 90 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        </motion.div>
-                      ) : (
-                        <motion.div
-                          key="eye"
-                          initial={{ opacity: 0, rotate: -90 }}
-                          animate={{ opacity: 1, rotate: 0 }}
-                          exit={{ opacity: 0, rotate: 90 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.button>
-                  <motion.div
-                    className="absolute inset-0 rounded-xl border-2 border-transparent pointer-events-none"
-                    animate={{
-                      borderColor: activeField === 'password' ? '#3B82F6' : 'transparent'
-                    }}
-                    transition={{ duration: 0.2 }}
-                  />
-                </div>
-              </motion.div>
-
-              {/* Error Message */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    className="flex items-center space-x-3 p-4 bg-red-50 border border-red-200 rounded-xl"
-                  >
-                    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
-                    <p className="text-red-600 text-sm">{error}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Submit Button */}
-              <motion.button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2 group"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                variants={itemVariants}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader className="h-5 w-5 animate-spin" />
-                    <span>Signing in...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <motion.div
-                      animate={{ x: [0, 5, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      <ArrowRight className="h-5 w-5" />
-                    </motion.div>
-                  </>
-                )}
-              </motion.button>
-            </form>
-
-            {/* Divider */}
-            <motion.div 
-              className="my-6"
-              variants={itemVariants}
-            >
+          <h2 className="text-3xl font-bold text-primary-700 mb-2 text-center">Sign in to Comm360</h2>
+          <p className="text-secondary-600 text-center mb-8">Start your journey. One account, endless possibilities.</p>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">Email</label>
               <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-white/80 text-gray-500 backdrop-blur-sm">Or continue with</span>
-                </div>
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-secondary-400" />
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  onFocus={() => handleFieldFocus('email')}
+                  onBlur={handleFieldBlur}
+                  className={`input-field pl-10 ${activeField === 'email' ? 'ring-2 ring-primary-400' : ''}`}
+                  placeholder="you@email.com"
+                />
               </div>
-            </motion.div>
-
-            {/* Google Sign In */}
-            <GoogleLogin
-              onSuccess={async ({ credential }) => {
-                const result = await googleLogin(credential);
-                if (result.success) {
-                  navigate('/');
-                } else {
-                  alert(result.error);
-                }
-              }}
-              onError={() => {
-                console.error('❌ Google Login Failed');
-                alert('Google Authentication Failed');
-              }}
-            />
-
-
-            {/* Sign Up Link */}
-            <motion.div 
-              className="mt-6 text-center"
-              variants={itemVariants}
-            >
-              <p className="text-gray-600">
-                Don't have an account?{' '}
-                <Link
-                  to="/register"
-                  className="text-blue-600 hover:text-blue-700 font-semibold transition-colors duration-200 hover:underline"
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-secondary-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  onFocus={() => handleFieldFocus('password')}
+                  onBlur={handleFieldBlur}
+                  className={`input-field pl-10 pr-10 ${activeField === 'password' ? 'ring-2 ring-primary-400' : ''}`}
+                  placeholder="Your password"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary-400 hover:text-primary-500 focus:outline-none"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
                 >
-                  Sign up
-                </Link>
-              </p>
-            </motion.div>
-          </motion.div>
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <Link to="/forgot" className="text-primary-600 hover:underline text-sm font-medium">Forgot password?</Link>
+            </div>
+            <motion.button
+              type="submit"
+              className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3 rounded-xl shadow-md mt-2"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              disabled={isLoading}
+            >
+              {isLoading ? <Loader className="animate-spin h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
+              <span>Sign In</span>
+            </motion.button>
+          </form>
+          <div className="my-6 flex items-center justify-center gap-2">
+            <span className="h-px w-10 bg-secondary-200" />
+            <span className="text-secondary-400 text-sm">or</span>
+            <span className="h-px w-10 bg-secondary-200" />
+          </div>
+          <div className="flex flex-col gap-4">
+            <GoogleLogin
+              onSuccess={googleLogin}
+              onError={() => alert('Google login failed')}
+              width="100%"
+              theme="filled_blue"
+              shape="pill"
+              text="signin_with"
+            />
+          </div>
+          <div className="mt-8 text-center text-secondary-500 text-sm">
+            Don&apos;t have an account?{' '}
+            <Link to="/register" className="text-primary-600 hover:underline font-medium">Sign up</Link>
+          </div>
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="mt-4 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2"
+              >
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </div>
