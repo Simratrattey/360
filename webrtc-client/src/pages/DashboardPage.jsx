@@ -9,7 +9,8 @@ import {
   Phone,
   MessageSquare,
   TrendingUp,
-  Activity
+  Activity,
+  Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -58,66 +59,66 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-secondary-900">
-              Welcome back, {user?.fullName || user?.username}!
-            </h1>
-            <p className="text-secondary-600 mt-1">
-              Here's what's happening with your meetings today.
-            </p>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={createNewMeeting}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>New Meeting</span>
-          </motion.button>
-        </div>
+    <div className="relative space-y-8">
+      {/* Hero background illustration */}
+      <div className="absolute inset-0 -z-10 pointer-events-none">
+        <div className="absolute left-1/2 top-0 -translate-x-1/2 w-[80vw] h-[40vh] bg-gradient-to-br from-blue-400/30 via-purple-400/20 to-pink-400/10 rounded-full blur-3xl opacity-60 animate-pulse" />
+        <div className="absolute right-0 bottom-0 w-64 h-64 bg-gradient-to-br from-purple-400/30 to-blue-400/10 rounded-full blur-2xl opacity-40" />
       </div>
+      {/* Welcome Section */}
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-8 flex items-center justify-between bg-white/70 shadow-2xl rounded-2xl border border-white/30">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
+            <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
+            Welcome back, {user?.fullName || user?.username}!
+          </h1>
+          <p className="text-secondary-700 mt-2 text-lg">Here's what's happening with your meetings today.</p>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.07 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={createNewMeeting}
+          className="btn-primary flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg"
+        >
+          <Plus className="h-5 w-5" />
+          <span>New Meeting</span>
+        </motion.button>
+      </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {stats.map((stat, index) => (
           <motion.div
             key={stat.name}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="card"
+            transition={{ delay: index * 0.12, duration: 0.6 }}
+            className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-secondary-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-secondary-900">{stat.value}</p>
-                <p className={`text-xs ${
-                  stat.changeType === 'positive' ? 'text-green-600' : 
-                  stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
-                }`}>
-                  {stat.change} from last month
-                </p>
-              </div>
-              <div className="h-12 w-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                <stat.icon className="h-6 w-6 text-primary-600" />
-              </div>
+            <div>
+              <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
+              <p className="text-3xl font-extrabold text-primary-800">{stat.value}</p>
+              <p className={`text-xs mt-1 ${
+                stat.changeType === 'positive' ? 'text-green-600' : 
+                stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
+              }`}>
+                {stat.change} from last month
+              </p>
+            </div>
+            <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
+              <stat.icon className="h-7 w-7 text-white" />
             </div>
           </motion.div>
         ))}
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Active Rooms */}
-        <div className="card">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 shadow-xl rounded-2xl p-6 border border-white/30">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-secondary-900">Active Rooms</h2>
-            <Activity className="h-5 w-5 text-primary-600" />
+            <h2 className="text-xl font-bold text-primary-800">Active Rooms</h2>
+            <Activity className="h-6 w-6 text-blue-400" />
           </div>
           {loading ? (
             <div className="space-y-3">
@@ -133,15 +134,15 @@ export default function DashboardPage() {
               {rooms.slice(0, 5).map((room) => (
                 <motion.div
                   key={room.roomId}
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg hover:bg-secondary-100 transition-colors cursor-pointer"
+                  whileHover={{ scale: 1.03 }}
+                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => joinMeeting(room.roomId)}
                 >
                   <div>
-                    <p className="font-medium text-secondary-900">Room {room.roomId}</p>
+                    <p className="font-bold text-primary-800">Room {room.roomId}</p>
                     <p className="text-sm text-secondary-600">{room.participants || 0} participants</p>
                   </div>
-                  <button className="btn-primary text-sm py-1 px-3">
+                  <button className="btn-primary text-sm py-1 px-4 rounded-lg shadow">
                     Join
                   </button>
                 </motion.div>
@@ -153,29 +154,29 @@ export default function DashboardPage() {
               <p className="text-secondary-600">No active rooms</p>
               <button 
                 onClick={createNewMeeting}
-                className="btn-primary mt-3"
+                className="btn-primary mt-3 px-6 py-2 rounded-xl shadow"
               >
                 Start a meeting
               </button>
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Recent Meetings */}
-        <div className="card">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 shadow-xl rounded-2xl p-6 border border-white/30">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-secondary-900">Recent Meetings</h2>
-            <TrendingUp className="h-5 w-5 text-primary-600" />
+            <h2 className="text-xl font-bold text-primary-800">Recent Meetings</h2>
+            <TrendingUp className="h-6 w-6 text-blue-400" />
           </div>
           <div className="space-y-3">
             {recentMeetings.map((meeting) => (
-              <div key={meeting.id} className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg">
+              <div key={meeting.id} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
                 <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                    <Video className="h-4 w-4 text-primary-600" />
+                  <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
+                    <Video className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-medium text-secondary-900">{meeting.title}</p>
+                    <p className="font-bold text-primary-800">{meeting.title}</p>
                     <p className="text-sm text-secondary-600">
                       {meeting.participants} participants • {meeting.duration}
                     </p>
@@ -190,54 +191,47 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Quick Actions */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-secondary-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/70 shadow-xl rounded-2xl p-6 border border-white/30">
+        <h2 className="text-xl font-bold text-primary-800 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={createNewMeeting}
-            className="flex flex-col items-center p-4 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors"
+            whileTap={{ scale: 0.97 }}
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
-            <Video className="h-8 w-8 text-primary-600 mb-2" />
-            <span className="font-medium text-primary-700">New Meeting</span>
+            <Phone className="h-7 w-7 mb-2" />
+            Start Call
           </motion.button>
-          
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate('/contacts')}
-            className="flex flex-col items-center p-4 bg-secondary-50 rounded-lg hover:bg-secondary-100 transition-colors"
+            whileTap={{ scale: 0.97 }}
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
-            <Users className="h-8 w-8 text-secondary-600 mb-2" />
-            <span className="font-medium text-secondary-700">Add Contact</span>
+            <MessageSquare className="h-7 w-7 mb-2" />
+            New Message
           </motion.button>
-          
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate('/meetings')}
-            className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+            whileTap={{ scale: 0.97 }}
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
-            <Calendar className="h-8 w-8 text-green-600 mb-2" />
-            <span className="font-medium text-green-700">Schedule</span>
+            <Users className="h-7 w-7 mb-2" />
+            Add Contact
           </motion.button>
-          
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => navigate('/settings')}
-            className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+            whileTap={{ scale: 0.97 }}
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
-            <MessageSquare className="h-8 w-8 text-purple-600 mb-2" />
-            <span className="font-medium text-purple-700">Messages</span>
+            <Calendar className="h-7 w-7 mb-2" />
+            Schedule
           </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 } 

@@ -39,20 +39,20 @@ export default function Layout({ children }) {
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50">
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-black/20" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
         <motion.div
           initial={{ x: -300 }}
           animate={{ x: 0 }}
           exit={{ x: -300 }}
-          className="fixed left-0 top-0 h-full w-64 bg-white shadow-xl"
+          className="fixed left-0 top-0 h-full w-72 bg-white/20 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20"
         >
-          <div className="flex h-16 items-center justify-between px-6">
-            <h1 className="text-xl font-bold text-primary-600">Comm360</h1>
-            <button onClick={() => setSidebarOpen(false)}>
-              <X className="h-6 w-6 text-secondary-500" />
+          <div className="flex h-20 items-center justify-between px-8">
+            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent tracking-tight">Comm360</h1>
+            <button onClick={() => setSidebarOpen(false)} className="hover:bg-white/20 p-2 rounded-full transition">
+              <X className="h-7 w-7 text-secondary-500" />
             </button>
           </div>
-          <nav className="px-4 py-6">
+          <nav className="px-6 py-8 space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
@@ -60,52 +60,81 @@ export default function Layout({ children }) {
                   key={item.name}
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center px-3 py-2 rounded-lg mb-2 transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-lg transition-all duration-200 relative group ${
                     isActive
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-secondary-600 hover:bg-secondary-100'
+                      ? 'bg-gradient-to-r from-blue-400/30 to-purple-400/30 text-primary-700 shadow-lg'
+                      : 'text-secondary-600 hover:bg-white/10 hover:text-primary-600'
                   }`}
                 >
-                  <item.icon className="h-5 w-5 mr-3" />
+                  <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-full bg-gradient-to-b from-blue-400 to-purple-400 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}></span>
+                  <item.icon className="h-6 w-6" />
                   {item.name}
                 </Link>
               );
             })}
           </nav>
+          <div className="px-6 mt-auto pb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center shadow-lg">
+                <User className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-primary-800">{user?.fullName || user?.username}</p>
+                <p className="text-xs text-secondary-500">{user?.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 w-full px-4 py-2 text-secondary-600 hover:bg-white/10 hover:text-red-600 rounded-xl font-semibold transition-all"
+            >
+              <LogOut className="h-5 w-5" />
+              Logout
+            </button>
+          </div>
         </motion.div>
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white shadow-xl">
-          <div className="flex h-16 items-center px-6">
-            <h1 className="text-xl font-bold text-primary-600">Comm360</h1>
+      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col z-30">
+        <div className="flex flex-col flex-grow bg-white/20 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20">
+          <div className="flex h-20 items-center px-8">
+            <h1 className="text-2xl font-extrabold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent tracking-tight">Comm360</h1>
           </div>
-          <nav className="flex-1 px-4 py-6">
+          <nav className="flex-1 px-6 py-8 space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center px-3 py-2 rounded-lg mb-2 transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-lg transition-all duration-200 relative group ${
                     isActive
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-secondary-600 hover:bg-secondary-100'
+                      ? 'bg-gradient-to-r from-blue-400/30 to-purple-400/30 text-primary-700 shadow-lg'
+                      : 'text-secondary-600 hover:bg-white/10 hover:text-primary-600'
                   }`}
                 >
-                  <item.icon className="h-5 w-5 mr-3" />
+                  <span className={`absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-full bg-gradient-to-b from-blue-400 to-purple-400 transition-all duration-200 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}></span>
+                  <item.icon className="h-6 w-6" />
                   {item.name}
                 </Link>
               );
             })}
           </nav>
-          <div className="border-t border-secondary-200 p-4">
+          <div className="px-6 mt-auto pb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center shadow-lg">
+                <User className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-primary-800">{user?.fullName || user?.username}</p>
+                <p className="text-xs text-secondary-500">{user?.email}</p>
+              </div>
+            </div>
             <button
               onClick={handleLogout}
-              className="flex items-center w-full px-3 py-2 text-secondary-600 hover:bg-secondary-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 w-full px-4 py-2 text-secondary-600 hover:bg-white/10 hover:text-red-600 rounded-xl font-semibold transition-all"
             >
-              <LogOut className="h-5 w-5 mr-3" />
+              <LogOut className="h-5 w-5" />
               Logout
             </button>
           </div>
@@ -113,7 +142,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-72">
         {/* Header */}
         <header className="bg-white shadow-sm border-b border-secondary-200">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
