@@ -10,11 +10,14 @@ import {
   MessageSquare,
   TrendingUp,
   Activity,
-  Sparkles
+  Sparkles,
+  User,
+  Hash
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/client.js';
+import * as conversationAPI from '../api/conversationService';
 
 const stats = [
   { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
@@ -35,6 +38,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unreadNotifications, setUnreadNotifications] = useState([]);
 
   useEffect(() => {
     // Fetch active rooms
@@ -48,6 +52,31 @@ export default function DashboardPage() {
         setLoading(false);
       });
   }, []);
+
+  // Fetch unread message notifications
+  useEffect(() => {
+    async function fetchUnread() {
+      try {
+        const res = await conversationAPI.getConversations();
+        const conversations = res.data.conversations || res.data || [];
+        // Aggregate unread counts by type
+        const notifications = conversations
+          .filter(c => c.unread > 0)
+          .map(c => ({
+            id: c._id,
+            type: c.type,
+            name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
+            unread: c.unread,
+            avatar: c.avatar,
+            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash
+          }));
+        setUnreadNotifications(notifications);
+      } catch (err) {
+        setUnreadNotifications([]);
+      }
+    }
+    fetchUnread();
+  }, [user]);
 
   const createNewMeeting = () => {
     const roomId = Date.now().toString();
@@ -84,6 +113,48 @@ export default function DashboardPage() {
           <span>New Meeting</span>
         </motion.button>
       </motion.div>
+
+      {/* New Message Notifications Section */}
+      {unreadNotifications.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/80 shadow-xl rounded-2xl p-6 border border-white/30">
+          <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
+            <MessageSquare className="h-6 w-6 text-blue-400" />
+            New Messages
+          </h2>
+          <div className="space-y-3">
+            {unreadNotifications.map((notif, idx) => (
+              <motion.div
+                key={notif.id}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.07, duration: 0.5 }}
+                className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
+              >
+                <div className="relative">
+                  {notif.avatar ? (
+                    <img src={notif.avatar} alt={notif.name} className="h-12 w-12 rounded-full object-cover shadow-md" />
+                  ) : (
+                    <div className={`h-12 w-12 rounded-full bg-gradient-to-r ${notif.type === 'dm' ? 'from-purple-500 to-pink-500' : notif.type === 'group' ? 'from-blue-500 to-cyan-500' : 'from-green-500 to-emerald-500'} flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                      <notif.icon className="h-6 w-6" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-primary-800">
+                    {notif.name || (notif.type === 'group' ? 'Group' : notif.type === 'community' ? 'Community' : 'Direct Message')}
+                  </h3>
+                  <p className="text-secondary-600 text-sm">
+                    {notif.unread} new message{notif.unread > 1 ? 's' : ''} {notif.type === 'dm' ? 'from this person' : notif.type === 'group' ? 'from this group' : 'from this community'}
+                  </p>
+                </div>
+                <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold rounded-full px-3 py-1 min-w-[32px] text-center shadow-md">
+                  {notif.unread > 99 ? '99+' : notif.unread}
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
