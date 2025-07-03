@@ -94,6 +94,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Set lowercase repository name
+      run: |
+        echo "LOWERCASE_REPO=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        echo "Repository name converted to: $LOWERCASE_REPO"
+    
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
     
@@ -108,7 +113,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -122,7 +127,7 @@ jobs:
       with:
         context: ./webrtc-client
         push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:${{ steps.meta.outputs.version }}
+        tags: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}-frontend:${{ steps.meta.outputs.version }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -133,7 +138,7 @@ jobs:
       with:
         context: ./webrtc-signaling-server
         push: true
-        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:${{ steps.meta.outputs.version }}
+        tags: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}-backend:${{ steps.meta.outputs.version }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
