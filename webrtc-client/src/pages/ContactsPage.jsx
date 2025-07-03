@@ -85,7 +85,7 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="relative space-y-8">
+    <div className="min-h-screen flex flex-col bg-gray-950 dark:bg-gray-950 text-gray-900 dark:text-secondary-100 relative space-y-8">
       {/* Hero background illustration */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <div className="absolute left-1/2 top-0 -translate-x-1/2 w-[80vw] h-[40vh] bg-gradient-to-br from-blue-400/30 via-purple-400/20 to-pink-400/10 rounded-full blur-3xl opacity-60 animate-pulse" />
