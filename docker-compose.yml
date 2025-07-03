@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # Frontend React App
+  frontend:
+    build:
+      context: ./webrtc-client
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:3000/api
+      - REACT_APP_WS_URL=ws://localhost:3000
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Backend Node.js Server
+  backend:
+    build:
+      context: ./webrtc-signaling-server
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      # Database
+      - MONGO_URI=${MONGO_URI}
+      
+      # JWT
+      - JWT_SECRET=${JWT_SECRET}
+      
+      # Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      
+      # AI Services
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      
+      # TTS
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - TTS_VOICE_ID=${TTS_VOICE_ID}
+      
+      # Solr
+      - SOLR_HOST=${SOLR_HOST}
+      - COLL=${COLL}
+      - WHOSE_AVATAR=${WHOSE_AVATAR}
+      - NUMUTTER=${NUMUTTER}
+      
+      # TURN Server
+      - TURN_USER=${TURN_USER}
+      - TURN_PASS=${TURN_PASS}
+      
+      # Server Config
+      - PORT=5000
+      - NODE_ENV=production
+      - BACKEND_URL=http://localhost:5000
+      
+      # CORS
+      - CORS_ORIGIN=http://localhost:3000
+      
+      # File Upload
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE}
+    volumes:
+      - ./webrtc-signaling-server/uploads:/app/uploads
+      - ./webrtc-signaling-server/recordings:/app/recordings
+      - ./webrtc-signaling-server/tmp:/app/tmp
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/auth/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  uploads:
+  recordings:
+  tmp: 
