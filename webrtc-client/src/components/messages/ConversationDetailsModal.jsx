@@ -185,9 +185,9 @@ export default function ConversationDetailsModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-secondary-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300 dark:border dark:border-gray-800">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className={`relative p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor} dark:bg-secondary-800/80 dark:border-gray-800`}>
+        <div className={`relative p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className={`p-2 rounded-xl bg-gradient-to-r ${config.gradient} text-white shadow-lg`}>
@@ -223,7 +223,7 @@ export default function ConversationDetailsModal({
           )}
 
           {/* Conversation Info */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-secondary-900 dark:to-secondary-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center space-x-2">
               <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
                 <Shield className="h-3 w-3 text-white" />
@@ -249,7 +249,7 @@ export default function ConversationDetailsModal({
           </div>
 
           {/* Name Section */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-secondary-900 dark:to-secondary-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
                 <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
@@ -306,7 +306,7 @@ export default function ConversationDetailsModal({
 
           {/* Description Section (for Groups and Communities) */}
           {(conversation.type === 'group' || conversation.type === 'community') && (
-            <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-secondary-900 dark:to-secondary-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+            <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
                   <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
@@ -361,7 +361,7 @@ export default function ConversationDetailsModal({
           )}
 
           {/* Members List */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-secondary-900 dark:to-secondary-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800">
+          <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
                 <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
@@ -484,7 +484,7 @@ export default function ConversationDetailsModal({
         {/* Add Member Modal */}
         {showAddMemberModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-secondary-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
               {/* Header */}
               <div className="relative p-6 bg-gradient-to-r from-blue-50 to-cyan-50 border-b border-blue-200">
                 <div className="flex items-center justify-between">

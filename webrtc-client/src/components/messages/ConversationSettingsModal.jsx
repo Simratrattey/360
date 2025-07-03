@@ -185,9 +185,9 @@ export default function ConversationSettingsModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className={`bg-white dark:bg-secondary-900 rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300 dark:border dark:border-gray-800`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300`}>
         {/* Header */}
-        <div className={`relative p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor} dark:bg-secondary-800/80 dark:border-gray-800`}>
+        <div className={`relative p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className={`p-2 rounded-xl bg-gradient-to-r ${config.gradient} text-white shadow-lg`}>

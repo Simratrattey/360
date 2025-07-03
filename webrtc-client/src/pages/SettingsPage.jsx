@@ -591,13 +591,13 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 dark:text-gray-100 py-10 px-2 md:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 py-10 px-2 md:px-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Sidebar Navigation */}
           <aside className="md:w-64 w-full flex-shrink-0">
             <div className="sticky top-10">
-              <nav className="space-y-2 bg-white/80 dark:bg-gray-900/80 rounded-2xl shadow-lg p-4 border border-gray-100 dark:border-gray-800">
+              <nav className="space-y-2 bg-white/80 rounded-2xl shadow-lg p-4 border border-gray-100">
                 {settingsSections.map((section) => (
                   <button
                     key={section.id}
@@ -623,7 +623,7 @@ export default function SettingsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="bg-white/90 dark:bg-secondary-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 p-8 mb-8"
+              className="bg-white/90 rounded-2xl shadow-2xl border border-gray-100 p-8 mb-8"
             >
               <div className="flex items-center mb-8 gap-4">
                 {settingsSections.find(s => s.id === activeSection)?.icon && (
