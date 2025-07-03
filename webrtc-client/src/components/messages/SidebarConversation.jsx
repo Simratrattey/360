@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Star, Trash2, MessageCircle, Users, Hash } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
 
@@ -77,6 +77,7 @@ export default function SidebarConversation({
   canDelete,
 }) {
   const { onlineUsers } = useChatSocket();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const displayName = getConversationDisplayName(conv, currentUserId);
   const initials = getInitials(displayName);
@@ -179,7 +180,7 @@ export default function SidebarConversation({
               {/* Delete button */}
               {canDelete && (
                 <button 
-                  onClick={e => { e.stopPropagation(); onDelete(); }} 
+                  onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
                   className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
                   title="Delete conversation"
                 >
@@ -210,6 +211,31 @@ export default function SidebarConversation({
       {/* Active indicator */}
       {isActive && (
         <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
+      )}
+
+      {/* Delete confirmation dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-xs w-full flex flex-col items-center">
+            <Trash2 className="h-8 w-8 text-red-500 mb-2" />
+            <h3 className="text-lg font-bold mb-2 text-gray-900">Delete Conversation?</h3>
+            <p className="text-gray-600 mb-4 text-center">Are you sure you want to delete this conversation? This action cannot be undone.</p>
+            <div className="flex gap-4 w-full">
+              <button
+                className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow"
+                onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -115,6 +115,35 @@ export default function SettingsPage() {
     };
   }, [testStream]);
 
+  // Theme switching effect
+  useEffect(() => {
+    if (!settings || !settings.appearance) return;
+    const theme = settings.appearance.theme;
+    const html = document.documentElement;
+    if (theme === 'dark') {
+      html.classList.add('dark');
+    } else if (theme === 'light') {
+      html.classList.remove('dark');
+    } else if (theme === 'auto') {
+      // Follow system preference
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mq.matches) {
+        html.classList.add('dark');
+      } else {
+        html.classList.remove('dark');
+      }
+      // Listen for system changes
+      const handler = (e) => {
+        if (settings.appearance.theme === 'auto') {
+          if (e.matches) html.classList.add('dark');
+          else html.classList.remove('dark');
+        }
+      };
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, [settings?.appearance?.theme]);
+
   const updateSetting = (section, key, value) => {
     setSettings(prev => ({
       ...prev,
