@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unreadNotifications, setUnreadNotifications] = useState([]);
+  const [messageNotifications, setMessageNotifications] = useState([]);
 
   useEffect(() => {
     // Fetch active rooms
@@ -78,6 +79,30 @@ export default function DashboardPage() {
     fetchUnread();
   }, [user]);
 
+  // Fetch message notifications (reuse logic from MessagesPage)
+  useEffect(() => {
+    async function fetchNotifications() {
+      try {
+        const res = await conversationAPI.getConversations();
+        const conversations = res.data.conversations || res.data || [];
+        const notifications = conversations
+          .filter(c => c.unread > 0)
+          .map(c => ({
+            id: c._id,
+            type: c.type,
+            name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
+            unread: c.unread,
+            avatar: c.avatar,
+            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash
+          }));
+        setMessageNotifications(notifications);
+      } catch (err) {
+        setMessageNotifications([]);
+      }
+    }
+    fetchNotifications();
+  }, [user]);
+
   const createNewMeeting = () => {
     const roomId = Date.now().toString();
     navigate(`/meeting/${roomId}`);
@@ -114,15 +139,15 @@ export default function DashboardPage() {
         </motion.button>
       </motion.div>
 
-      {/* New Message Notifications Section */}
-      {unreadNotifications.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/80 shadow-xl rounded-2xl p-6 border border-white/30">
-          <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
-            <MessageSquare className="h-6 w-6 text-blue-400" />
-            New Messages
-          </h2>
+      {/* Message Notifications Section */}
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/80 shadow-xl rounded-2xl p-6 border border-white/30">
+        <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
+          <MessageSquare className="h-6 w-6 text-blue-400" />
+          Message Notifications
+        </h2>
+        {messageNotifications.length > 0 ? (
           <div className="space-y-3">
-            {unreadNotifications.map((notif, idx) => (
+            {messageNotifications.map((notif, idx) => (
               <motion.div
                 key={notif.id}
                 initial={{ opacity: 0, x: 30 }}
@@ -153,8 +178,10 @@ export default function DashboardPage() {
               </motion.div>
             ))}
           </div>
-        </motion.div>
-      )}
+        ) : (
+          <div className="text-center text-secondary-400 py-8 text-lg">No new messages 🎉</div>
+        )}
+      </motion.div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
