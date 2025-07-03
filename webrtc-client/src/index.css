@@ -5,33 +5,45 @@
 
 @layer base {
   body {
-    @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100;
+    @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-secondary-200;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:bg-primary-500 dark:hover:bg-primary-600 dark:text-gray-100;
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:bg-gradient-to-r dark:from-blue-700 dark:to-purple-700 dark:hover:from-blue-800 dark:hover:to-purple-800 dark:text-white dark:shadow-lg;
   }
   
   .btn-secondary {
-    @apply bg-secondary-100 hover:bg-secondary-200 text-secondary-900 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 dark:bg-secondary-800 dark:hover:bg-secondary-700 dark:text-secondary-100;
+    @apply bg-secondary-100 hover:bg-secondary-200 text-secondary-900 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 dark:bg-secondary-800/80 dark:hover:bg-secondary-700/80 dark:text-secondary-100 dark:shadow;
   }
   
   .btn-outline {
-    @apply border border-secondary-300 hover:bg-secondary-50 text-secondary-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 dark:border-secondary-700 dark:hover:bg-secondary-800 dark:text-secondary-100;
+    @apply border border-secondary-300 hover:bg-secondary-50 text-secondary-700 font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2 dark:border-secondary-700 dark:hover:bg-secondary-800/60 dark:text-secondary-100 dark:shadow;
   }
   
   .input-field {
-    @apply w-full px-3 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors duration-200 dark:bg-secondary-900 dark:border-secondary-700 dark:text-gray-100;
+    @apply w-full px-3 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors duration-200 dark:bg-secondary-900/80 dark:border-secondary-700 dark:text-secondary-100 dark:placeholder:text-secondary-400 dark:shadow-inner;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-secondary-200 p-6 dark:bg-secondary-900 dark:border-secondary-700 dark:shadow-lg;
+    @apply bg-white rounded-xl shadow-sm border border-secondary-200 p-6 dark:bg-gradient-to-br dark:from-secondary-900 dark:to-gray-950 dark:border-gray-800 dark:shadow-2xl;
   }
   
   .glass-effect {
-    @apply bg-white/80 backdrop-blur-sm border border-white/20 dark:bg-secondary-800/80 dark:border-secondary-700/40;
+    @apply bg-white/80 backdrop-blur-sm border border-white/20 dark:bg-gradient-to-br dark:from-secondary-900/80 dark:to-gray-900/80 dark:border-secondary-800/40 dark:backdrop-blur-lg;
+  }
+  
+  .highlight {
+    @apply text-primary-500 dark:text-primary-400 font-semibold;
+  }
+  
+  .bubble-dark {
+    @apply bg-secondary-800/90 text-secondary-100 border border-secondary-700 shadow-lg;
+  }
+  
+  .bubble-dark-own {
+    @apply bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900 text-primary-100 border border-primary-800 shadow-xl;
   }
 } 

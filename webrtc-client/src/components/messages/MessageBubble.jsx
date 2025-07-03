@@ -280,13 +280,13 @@ export default function MessageBubble({
           <div className="flex items-center mr-2">
             <button
               onClick={() => setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId)}
-              className={`p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
+              className={`p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100 dark:hover:bg-secondary-800/60`}
               tabIndex={-1}
             >
-              <Smile className="h-5 w-5 text-gray-400" />
+              <Smile className="h-5 w-5 text-gray-400 dark:text-secondary-300" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3 flex flex-wrap gap-2 mb-2 min-w-[200px]">
+              <div className="absolute left-0 bottom-full z-20 bg-white dark:bg-secondary-900 border border-gray-200 dark:border-secondary-700 rounded-lg shadow-lg p-3 flex flex-wrap gap-2 mb-2 min-w-[200px]">
                 {emojiList.map(emoji => (
                   <span
                     key={emoji}
@@ -302,15 +302,15 @@ export default function MessageBubble({
         )}
         <div className={`max-w-sm px-3 py-2 rounded-2xl relative shadow-sm ${
           isOwn
-            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-            : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-300'
+            ? 'bubble-dark-own'
+            : 'bubble-dark'
         }`}>
           {/* Sender name and timestamp */}
           <div className="flex items-center justify-between mb-2 min-w-0">
-            <div className={`text-sm font-semibold truncate flex-1 ${isOwn ? 'text-blue-100' : 'text-gray-700'}`}>
+            <div className={`text-sm font-semibold truncate flex-1 ${isOwn ? 'text-primary-200' : 'text-secondary-200'}`}>
               {senderName}
             </div>
-            <div className={`flex items-center space-x-2 flex-shrink-0 ml-2 ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+            <div className={`flex items-center space-x-2 flex-shrink-0 ml-2 ${isOwn ? 'text-primary-300' : 'text-secondary-400'}`}>
               <span className="text-xs whitespace-nowrap">
                 {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
@@ -323,8 +323,8 @@ export default function MessageBubble({
                 {renderStatusIndicator()}
                 {/* Read receipts tooltip/modal */}
                 {showReadTooltip && messageStatus && messageStatus[messageId]?.recipients?.length > 0 && (
-                  <div className="absolute right-0 top-6 z-30 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-2 text-xs text-gray-700 min-w-[120px] animate-in fade-in duration-200">
-                    <div className="font-semibold mb-1 text-gray-900">Read by:</div>
+                  <div className="absolute right-0 top-6 z-30 bg-secondary-900 border border-secondary-700 rounded-xl shadow-lg px-4 py-2 text-xs text-secondary-200 min-w-[120px] animate-in fade-in duration-200">
+                    <div className="font-semibold mb-1 text-primary-400">Read by:</div>
                     <ul>
                       {messageStatus[messageId].recipients.map(uid => {
                         const user = getUserObj(uid);
@@ -345,12 +345,12 @@ export default function MessageBubble({
           {/* Reply context */}
           {(replyContext || msg.replyTo) && (replyContext?.text || replyContext?.file || msg.replyTo?.text || msg.replyTo?.file) && (
             <div className={`text-xs mb-2 p-2 rounded-lg break-words ${
-              isOwn ? 'bg-blue-400 bg-opacity-30' : 'bg-gray-100'
+              isOwn ? 'bg-blue-900/40' : 'bg-secondary-800/80 text-secondary-300'
             }`}>
-              <span className={`font-medium ${isOwn ? 'text-blue-100' : 'text-gray-600'}`}>
+              <span className={`font-medium ${isOwn ? 'text-primary-200' : 'text-secondary-300'}`}>
                 Replying to: 
               </span>
-              <span className={`italic ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+              <span className={`italic ${isOwn ? 'text-primary-200' : 'text-secondary-400'}`}>
                 {((replyContext || msg.replyTo)?.text || (replyContext || msg.replyTo)?.file?.name || '').slice(0, 50)}{((replyContext || msg.replyTo)?.text || (replyContext || msg.replyTo)?.file?.name || '').length > 50 ? '...' : ''}
               </span>
             </div>
