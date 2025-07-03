@@ -73,6 +73,14 @@ export default function MessageBubble({
     return null;
   };
 
+  // Helper: get user object from onlineUsers (Map or array)
+  const getUserObj = (userId) => {
+    if (!onlineUsers) return null;
+    if (onlineUsers instanceof Map) return onlineUsers.get(userId);
+    if (Array.isArray(onlineUsers)) return onlineUsers.find(u => u._id === userId);
+    return null;
+  };
+
   // Helper: highlight mentions in text
   const renderTextWithMentions = (text) => {
     if (!text) return null;
@@ -81,7 +89,8 @@ export default function MessageBubble({
       if (/^@\w[\w.]*$/.test(part)) {
         const username = part.slice(1);
         // Highlight if it's the current user
-        const isMe = username.toLowerCase() === (onlineUsers?.find(u => u._id === currentUserId)?.username?.toLowerCase() || '');
+        const userObj = getUserObj(currentUserId);
+        const isMe = username.toLowerCase() === (userObj?.username?.toLowerCase() || '');
         return (
           <span
             key={i}
@@ -318,7 +327,7 @@ export default function MessageBubble({
                     <div className="font-semibold mb-1 text-gray-900">Read by:</div>
                     <ul>
                       {messageStatus[messageId].recipients.map(uid => {
-                        const user = onlineUsers?.find(u => u._id === uid);
+                        const user = getUserObj(uid);
                         return (
                           <li key={uid} className="flex items-center gap-2 py-0.5">
                             <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
