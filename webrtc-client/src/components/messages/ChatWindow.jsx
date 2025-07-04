@@ -1,10 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 
+function groupMessagesByDate(messages) {
+  if (!messages || !Array.isArray(messages)) return {};
+  return messages.reduce((acc, msg) => {
+    const date = new Date(msg.createdAt || msg.timestamp || Date.now()).toLocaleDateString();
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(msg);
+    return acc;
+  }, {});
+}
+
 export default function ChatWindow({
-  grouped,
-  selected,
-  reactions,
+  messages = [],
+  currentUserId,
+  onEdit,
+  onDelete,
+  onReply,
+  onEmoji,
+  reactions = {},
   showEmojiPicker,
   setShowEmojiPicker,
   emojiList,
@@ -13,23 +27,18 @@ export default function ChatWindow({
   setEditInput,
   handleEditSave,
   handleEditCancel,
-  onEdit,
-  onDelete,
-  onReply,
-  onEmoji,
-  replyContext,
-  typing,
-  currentUserId,
+  typing = {},
   messageStatus,
   onlineUsers,
 }) {
   const chatRef = useRef(null);
+  const grouped = groupMessagesByDate(messages);
 
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [grouped, typing]);
+  }, [messages, typing]);
 
   // Get typing users
   const typingUsers = Object.keys(typing || {}).filter(userId => 

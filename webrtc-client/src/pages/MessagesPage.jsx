@@ -534,8 +534,6 @@ export default function MessagesPage() {
     }
   };
 
-  const grouped = groupMessagesByDate(messages);
-
   return (
     <div className="flex h-[80vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
       {/* Sidebar - Full width on mobile when open */}
