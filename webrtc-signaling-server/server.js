@@ -50,7 +50,7 @@ app.use(express.urlencoded({ extended: true }));
 // ─── Enable CORS for your front-end origin ──────────────────────────────────
 const corsOptions = {
   origin: [
-    'https://webrtc-client-me7n.vercel.app',
+    'https://360-five-nu.vercel.app',
     'https://comm360-milestone1.vercel.app',
     'https://comm360-milestone1.onrender.com',
 
