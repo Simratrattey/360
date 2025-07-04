@@ -11,6 +11,7 @@ import * as conversationAPI from '../api/conversationService';
 import * as messageAPI from '../api/messageService';
 import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
+import { useMediaQuery } from 'react-responsive';
 
 // Placeholder for emoji list
 const emojiList = ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🙏', '🔥', '💯', '✨', '🎉', '🤔', '😎', '🥳', '😴'];
@@ -113,6 +114,8 @@ export default function MessagesPage() {
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
   const windowFocused = useRef(true);
+  const isMobile = useMediaQuery({ maxWidth: 767 });
+  const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
 
   // Request notification permission on mount
   useEffect(() => {
@@ -134,6 +137,29 @@ export default function MessagesPage() {
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  // When mounting on mobile, show sidebar first
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(true);
+      setSelected(null);
+    }
+  }, [isMobile]);
+
+  // Add useEffect to auto-select conversation from URL param
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const conversationId = urlParams.get('conversation');
+    if (conversationId && allConversations.length > 0) {
+      const allItems = allConversations.flatMap(section => section.items);
+      const target = allItems.find(c => c._id === conversationId);
+      if (target) {
+        setSelected(target);
+        if (isMobile) setSidebarOpen(false);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, [allConversations, isMobile]);
 
   const fetchConversations = async () => {
     try {
@@ -181,8 +207,7 @@ export default function MessagesPage() {
       if (
         window.Notification &&
         Notification.permission === 'granted' &&
-        msg.senderId !== user.id &&
-        windowFocused.current
+        (msg.senderId !== user.id && msg.sender !== user.id)
       ) {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
@@ -296,7 +321,7 @@ export default function MessagesPage() {
     setSelected(conv);
     setReplyTo(null);
     setShowEmojiPicker(false);
-    // Optionally: mark as read via API
+    if (isMobile) setSidebarOpen(false);
   };
 
   const handleSend = async () => {
@@ -504,220 +529,235 @@ export default function MessagesPage() {
   return (
     <div className="flex h-[80vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
       {/* Sidebar */}
-      <div className="w-80 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-                <MessageCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Messages</h1>
-                <p className="text-sm text-gray-600">Connect with your team</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowCreateModal(true)} 
-              className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              title="New Conversation"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Search */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto py-2">
-          {(() => {
-            console.log('About to render filteredConversations:', filteredConversations);
-            return filteredConversations.map(section => {
-              console.log('Rendering section:', section.section);
-              console.log('Section items count:', section.items.length);
-              
-              return (
-                <div key={section.section} className="mb-6">
-                  <div className="flex items-center px-6 py-3 text-gray-500 uppercase text-xs font-bold tracking-wider">
-                    <section.icon className="h-4 w-4 mr-3" />
-                    {section.section}
-                  </div>
-                  {section.items.map(conv => {
-                    console.log('Rendering conversation item:', conv);
-                    console.log('Conversation members:', conv?.members);
-                    console.log('About to render SidebarConversation for conv:', conv._id);
-                    
-                    return (
-                      <SidebarConversation
-                        key={conv._id}
-                        conv={conv}
-                        isActive={selected && selected._id === conv._id}
-                        onSelect={() => handleSelect(conv)}
-                        onStar={() => handleStar(conv._id)}
-                        onDelete={() => handleDeleteConversation(conv)}
-                        starred={starred.includes(conv._id)}
-                        getInitials={getInitials}
-                        currentUserId={user?.id}
-                        canDelete={
-                          conv.type === 'dm' || 
-                          (conv.type === 'group' && conv.admins?.includes(user?.id)) ||
-                          (conv.type === 'community' && conv.admins?.includes(user?.id))
-                        }
-                      />
-                    );
-                  })}
+      {(!isMobile || sidebarOpen) && (
+        <div className="w-80 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
+                  <MessageCircle className="h-6 w-6" />
                 </div>
-              );
-            });
-          })()}
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Messages</h1>
+                  <p className="text-sm text-gray-600">Connect with your team</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowCreateModal(true)} 
+                className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                title="New Conversation"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="p-4 border-b border-gray-100">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm"
+              />
+            </div>
+          </div>
+
+          {/* Conversations List */}
+          <div className="flex-1 overflow-y-auto py-2">
+            {(() => {
+              console.log('About to render filteredConversations:', filteredConversations);
+              return filteredConversations.map(section => {
+                console.log('Rendering section:', section.section);
+                console.log('Section items count:', section.items.length);
+                
+                return (
+                  <div key={section.section} className="mb-6">
+                    <div className="flex items-center px-6 py-3 text-gray-500 uppercase text-xs font-bold tracking-wider">
+                      <section.icon className="h-4 w-4 mr-3" />
+                      {section.section}
+                    </div>
+                    {section.items.map(conv => {
+                      console.log('Rendering conversation item:', conv);
+                      console.log('Conversation members:', conv?.members);
+                      console.log('About to render SidebarConversation for conv:', conv._id);
+                      
+                      return (
+                        <SidebarConversation
+                          key={conv._id}
+                          conv={conv}
+                          isActive={selected && selected._id === conv._id}
+                          onSelect={() => handleSelect(conv)}
+                          onStar={() => handleStar(conv._id)}
+                          onDelete={() => handleDeleteConversation(conv)}
+                          starred={starred.includes(conv._id)}
+                          getInitials={getInitials}
+                          currentUserId={user?.id}
+                          canDelete={
+                            conv.type === 'dm' || 
+                            (conv.type === 'group' && conv.admins?.includes(user?.id)) ||
+                            (conv.type === 'community' && conv.admins?.includes(user?.id))
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              });
+            })()}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm">
-        {/* Chat header */}
-        {selected ? (
-          <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-blue-50">
-            <div className="flex items-center justify-between">
-              <div 
-                className="flex items-center space-x-4 cursor-pointer hover:bg-white/50 p-3 rounded-xl transition-all duration-200"
-                onClick={() => setShowDetailsModal(true)}
-              >
-                <div className="relative">
-                  {selected.avatar ? (
-                    <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-12 w-12 rounded-full object-cover shadow-lg" />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                      {getInitials(getConversationDisplayName(selected, user?.id))}
-                    </div>
-                  )}
-                  {selected.status && (
-                    <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-3 border-white ${selected.status === 'online' ? 'bg-green-500' : 'bg-gray-400'} shadow-md`}></span>
+      {(!isMobile || (!sidebarOpen && selected)) && (
+        <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm">
+          {/* Mobile back button */}
+          {isMobile && (
+            <button
+              className="p-2 m-2 rounded-full bg-blue-100 text-blue-600 shadow-md"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+          )}
+          {/* Chat header */}
+          {selected ? (
+            <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-blue-50">
+              <div className="flex items-center justify-between">
+                <div 
+                  className="flex items-center space-x-4 cursor-pointer hover:bg-white/50 p-3 rounded-xl transition-all duration-200"
+                  onClick={() => setShowDetailsModal(true)}
+                >
+                  <div className="relative">
+                    {selected.avatar ? (
+                      <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-12 w-12 rounded-full object-cover shadow-lg" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                        {getInitials(getConversationDisplayName(selected, user?.id))}
+                      </div>
+                    )}
+                    {selected.status && (
+                      <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-3 border-white ${selected.status === 'online' ? 'bg-green-500' : 'bg-gray-400'} shadow-md`}></span>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <h2 className="text-lg font-bold text-gray-900">{getConversationDisplayName(selected, user?.id)}</h2>
+                    {selected && (selected.type === 'group' || selected.type === 'community') && (
+                      <p className="text-sm text-gray-600">
+                        {selected.members?.length || 0} members
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {selected && (
+                    <button 
+                      onClick={() => setShowSettingsModal(true)} 
+                      className="p-2 rounded-xl hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700" 
+                      title="Conversation Settings"
+                    >
+                      <Settings className="h-5 w-5" />
+                    </button>
                   )}
                 </div>
-                <div className="flex flex-col">
-                  <h2 className="text-lg font-bold text-gray-900">{getConversationDisplayName(selected, user?.id)}</h2>
-                  {selected && (selected.type === 'group' || selected.type === 'community') && (
-                    <p className="text-sm text-gray-600">
-                      {selected.members?.length || 0} members
-                    </p>
-                  )}
+              </div>
+            </div>
+          ) : (
+            <div className="border-b border-gray-100 px-6 py-8 bg-gradient-to-r from-gray-50 to-blue-50">
+              <div className="text-center">
+                <div className="p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <MessageCircle className="h-8 w-8 text-white" />
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                {selected && (
-                  <button 
-                    onClick={() => setShowSettingsModal(true)} 
-                    className="p-2 rounded-xl hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700" 
-                    title="Conversation Settings"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
-                )}
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome to Messages</h2>
+                <p className="text-gray-600">Select a conversation to start chatting</p>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="border-b border-gray-100 px-6 py-8 bg-gradient-to-r from-gray-50 to-blue-50">
-            <div className="text-center">
-              <div className="p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                <MessageCircle className="h-8 w-8 text-white" />
+          )}
+
+          {/* Reply context */}
+          {replyTo && (
+            <div className="px-6 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                  <MessageCircle className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-gray-900">Replying to:</p>
+                  <p className="text-sm text-gray-600 truncate">{replyTo.text || replyTo.file?.name}</p>
+                </div>
+                <button 
+                  onClick={() => setReplyTo(null)} 
+                  className="p-1 rounded-full hover:bg-white/50 transition-colors text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Welcome to Messages</h2>
-              <p className="text-gray-600">Select a conversation to start chatting</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Reply context */}
-        {replyTo && (
-          <div className="px-6 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white">
-                <MessageCircle className="h-4 w-4" />
+          {/* Chat messages */}
+          <ChatWindow
+            grouped={grouped}
+            selected={selected}
+            reactions={reactions}
+            showEmojiPicker={showEmojiPicker}
+            setShowEmojiPicker={setShowEmojiPicker}
+            emojiList={emojiList}
+            editMsgId={editMsgId}
+            editInput={editInput}
+            setEditInput={setEditInput}
+            handleEditSave={handleEditSave}
+            handleEditCancel={handleEditCancel}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onReply={handleReply}
+            onEmoji={handleEmojiClick}
+            replyContext={replyTo}
+            typing={typing}
+            currentUserId={user.id}
+            messageStatus={chatSocket.messageStatus}
+            onlineUsers={chatSocket.onlineUsers}
+          />
+
+          {/* Chat input */}
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSend={handleSend}
+            onFileChange={handleFileChange}
+            uploadFile={uploadFile}
+            onRemoveFile={handleRemoveFile}
+            onShowEmojiPicker={() => setShowEmojiPicker('input')}
+            onTyping={handleTyping}
+            members={selected?.members || []}
+          />
+
+          {/* Notification */}
+          {notification && (
+            <div className="fixed top-6 right-6 z-50 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-xl shadow-2xl animate-in slide-in-from-right-4 duration-300">
+              <div className="flex items-center space-x-3">
+                <div className="p-1 rounded-full bg-white/20">
+                  <Check className="h-4 w-4" />
+                </div>
+                <span className="font-medium">{notification.message}</span>
+                <button 
+                  onClick={() => setNotification(null)} 
+                  className="ml-4 text-white/80 hover:text-white transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-gray-900">Replying to:</p>
-                <p className="text-sm text-gray-600 truncate">{replyTo.text || replyTo.file?.name}</p>
-              </div>
-              <button 
-                onClick={() => setReplyTo(null)} 
-                className="p-1 rounded-full hover:bg-white/50 transition-colors text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
-          </div>
-        )}
-
-        {/* Chat messages */}
-        <ChatWindow
-          grouped={grouped}
-          selected={selected}
-          reactions={reactions}
-          showEmojiPicker={showEmojiPicker}
-          setShowEmojiPicker={setShowEmojiPicker}
-          emojiList={emojiList}
-          editMsgId={editMsgId}
-          editInput={editInput}
-          setEditInput={setEditInput}
-          handleEditSave={handleEditSave}
-          handleEditCancel={handleEditCancel}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          onReply={handleReply}
-          onEmoji={handleEmojiClick}
-          replyContext={replyTo}
-          typing={typing}
-          currentUserId={user.id}
-          messageStatus={chatSocket.messageStatus}
-          onlineUsers={chatSocket.onlineUsers}
-        />
-
-        {/* Chat input */}
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onSend={handleSend}
-          onFileChange={handleFileChange}
-          uploadFile={uploadFile}
-          onRemoveFile={handleRemoveFile}
-          onShowEmojiPicker={() => setShowEmojiPicker('input')}
-          onTyping={handleTyping}
-          members={selected?.members || []}
-        />
-
-        {/* Notification */}
-        {notification && (
-          <div className="fixed top-6 right-6 z-50 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-3 rounded-xl shadow-2xl animate-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center space-x-3">
-              <div className="p-1 rounded-full bg-white/20">
-                <Check className="h-4 w-4" />
-              </div>
-              <span className="font-medium">{notification.message}</span>
-              <button 
-                onClick={() => setNotification(null)} 
-                className="ml-4 text-white/80 hover:text-white transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       
       {/* User Selection Modal */}
       <UserSelectionModal

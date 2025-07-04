@@ -154,6 +154,7 @@ export default function DashboardPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
+                onClick={() => navigate(`/messages?conversation=${notif.id}`)}
               >
                 <div className="relative">
                   {notif.avatar ? (
