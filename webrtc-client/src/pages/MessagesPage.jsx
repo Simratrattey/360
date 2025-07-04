@@ -116,6 +116,7 @@ export default function MessagesPage() {
   const windowFocused = useRef(true);
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+  const [messagesCache, setMessagesCache] = useState({});
 
   // Request notification permission on mount
   useEffect(() => {
@@ -188,9 +189,14 @@ export default function MessagesPage() {
   // Fetch messages when a conversation is selected (REST, then join room)
   useEffect(() => {
     if (selected && selected._id) {
-      messageAPI.getMessages(selected._id).then(res => {
-        setMessages(res.data.messages);
-      });
+      if (messagesCache[selected._id]) {
+        setMessages(messagesCache[selected._id]);
+      } else {
+        messageAPI.getMessages(selected._id).then(res => {
+          setMessages(res.data.messages);
+          setMessagesCache(prev => ({ ...prev, [selected._id]: res.data.messages }));
+        });
+      }
       chatSocket.joinConversation(selected._id);
       return () => chatSocket.leaveConversation(selected._id);
     }
@@ -202,7 +208,11 @@ export default function MessagesPage() {
     if (!chatSocket.socket) return;
     // New message
     chatSocket.on('chat:new', msg => {
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => {
+        const updated = [...prev, msg];
+        setMessagesCache(cache => ({ ...cache, [msg.conversationId]: updated }));
+        return updated;
+      });
       // Show browser notification if message is not from current user
       if (
         window.Notification &&
