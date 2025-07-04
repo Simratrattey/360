@@ -13,7 +13,7 @@ export const uploadMessageFile = (file) => {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-      console.log('Upload progress:', percentCompleted);
+      // Upload progress tracking
     }
   });
 };
@@ -208,7 +208,7 @@ export const downloadFile = async (url, filename, mimeType) => {
       try {
         // For 426 Upgrade Required errors, try opening in new tab directly
         if (fetchError.message.includes('426') || fetchError.message.includes('Upgrade Required')) {
-          console.log('Detected 426 error, opening in new tab');
+          // Detected 426 error, opening in new tab
           window.open(url, '_blank');
           return;
         }
@@ -266,7 +266,7 @@ export const downloadFile = async (url, filename, mimeType) => {
       }
       
       // Final fallback: Open in new tab
-      console.log('All download methods failed, opening in new tab as fallback');
+              // All download methods failed, opening in new tab as fallback
       window.open(url, '_blank');
     }
   } catch (error) {

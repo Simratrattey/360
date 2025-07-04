@@ -17,65 +17,45 @@ import { useMediaQuery } from 'react-responsive';
 const emojiList = ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🙏', '🔥', '💯', '✨', '🎉', '🤔', '😎', '🥳', '😴'];
 
 function getInitials(name) {
-  console.log('getInitials called with:', name, 'type:', typeof name);
-  
   if (!name || typeof name !== 'string') {
-    console.log('getInitials returning fallback: U');
     return 'U';
   }
   
   const result = name.split(' ').map(n => n[0]).join('').toUpperCase();
-  console.log('getInitials result:', result);
   return result;
 }
 
 function getConversationDisplayName(conversation, currentUserId) {
-  console.log('MessagesPage getConversationDisplayName called with:', { conversation, currentUserId });
-  
   try {
     if (!conversation) {
-      console.log('No conversation provided, returning Unknown');
       return 'Unknown';
     }
     
     // If conversation has a name (group/community), use it
     if (conversation.name) {
-      console.log('Using conversation name:', conversation.name);
       return String(conversation.name);
     }
     
     // For DMs, show the other person's name
     if (conversation.type === 'dm' && conversation.members) {
-      console.log('Looking for other member in DM');
       const otherMember = conversation.members.find(m => m._id !== currentUserId);
-      console.log('Other member found:', otherMember);
-      console.log('Other member type:', typeof otherMember);
       
       if (otherMember && typeof otherMember === 'object') {
-        console.log('Processing other member object');
-        
         // Ensure we're working with a user object and extract string values
         const fullName = otherMember.fullName;
         const username = otherMember.username;
         const email = otherMember.email;
         
-        console.log('Member properties:', { fullName, username, email });
-        
         const displayName = fullName || username || email || 'Unknown User';
-        console.log('Final display name:', displayName, 'type:', typeof displayName);
         
         // Ensure we return a string
-        const result = String(displayName);
-        console.log('Returning result:', result);
-        return result;
+        return String(displayName);
       } else {
-        console.log('No valid other member found, using fallback');
         return 'Unknown User';
       }
     }
     
     // Fallback
-    console.log('Using fallback name: Unknown Conversation');
     return 'Unknown Conversation';
   } catch (error) {
     console.error('Error in MessagesPage getConversationDisplayName:', error);
@@ -165,9 +145,7 @@ export default function MessagesPage() {
   const fetchConversations = async () => {
     try {
       const res = await conversationAPI.getConversations();
-      console.log('Conversations API response:', res);
       const conversations = res.data.conversations || res.data || [];
-      console.log('Processed conversations:', conversations);
       
       setAllConversations([
         { section: 'Direct Messages', icon: User, items: conversations.filter(c => c.type === 'dm') },
@@ -178,7 +156,6 @@ export default function MessagesPage() {
       // Auto-select first conversation
       const first = conversations[0];
       if (first) {
-        console.log('Auto-selecting first conversation:', first);
         handleSelect(first);
       }
     } catch (error) {
@@ -200,7 +177,6 @@ export default function MessagesPage() {
       chatSocket.joinConversation(selected._id);
       return () => chatSocket.leaveConversation(selected._id);
     }
-    // eslint-disable-next-line
   }, [selected]);
 
   // Real-time event listeners
@@ -265,7 +241,6 @@ export default function MessagesPage() {
       chatSocket.off('chat:unreact');
       chatSocket.off('chat:typing');
     };
-    // eslint-disable-next-line
   }, [chatSocket.socket, selected, user.id]);
 
   // Mark messages as read when conversation is selected
@@ -282,16 +257,9 @@ export default function MessagesPage() {
 
   // Filter conversations by search
   const filteredConversations = allConversations.map(section => {
-    console.log('Processing section:', section.section);
-    console.log('Section items before filter:', section.items);
-    
     const filteredItems = section.items.filter(conv => {
-      console.log('Filtering conversation:', conv);
-      console.log('Conversation members:', conv.members);
-      
       try {
         const displayName = getConversationDisplayName(conv, user?.id);
-        console.log('Display name:', displayName);
         
         const memberNames = conv.members?.map(m => {
           // Ensure we're not accidentally rendering the member object
@@ -302,20 +270,15 @@ export default function MessagesPage() {
           return '';
         }).join(' ') || '';
         
-        console.log('Member names string:', memberNames);
-        
         const result = displayName.toLowerCase().includes(search.toLowerCase()) || 
                memberNames.toLowerCase().includes(search.toLowerCase());
         
-        console.log('Filter result:', result);
         return result;
       } catch (error) {
         console.error('Error in conversation filter:', error);
         return false;
       }
     });
-    
-    console.log('Filtered items:', filteredItems);
     
     return {
       ...section,
@@ -325,7 +288,6 @@ export default function MessagesPage() {
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {
-      console.error('Invalid conversation object:', conv);
       return;
     }
     setSelected(conv);
@@ -337,7 +299,6 @@ export default function MessagesPage() {
   const handleSend = async () => {
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
-      console.error('No conversation selected or conversation has no _id');
       return;
     }
 
@@ -480,13 +441,11 @@ export default function MessagesPage() {
 
   const handleUserSelect = async (selectedUser) => {
     try {
-      console.log('Creating DM with user:', selectedUser);
       const response = await conversationAPI.createConversation({
         type: 'dm',
         memberIds: [selectedUser._id]
       });
       
-      console.log('Conversation creation response:', response);
       const newConversation = response.data.conversation;
       
       // Refresh conversations list
@@ -578,11 +537,7 @@ export default function MessagesPage() {
           {/* Conversations List */}
           <div className="flex-1 overflow-y-auto py-2">
             {(() => {
-              console.log('About to render filteredConversations:', filteredConversations);
               return filteredConversations.map(section => {
-                console.log('Rendering section:', section.section);
-                console.log('Section items count:', section.items.length);
-                
                 return (
                   <div key={section.section} className="mb-4 md:mb-6">
                     <div className="flex items-center px-4 md:px-6 py-2 md:py-3 text-gray-500 uppercase text-xs font-bold tracking-wider">
@@ -590,10 +545,6 @@ export default function MessagesPage() {
                       {section.section}
                     </div>
                     {section.items.map(conv => {
-                      console.log('Rendering conversation item:', conv);
-                      console.log('Conversation members:', conv?.members);
-                      console.log('About to render SidebarConversation for conv:', conv._id);
-                      
                       return (
                         <SidebarConversation
                           key={conv._id}

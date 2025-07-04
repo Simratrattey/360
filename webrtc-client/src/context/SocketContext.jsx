@@ -12,6 +12,12 @@ export function SocketProvider({ children }) {
   const [participants, setParticipants] = useState([]);
   const [availableOffers, setAvailableOffers] = useState([]);
   const [error, setError] = useState(null);
+  const [offerObj, setOfferObj] = useState(null);
+  const [iceCandidate, setIceCandidate] = useState(null);
+  const [userHungUp, setUserHungUp] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [avatarOutput, setAvatarOutput] = useState(null);
+  const [avatarNavigate, setAvatarNavigate] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -29,13 +35,10 @@ export function SocketProvider({ children }) {
 
       s.on('connect', () => {
         setIsConnected(true);
-        setError(null);
-        console.log('Socket connected');
       });
 
       s.on('disconnect', () => {
         setIsConnected(false);
-        console.log('Socket disconnected');
       });
 
       s.on('connect_error', (err) => {
@@ -55,31 +58,28 @@ export function SocketProvider({ children }) {
         setAvailableOffers(prev => [...prev, ...offers]);
       });
 
-      s.on('answerResponse', (offerObj) => {
-        // Handle answer response
-        console.log('Received answer response:', offerObj);
+      s.on('answer', (offerObj) => {
+        setOfferObj(offerObj);
       });
 
-      s.on('receivedIceCandidateFromServer', (iceCandidate) => {
-        // Handle ICE candidate from server
-        console.log('Received ICE candidate from server:', iceCandidate);
+      s.on('ice-candidate', (iceCandidate) => {
+        setIceCandidate(iceCandidate);
       });
 
-      s.on('hangup', (userName) => {
-        console.log('User hung up:', userName);
-        setParticipants(prev => prev.filter(p => p !== userName));
+      s.on('user-hung-up', (userName) => {
+        setUserHungUp(userName);
       });
 
-      s.on('receiveMessage', ({ userName, message }) => {
-        console.log('Received message:', { userName, message });
+      s.on('chat-message', ({ userName, message }) => {
+        setMessages(prev => [...prev, { userName, message }]);
       });
 
-      s.on('avatarOutput', (json) => {
-        console.log('Avatar output:', json);
+      s.on('avatar-output', (json) => {
+        setAvatarOutput(json);
       });
 
-      s.on('avatarNavigate', ({ index }) => {
-        console.log('Avatar navigate:', index);
+      s.on('avatar-navigate', (index) => {
+        setAvatarNavigate(index);
       });
 
       setSocket(s);

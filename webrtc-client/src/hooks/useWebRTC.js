@@ -87,7 +87,6 @@ export function useWebRTC() {
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log(`Peer connection state: ${pc.connectionState}`);
       if (pc.connectionState === 'failed') {
         setError('Peer connection failed');
       }

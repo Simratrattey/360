@@ -30,14 +30,12 @@ export function ChatSocketProvider({ children }) {
 
     s.on('connect', () => {
       setConnected(true);
-      console.log('Chat socket connected');
       // Get online users when connected
       s.emit('getOnlineUsers');
     });
 
     s.on('disconnect', () => {
       setConnected(false);
-      console.log('Chat socket disconnected');
     });
 
     s.on('connect_error', (err) => {

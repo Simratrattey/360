@@ -3,61 +3,36 @@ import { Star, Trash2, MessageCircle, Users, Hash } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
 
 function getConversationDisplayName(conversation, currentUserId) {
-  console.log('SidebarConversation getConversationDisplayName called with:', { conversation, currentUserId });
-  
   try {
     if (!conversation) {
-      console.log('No conversation provided, returning Unknown');
       return 'Unknown';
     }
     
     // If conversation has a name (group/community), use it
     if (conversation.name) {
-      console.log('Using conversation name:', conversation.name);
       return String(conversation.name);
     }
     
     // For DMs, show the other person's name
     if (conversation.type === 'dm' && conversation.members) {
-      console.log('Looking for other member in DM, members:', conversation.members);
-      console.log('Current user ID:', currentUserId);
-      
-      const otherMember = conversation.members.find(m => {
-        console.log('Checking member:', m);
-        console.log('Member _id:', m?._id);
-        console.log('Current user ID:', currentUserId);
-        console.log('Match result:', m?._id !== currentUserId);
-        return m?._id !== currentUserId;
-      });
-      
-      console.log('Other member found:', otherMember);
-      console.log('Other member type:', typeof otherMember);
+      const otherMember = conversation.members.find(m => m._id !== currentUserId);
       
       if (otherMember && typeof otherMember === 'object') {
-        console.log('Processing other member object');
-        
         // Ensure we're working with a user object and extract string values
         const fullName = otherMember.fullName;
         const username = otherMember.username;
         const email = otherMember.email;
         
-        console.log('Member properties:', { fullName, username, email });
-        
         const displayName = fullName || username || email || 'Unknown User';
-        console.log('Final display name:', displayName, 'type:', typeof displayName);
         
         // Ensure we return a string
-        const result = String(displayName);
-        console.log('Returning result:', result);
-        return result;
+        return String(displayName);
       } else {
-        console.log('No valid other member found, using fallback');
         return 'Unknown User';
       }
     }
     
     // Fallback
-    console.log('Using fallback name: Unknown Conversation');
     return 'Unknown Conversation';
   } catch (error) {
     console.error('Error in getConversationDisplayName:', error);

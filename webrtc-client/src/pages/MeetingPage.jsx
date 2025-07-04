@@ -40,7 +40,6 @@ export default function MeetingPage() {
   useEffect(() => {
     if (roomId && user && !hasJoinedRef.current) {
       hasJoinedRef.current = true;
-      console.log('Calling joinMeeting for room:', roomId);
       joinMeeting(roomId);
     }
     return () => leaveMeeting();
@@ -49,8 +48,6 @@ export default function MeetingPage() {
   useEffect(() => {
     if (!localStream) {
       console.warn('No localStream: camera/mic may not be available or permission denied.');
-    } else {
-      console.log('localStream set:', localStream);
     }
   }, [localStream]);
 
@@ -81,7 +78,6 @@ export default function MeetingPage() {
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsAudioEnabled(audioTrack.enabled);
-        console.log('Audio track enabled:', audioTrack.enabled);
       } else {
         console.error('No audio track found');
       }
@@ -96,7 +92,6 @@ export default function MeetingPage() {
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoEnabled(videoTrack.enabled);
-        console.log('Video track enabled:', videoTrack.enabled);
       } else {
         console.error('No video track found');
       }

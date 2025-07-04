@@ -5,7 +5,6 @@ import { Chrome } from 'lucide-react';
 export function GoogleSignIn() {
   const handleGoogleSignIn = () => {
     // Implement Google OAuth here
-    console.log('Google sign in clicked');
   };
 
   return (
