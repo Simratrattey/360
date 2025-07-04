@@ -122,69 +122,69 @@ export default function SidebarConversation({
   
   return (
     <div
-      className={`group relative mx-3 mb-2 p-4 rounded-xl cursor-pointer transition-all duration-300 ${
+      className={`group relative mx-2 md:mx-3 mb-2 p-3 md:p-4 rounded-xl cursor-pointer transition-all duration-300 ${
         isActive 
           ? `bg-gradient-to-r ${typeConfig.bgGradient} border-2 ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
           : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200 hover:shadow-md'
       }`}
       onClick={onSelect}
     >
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2 md:space-x-3">
         {/* Avatar/Icon */}
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           {conv?.avatar ? (
-            <img src={conv.avatar} alt={displayName} className="h-12 w-12 rounded-full object-cover shadow-md" />
+            <img src={conv.avatar} alt={displayName} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-md" />
           ) : (
-            <div className={`h-12 w-12 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-6 w-6" />}
+            <div className={`h-10 w-10 md:h-12 md:w-12 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg`}>
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-4 w-4 md:h-6 md:w-6" />}
             </div>
           )}
           
           {/* Online status indicator */}
           {(conv?.status === 'online' || (conv.type === 'dm' && isOnline)) && (
-            <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-3 border-white bg-green-500 shadow-md"></span>
+            <span className="absolute -bottom-1 -right-1 h-3 w-3 md:h-4 md:w-4 rounded-full border-2 md:border-3 border-white bg-green-500 shadow-md"></span>
           )}
           
           {/* Type indicator for groups/communities */}
           {conv.type !== 'dm' && (
-            <div className={`absolute -top-1 -right-1 h-5 w-5 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
-              <typeConfig.icon className="h-3 w-3 text-white" />
+            <div className={`absolute -top-1 -right-1 h-4 w-4 md:h-5 md:w-5 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
+              <typeConfig.icon className="h-2 w-2 md:h-3 md:w-3 text-white" />
             </div>
           )}
 
           {/* Blue dot for unread messages */}
           {conv?.unread > 0 && (
-            <span className="absolute -top-1 -left-1 h-3 w-3 rounded-full bg-blue-500 border-2 border-white shadow-md z-10"></span>
+            <span className="absolute -top-1 -left-1 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full bg-blue-500 border-2 border-white shadow-md z-10"></span>
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className={`font-semibold truncate ${isActive ? 'text-gray-900' : 'text-gray-800'}`}>
+            <h3 className={`font-semibold truncate text-sm md:text-base ${isActive ? 'text-gray-900' : 'text-gray-800'}`}>
               {displayName}
             </h3>
             <div className="flex items-center space-x-1">
               {/* Star button */}
               <button 
                 onClick={e => { e.stopPropagation(); onStar(); }} 
-                className={`p-1.5 rounded-full transition-all duration-200 ${
+                className={`p-1 md:p-1.5 rounded-full transition-all duration-200 ${
                   starred 
                     ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' 
                     : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'
                 }`}
               >
-                <Star fill={starred ? 'currentColor' : 'none'} className="h-4 w-4" />
+                <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-4 md:w-4" />
               </button>
               
               {/* Delete button */}
               {canDelete && (
                 <button 
                   onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
-                  className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
+                  className="p-1 md:p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
                   title="Delete conversation"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
                 </button>
               )}
             </div>
@@ -192,7 +192,7 @@ export default function SidebarConversation({
           
           {/* Subtitle */}
           <div className="flex items-center justify-between mt-1">
-            <p className="text-sm text-gray-500 truncate">
+            <p className="text-xs md:text-sm text-gray-500 truncate">
               {conv.type === 'dm' ? (isOnline ? 'Online' : 'Offline') : 
                conv.type === 'group' ? `${conv.members?.length || 0} members` :
                `${conv.members?.length || 0} members`}
@@ -200,7 +200,7 @@ export default function SidebarConversation({
             
             {/* Unread count */}
             {conv?.unread > 0 && (
-              <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full px-2 py-1 min-w-[20px] text-center shadow-md">
+              <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full px-1.5 md:px-2 py-0.5 md:py-1 min-w-[16px] md:min-w-[20px] text-center shadow-md">
                 {conv.unread > 99 ? '99+' : conv.unread}
               </span>
             )}
@@ -215,20 +215,20 @@ export default function SidebarConversation({
 
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-xs w-full flex flex-col items-center">
-            <Trash2 className="h-8 w-8 text-red-500 mb-2" />
-            <h3 className="text-lg font-bold mb-2 text-gray-900">Delete Conversation?</h3>
-            <p className="text-gray-600 mb-4 text-center">Are you sure you want to delete this conversation? This action cannot be undone.</p>
-            <div className="flex gap-4 w-full">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-xs w-full flex flex-col items-center">
+            <Trash2 className="h-6 w-6 md:h-8 md:w-8 text-red-500 mb-2" />
+            <h3 className="text-base md:text-lg font-bold mb-2 text-gray-900 text-center">Delete Conversation?</h3>
+            <p className="text-sm md:text-base text-gray-600 mb-4 text-center">Are you sure you want to delete this conversation? This action cannot be undone.</p>
+            <div className="flex gap-3 md:gap-4 w-full">
               <button
-                className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
+                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium text-sm md:text-base"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Cancel
               </button>
               <button
-                className="flex-1 px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow"
+                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow text-sm md:text-base"
                 onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
               >
                 Delete
