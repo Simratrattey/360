@@ -1,29 +1,14 @@
 version: '3.8'
 
 services:
-  # Frontend React App
-  frontend:
+  # Comm360 Application (Frontend + Backend)
+  comm360:
     build:
-      context: ./webrtc-client
+      context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:3000/api
-      - REACT_APP_WS_URL=ws://localhost:3000
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  # Backend Node.js Server
-  backend:
-    build:
-      context: ./webrtc-signaling-server
-      dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+      - "3000:80"  # Frontend
+      - "5000:5000"  # Backend API
     environment:
       # Database
       - MONGO_URI=${MONGO_URI}
@@ -64,11 +49,9 @@ services:
       # File Upload
       - MAX_FILE_SIZE=${MAX_FILE_SIZE}
     volumes:
-      - ./webrtc-signaling-server/uploads:/app/uploads
-      - ./webrtc-signaling-server/recordings:/app/recordings
-      - ./webrtc-signaling-server/tmp:/app/tmp
-    networks:
-      - app-network
+      - ./webrtc-signaling-server/uploads:/app/backend/uploads
+      - ./webrtc-signaling-server/recordings:/app/backend/recordings
+      - ./webrtc-signaling-server/tmp:/app/backend/tmp
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/auth/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
@@ -78,7 +61,7 @@ services:
       start_period: 40s
 
 networks:
-  app-network:
+  default:
     driver: bridge
 
 volumes:
