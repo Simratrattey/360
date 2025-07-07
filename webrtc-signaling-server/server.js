@@ -104,6 +104,30 @@ app.use('/api', (req, res, next) => {
   return authMiddleware(req, res, next);
 });
 
+
+
+// at top of server.js
+import mediasoup from 'mediasoup';
+
+let worker, router;
+async function initMediasoup() {
+  worker = await mediasoup.createWorker({ 
+    rtcMinPort: 10000, rtcMaxPort: 10100 
+  });
+  router = await worker.createRouter({
+    mediaCodecs: [
+      { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
+      { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 }
+    ]
+  });
+  app.locals.mediasoupRouter = router;
+  console.log('🛠️  mediasoup router created');
+}
+initMediasoup();
+
+import sfuRoutes from './src/routes/sfu.js';
+app.use('/api/sfu', sfuRoutes);
+
 // ─── Recording upload endpoint ────────────────────────────────────────────
 // Temporarily store uploads, then move into a per-session folder
 const upload = multer({ dest: 'tmp/' });
