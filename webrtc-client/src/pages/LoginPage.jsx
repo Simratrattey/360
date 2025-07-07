@@ -260,7 +260,10 @@ export default function LoginPage() {
           </div>
           <div className="flex flex-col gap-4">
             <GoogleLogin
-              onSuccess={googleLogin}
+              onSuccess={credentialResponse => {
+                const idToken = credentialResponse.credential;
+                googleLogin(idToken);
+              }}
               onError={() => alert('Google login failed')}
               width="400"
               theme="filled_blue"
