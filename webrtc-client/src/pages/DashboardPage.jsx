@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     // Fetch active rooms
-    API.get('/api/rooms')
+    API.get('/rooms')
       .then(res => {
         setRooms(res.data.rooms || []);
         setLoading(false);
