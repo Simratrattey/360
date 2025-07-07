@@ -6,16 +6,16 @@ dotenv.config();
 const API_KEY  = process.env.ELEVENLABS_API_KEY;
 const VOICE_ID = process.env.TTS_VOICE_ID;
 
-if (!API_KEY || !VOICE_ID) {
-  throw new Error('ELEVENLABS_API_KEY or TTS_VOICE_ID not set in .env');
-}
-
 /**
  * Send text to ElevenLabs streaming TTS and return raw audio bytes.
  * @param {string} text 
  * @returns {Promise<Buffer>}
  */
 export async function generateAudio(text) {
+  if (!API_KEY || !VOICE_ID) {
+    throw new Error('ELEVENLABS_API_KEY or TTS_VOICE_ID not set - text-to-speech functionality unavailable');
+  }
+
   const url = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`;
   const body = {
     text,

@@ -1,11 +1,14 @@
 // llm.js
 import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 import axios from 'axios';
+
+// Only initialize OpenAI if API key is provided
+let openai = null;
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+}
 
 export async function generateReply(prompt) {
   // const resp = await openai.chat.completions.create({

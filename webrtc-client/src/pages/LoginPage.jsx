@@ -262,7 +262,7 @@ export default function LoginPage() {
             <GoogleLogin
               onSuccess={googleLogin}
               onError={() => alert('Google login failed')}
-              width="100%"
+              width="400"
               theme="filled_blue"
               shape="pill"
               text="signin_with"

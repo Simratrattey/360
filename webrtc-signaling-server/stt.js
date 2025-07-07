@@ -7,9 +7,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not set');
 
-const client = new Groq({ apiKey: GROQ_API_KEY });
+// Only initialize Groq if API key is provided
+let client = null;
+if (GROQ_API_KEY) {
+  client = new Groq({ apiKey: GROQ_API_KEY });
+}
 
 /**
  * Transcribes (or translates) an audio buffer via Groq Whisper.
@@ -30,6 +33,10 @@ export async function transcribeAudio(
     translate  = false
   } = {}
 ) {
+  if (!client) {
+    throw new Error('GROQ_API_KEY not set - speech-to-text functionality unavailable');
+  }
+
   // 1) dump to temp WAV file
   const tmpPath = path.join(os.tmpdir(), `groq-${Date.now()}.wav`);
   // If your audioBuffer is already a .wav file, you can skip the header
