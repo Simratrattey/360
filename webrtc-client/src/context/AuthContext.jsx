@@ -9,42 +9,52 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      authService.validateToken()
-        .then(result => {
+    const validateToken = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const result = await authService.validateToken();
           if (result.success) {
             setUser(result.data.user);
           } else {
             localStorage.removeItem('token');
+            setUser(null);
           }
-        })
-        .catch(() => {
+        } catch (err) {
+          console.error('Token validation error:', err);
           localStorage.removeItem('token');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
+          setUser(null);
+        }
+      }
       setLoading(false);
-    }
+    };
+
+    validateToken();
   }, []);
 
   async function login(email, password) {
     setError(null);
     setLoading(true);
     
-    const result = await authService.login(email, password);
-    
-    if (result.success) {
-      localStorage.setItem('token', result.data.token);
-      setUser(result.data.user);
+    try {
+      const result = await authService.login(email, password);
+      
+      if (result.success) {
+        localStorage.setItem('token', result.data.token);
+        setUser(result.data.user);
+        setLoading(false);
+        return { success: true };
+      } else {
+        setError(result.error);
+        setLoading(false);
+        return { success: false, error: result.error };
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
+      setError(errorMessage);
       setLoading(false);
-      return { success: true };
-    } else {
-      setError(result.error);
-      setLoading(false);
-      return { success: false, error: result.error };
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -52,17 +62,25 @@ export function AuthProvider({ children }) {
     setError(null);
     setLoading(true);
     
-    const result = await authService.register(userData);
-    
-    if (result.success) {
-      localStorage.setItem('token', result.data.token);
-      setUser(result.data.user);
+    try {
+      const result = await authService.register(userData);
+      
+      if (result.success) {
+        localStorage.setItem('token', result.data.token);
+        setUser(result.data.user);
+        setLoading(false);
+        return { success: true };
+      } else {
+        setError(result.error);
+        setLoading(false);
+        return { success: false, error: result.error };
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      setError(errorMessage);
       setLoading(false);
-      return { success: true };
-    } else {
-      setError(result.error);
-      setLoading(false);
-      return { success: false, error: result.error };
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -70,17 +88,25 @@ export function AuthProvider({ children }) {
     setError(null);
     setLoading(true);
     
-    const result = await authService.googleAuth(idToken);
-    
-    if (result.success) {
-      localStorage.setItem('token', result.data.token);
-      setUser(result.data.user);
+    try {
+      const result = await authService.googleAuth(idToken);
+      
+      if (result.success) {
+        localStorage.setItem('token', result.data.token);
+        setUser(result.data.user);
+        setLoading(false);
+        return { success: true };
+      } else {
+        setError(result.error);
+        setLoading(false);
+        return { success: false, error: result.error };
+      }
+    } catch (err) {
+      console.error('Google login error:', err);
+      const errorMessage = err.response?.data?.message || 'Google authentication failed. Please try again.';
+      setError(errorMessage);
       setLoading(false);
-      return { success: true };
-    } else {
-      setError(result.error);
-      setLoading(false);
-      return { success: false, error: result.error };
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -88,6 +114,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token');
     setUser(null);
     setError(null);
+    setLoading(false);
   }
 
   function clearError() {

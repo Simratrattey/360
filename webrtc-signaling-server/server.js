@@ -29,6 +29,7 @@ import messageRoutes from './src/routes/message.js';
 import userRoutes from './src/routes/user.js';
 import fileRoutes from './src/routes/file.js';
 import meetingRoutes from './src/routes/meetings.js';
+import sfuRoutes from './src/routes/sfu.js';
 
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -126,8 +127,6 @@ async function initMediasoup() {
   console.log('🛠️  mediasoup router created');
 }
 initMediasoup();
-
-import sfuRoutes from './src/routes/sfu.js';
 
 // ─── Recording upload endpoint ────────────────────────────────────────────
 // Temporarily store uploads, then move into a per-session folder

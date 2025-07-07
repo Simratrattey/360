@@ -7,9 +7,14 @@ class AuthService {
       const response = await API.post('/auth/register', userData);
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Registration API error:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Registration failed';
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Registration failed' 
+        error: errorMessage 
       };
     }
   }
@@ -20,9 +25,14 @@ class AuthService {
       const response = await API.post('/auth/login', { email, password });
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Login API error:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Login failed';
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Login failed' 
+        error: errorMessage 
       };
     }
   }
@@ -34,9 +44,14 @@ class AuthService {
       const response = await API.post('/auth/google', { idToken });
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Google auth API error:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Google authentication failed';
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Google authentication failed' 
+        error: errorMessage 
       };
     }
   }
@@ -47,9 +62,14 @@ class AuthService {
       const response = await API.get('/auth/me');
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Get current user API error:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to get user profile';
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Failed to get user profile' 
+        error: errorMessage 
       };
     }
   }
@@ -60,6 +80,7 @@ class AuthService {
       const response = await API.get('/auth/me');
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Token validation API error:', error);
       return { success: false, error: 'Invalid token' };
     }
   }

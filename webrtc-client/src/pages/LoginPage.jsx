@@ -242,14 +242,15 @@ export default function LoginPage() {
               <Link to="/forgot" className="text-primary-600 hover:underline text-sm font-medium">Forgot password?</Link>
             </div>
             <motion.button
-              onClick={() => window.google && google.accounts.id.prompt()}
-              className="w-full bg-white border-2 border-gray-200 text-gray-700 py-4 px-6 rounded-xl font-semibold hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center space-x-3 group"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-4 px-6 rounded-xl font-semibold hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center space-x-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+              whileHover={{ scale: isLoading ? 1 : 1.02, y: isLoading ? 0 : -2 }}
+              whileTap={{ scale: isLoading ? 1 : 0.98 }}
               variants={itemVariants}
             >
               {isLoading ? <Loader className="animate-spin h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
-              <span>Sign In</span>
+              <span>{isLoading ? 'Signing In...' : 'Sign In'}</span>
             </motion.button>
           </form>
           <div className="my-6 flex items-center justify-center gap-2">

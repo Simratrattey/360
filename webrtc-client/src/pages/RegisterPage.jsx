@@ -2,8 +2,8 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext.jsx';
-import { Mail, Lock, User, Eye, EyeOff, Loader } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Mail, Lock, User, Eye, EyeOff, Loader, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas, useLoader } from '@react-three/fiber';
 import { OrbitControls, Stars, Sphere } from '@react-three/drei';
 import { TextureLoader } from 'three';
@@ -15,25 +15,57 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [showPw, setShowPw]     = useState(false);
-  const { register, user }      = useContext(AuthContext);
-  const navigate                = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { register, user, error: authError, clearError } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   // if already logged in, go home
   useEffect(() => {
-    if (user) navigate('/');
-  }, [user]);
+    if (user) navigate('/dashboard');
+  }, [user, navigate]);
+
+  // Clear error when user types
+  useEffect(() => {
+    if (error || authError) {
+      const timer = setTimeout(() => {
+        setError('');
+        clearError();
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, authError, clearError]);
 
   const onSubmit = async e => {
     e.preventDefault();
+    setError('');
+    clearError();
+    
+    // Validation
     if (password !== confirm) {
-      return alert("Passwords don't match");
+      setError("Passwords don't match");
+      return;
     }
+    
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+    
+    setIsLoading(true);
+    
     try {
-      await register({ fullName, username, email, password });
-      navigate('/');              // or '/dashboard'
+      const result = await register({ fullName, username, email, password });
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Registration failed');
+      }
     } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || 'Registration failed');
+      console.error('Registration error:', err);
+      setError(err.response?.data?.message || 'Registration failed');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -165,11 +197,28 @@ export default function RegisterPage() {
             </div>
             <button
               type="submit"
-              className="btn-primary w-full flex items-center justify-center gap-2 text-lg py-3 rounded-xl shadow-md mt-2"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-4 px-6 rounded-xl font-semibold hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center space-x-3 group disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {false ? <Loader className="animate-spin h-5 w-5" /> : 'Sign up'}
+              {isLoading ? <Loader className="animate-spin h-5 w-5" /> : 'Sign up'}
+              <span>{isLoading ? 'Creating Account...' : 'Create Account'}</span>
             </button>
           </form>
+          
+          <AnimatePresence>
+            {(error || authError) && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="mt-4 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2"
+              >
+                <AlertCircle className="h-5 w-5" />
+                <span>{error || authError}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           <div className="mt-8 text-center text-secondary-500 text-sm">
             Already have an account?{' '}
             <Link to="/login" className="text-primary-600 hover:underline font-medium">Sign in</Link>
