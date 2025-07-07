@@ -132,4 +132,4 @@ recordings/
 *.backup
 
 # Local development files
-.local 
+.local webrtc-client/node_modules
