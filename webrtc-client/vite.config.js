@@ -15,6 +15,10 @@ export default defineConfig({
     outDir: 'dist',
   },
   server: {
+    headers: {
+      // this ensures the same header on localhost:3000
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups'
+    },
     port: 3000,
     proxy: {
       '/api': {
