@@ -1,9 +1,12 @@
 import axios from 'axios';
 
-// will be replaced by Vite from your .env
+const baseURL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : 'http://localhost:5000/api';
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: true,
+  baseURL,
+  // withCredentials: true, // uncomment if you later need cookies
 });
 
 // automatically attach token
