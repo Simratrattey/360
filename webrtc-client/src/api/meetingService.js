@@ -4,7 +4,7 @@ class MeetingService {
   // Get ICE servers configuration
   async getIceServers() {
     try {
-      const response = await API.get('/api/ice');
+      const response = await API.get('/ice');
       return { success: true, data: response.data };
     } catch (error) {
       return { 
@@ -17,7 +17,7 @@ class MeetingService {
   // Get active rooms
   async getActiveRooms() {
     try {
-      const response = await API.get('/api/rooms');
+      const response = await API.get('/rooms');
       return { success: true, data: response.data };
     } catch (error) {
       return { 
@@ -34,7 +34,7 @@ class MeetingService {
       formData.append('video', videoBlob, 'recording.webm');
       formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
 
-      const response = await API.post('/api/recordings', formData, {
+      const response = await API.post('/recordings', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -51,7 +51,7 @@ class MeetingService {
   // Get recordings list
   async getRecordings() {
     try {
-      const response = await API.get('/api/recordings');
+      const response = await API.get('/recordings');
       return { success: true, data: response.data };
     } catch (error) {
       return { 
@@ -64,7 +64,7 @@ class MeetingService {
   // Get recordings for specific room
   async getRoomRecordings(roomId) {
     try {
-      const response = await API.get(`/api/recordings/${roomId}`);
+      const response = await API.get(`/recordings/${roomId}`);
       return { success: true, data: response.data };
     } catch (error) {
       return { 

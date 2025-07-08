@@ -89,7 +89,7 @@ export default function ConversationDetailsModal({
     }
 
     try {
-      await API.put(`/api/conversations/${conversation._id}`, { name: name.trim() });
+      await API.put(`/conversations/${conversation._id}`, { name: name.trim() });
       setIsEditingName(false);
       setSuccess('Name updated successfully');
       onConversationUpdated();
@@ -102,7 +102,7 @@ export default function ConversationDetailsModal({
 
   const handleSaveDescription = async () => {
     try {
-      await API.put(`/api/conversations/${conversation._id}`, { description: description.trim() });
+      await API.put(`/conversations/${conversation._id}`, { description: description.trim() });
       setIsEditingDescription(false);
       setSuccess('Description updated successfully');
       onConversationUpdated();
@@ -115,7 +115,7 @@ export default function ConversationDetailsModal({
 
   const handleMakeAdmin = async (userId) => {
     try {
-      await API.post(`/api/conversations/${conversation._id}/admins`, { userId });
+      await API.post(`/conversations/${conversation._id}/admins`, { userId });
       setSuccess('Admin added successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
@@ -129,7 +129,7 @@ export default function ConversationDetailsModal({
 
   const handleRemoveAdmin = async (userId) => {
     try {
-      await API.delete(`/api/conversations/${conversation._id}/admins/${userId}`);
+      await API.delete(`/conversations/${conversation._id}/admins/${userId}`);
       setSuccess('Admin removed successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
@@ -143,7 +143,7 @@ export default function ConversationDetailsModal({
 
   const handleRemoveMember = async (userId) => {
     try {
-      await API.delete(`/api/conversations/${conversation._id}/members/${userId}`);
+      await API.delete(`/conversations/${conversation._id}/members/${userId}`);
       setSuccess('Member removed successfully');
       onConversationUpdated();
       setMemberActionMenu(null);
@@ -158,7 +158,7 @@ export default function ConversationDetailsModal({
     if (!selectedUserToAdd) return;
     
     try {
-      await API.post(`/api/conversations/${conversation._id}/members`, { userId: selectedUserToAdd._id });
+      await API.post(`/conversations/${conversation._id}/members`, { userId: selectedUserToAdd._id });
       setSuccess('Member added successfully');
       onConversationUpdated();
       setShowAddMemberModal(false);

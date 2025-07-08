@@ -98,7 +98,7 @@ export default function ConversationSettingsModal({
 
   const handleAddMember = async (userId) => {
     try {
-      await API.post(`/api/conversations/${conversation._id}/members`, { userId });
+      await API.post(`/conversations/${conversation._id}/members`, { userId });
       setSuccess('Member added successfully');
       onConversationUpdated();
       setTimeout(() => setSuccess(null), 3000);
@@ -110,7 +110,7 @@ export default function ConversationSettingsModal({
 
   const handleRemoveMember = async (userId) => {
     try {
-      await API.delete(`/api/conversations/${conversation._id}/members/${userId}`);
+      await API.delete(`/conversations/${conversation._id}/members/${userId}`);
       setSuccess('Member removed successfully');
       onConversationUpdated();
       setTimeout(() => setSuccess(null), 3000);
@@ -124,10 +124,10 @@ export default function ConversationSettingsModal({
     try {
       const isCurrentlyAdmin = conversation.admins?.includes(userId);
       if (isCurrentlyAdmin) {
-        await API.delete(`/api/conversations/${conversation._id}/admins/${userId}`);
+        await API.delete(`/conversations/${conversation._id}/admins/${userId}`);
         setSuccess('Admin removed successfully');
       } else {
-        await API.post(`/api/conversations/${conversation._id}/admins`, { userId });
+        await API.post(`/conversations/${conversation._id}/admins`, { userId });
         setSuccess('Admin added successfully');
       }
       onConversationUpdated();
@@ -146,7 +146,7 @@ export default function ConversationSettingsModal({
         return;
       }
       
-      await API.put(`/api/conversations/${conversation._id}`, { name: newName.trim() });
+      await API.put(`/conversations/${conversation._id}`, { name: newName.trim() });
       setSuccess('Name updated successfully');
       onConversationUpdated();
       setTimeout(() => setSuccess(null), 3000);
@@ -162,7 +162,7 @@ export default function ConversationSettingsModal({
     }
 
     try {
-      await API.delete(`/api/conversations/${conversation._id}`);
+      await API.delete(`/conversations/${conversation._id}`);
       setSuccess('Conversation deleted successfully');
       onConversationDeleted();
       setTimeout(() => onClose(), 1000);
