@@ -103,7 +103,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
         conversationData.description = communityDescription.trim();
       }
 
-      const response = await API.post('/api/conversations', conversationData);
+      const response = await API.post('/conversations', conversationData);
       
       // Check if this is an existing DM being returned
       if (response.data.message && response.data.message.includes('already exists')) {
