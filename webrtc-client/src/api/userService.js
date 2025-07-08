@@ -3,7 +3,7 @@ import API from './client';
 export async function uploadAvatar(file) {
   const formData = new FormData();
   formData.append('avatar', file);
-  const response = await API.post('/api/users/avatar', formData, {
+  const response = await API.post('/users/avatar', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
   return response.data; // { avatarUrl: ... }
@@ -11,7 +11,7 @@ export async function uploadAvatar(file) {
 
 export async function updateSettings(settings) {
   try {
-    const response = await API.put('/api/users/settings', settings);
+    const response = await API.put('/users/settings', settings);
     return { success: true, data: response.data };
   } catch (error) {
     return {
@@ -22,6 +22,6 @@ export async function updateSettings(settings) {
 }
 
 export async function getUserSettings() {
-  const response = await API.get('/api/users/settings');
+  const response = await API.get('/users/settings');
   return response.data;
 } 

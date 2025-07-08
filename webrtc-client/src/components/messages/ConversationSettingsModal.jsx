@@ -66,7 +66,7 @@ export default function ConversationSettingsModal({
     setLoading(true);
     setError(null);
     try {
-      const response = await API.get('/api/users');
+      const response = await API.get('/users');
       const allUsers = response.data.users || response.data || [];
       // Filter out current user and existing members
       const existingMemberIds = conversation?.members?.map(m => m._id || m) || [];

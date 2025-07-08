@@ -27,7 +27,7 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
     setLoading(true);
     setError(null);
     try {
-      const response = await API.get('/api/users');
+      const response = await API.get('/users');
       const allUsers = response.data.users || response.data || [];
       // Filter out current user
       const otherUsers = allUsers.filter(user => user._id !== currentUserId);

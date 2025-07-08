@@ -29,7 +29,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
 
   useEffect(() => {
     if (open) {
-      API.get('/api/users')
+      API.get('/users')
         .then((res) => {
           console.log('Fetched users:', res.data);
           setContacts(Array.isArray(res.data.users) ? res.data.users : []);

@@ -63,7 +63,7 @@ export default function ConversationDetailsModal({
 
   const fetchAllUsers = async () => {
     try {
-      const response = await API.get('/api/users');
+      const response = await API.get('/users');
       const users = response.data.users || response.data || [];
       // Filter out users who are already members
       const nonMembers = users.filter(user => 
