@@ -321,7 +321,7 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => navigate('/contacts')}
-            className="flex flex-col items-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
             <Users className="h-7 w-7 mb-2" />
             Add Contact
@@ -330,7 +330,7 @@ export default function DashboardPage() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setScheduling(true)}
-            className="flex flex-col items-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+            className="btn-primary flex flex-col items-center gap-2 py-6 rounded-xl shadow-lg text-lg"
           >
             <Calendar className="h-7 w-7 mb-2" />
             Schedule
