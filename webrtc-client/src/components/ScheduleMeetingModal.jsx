@@ -136,9 +136,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleSubmit = async () => {
     // Validation
     if (!formData.title.trim()) {
       setError('Meeting title is required');
@@ -190,6 +188,12 @@ export default function ScheduleMeetingModal({ open, onClose }) {
     }
   };
 
+  const handleOpenChange = (open) => {
+    if (!open && !submitting) {
+      handleClose();
+    }
+  };
+
   const formatDateTime = (date) => {
     return date.toLocaleString([], {
       weekday: 'short',
@@ -203,7 +207,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
@@ -229,11 +233,10 @@ export default function ScheduleMeetingModal({ open, onClose }) {
               </p>
             </motion.div>
           ) : (
-            <motion.form
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              onSubmit={handleSubmit}
               className="space-y-6"
             >
               {/* Error Message */}
@@ -410,7 +413,11 @@ export default function ScheduleMeetingModal({ open, onClose }) {
                               {participant.fullName || participant.username}
                               <button
                                 type="button"
-                                onClick={() => handleParticipantToggle(participant)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleParticipantToggle(participant);
+                                }}
                                 className="ml-1 hover:text-red-500"
                               >
                                 <X className="h-3 w-3" />
@@ -439,19 +446,30 @@ export default function ScheduleMeetingModal({ open, onClose }) {
                             return (
                               <div
                                 key={contact._id}
-                                className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
+                                className={`flex items-center p-2 rounded-lg transition-colors ${
                                   isSelected 
                                     ? 'bg-blue-50 border border-blue-200' 
                                     : 'hover:bg-gray-50'
                                 }`}
-                                onClick={() => handleParticipantToggle(contact)}
                               >
                                 <Checkbox
                                   checked={isSelected}
                                   onCheckedChange={() => handleParticipantToggle(contact)}
                                   className="mr-3"
                                 />
-                                <div className="flex-1 min-w-0">
+                                <div 
+                                  className="flex-1 min-w-0 cursor-pointer"
+                                  onClick={() => handleParticipantToggle(contact)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      handleParticipantToggle(contact);
+                                    }
+                                  }}
+                                  tabIndex={0}
+                                  role="button"
+                                  aria-label={`Select ${contact.fullName || contact.username}`}
+                                >
                                   <p className="text-sm font-medium text-gray-900 truncate">
                                     {contact.fullName || contact.username}
                                   </p>
@@ -480,7 +498,8 @@ export default function ScheduleMeetingModal({ open, onClose }) {
                   Cancel
                 </Button>
                 <Button 
-                  type="submit" 
+                  type="button" 
+                  onClick={handleSubmit}
                   disabled={submitting || !formData.title.trim()}
                   className="min-w-[120px]"
                 >
@@ -497,7 +516,7 @@ export default function ScheduleMeetingModal({ open, onClose }) {
                   )}
                 </Button>
               </DialogFooter>
-            </motion.form>
+            </motion.div>
           )}
         </AnimatePresence>
       </DialogContent>
