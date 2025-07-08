@@ -457,6 +457,9 @@ export default function MeetingsPage() {
           setIsModalOpen(false);
           reload();
         }}
+        onMeetingScheduled={() => {
+          reload();
+        }}
       />
     </div>
   );

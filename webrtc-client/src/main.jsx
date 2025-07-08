@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { ChatSocketProvider } from './context/ChatSocketContext.jsx';
+import { NotificationProvider } from './context/NotificationContext.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,14 +14,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <SocketProvider>
         <ChatSocketProvider>
-          <BrowserRouter
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true
-            }}
-          >
-            <App />
-          </BrowserRouter>
+          <NotificationProvider>
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+              }}
+            >
+              <App />
+            </BrowserRouter>
+          </NotificationProvider>
         </ChatSocketProvider>
       </SocketProvider>
     </AuthProvider>

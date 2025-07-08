@@ -1,5 +1,6 @@
 // src/controllers/meetingController.js
 import Meeting from '../models/meeting.js';
+import { createNotification } from './notificationController.js';
 import { randomUUID } from 'crypto';
 
 export const createMeeting = async (req, res, next) => {
@@ -48,6 +49,39 @@ export const createMeeting = async (req, res, next) => {
     // Populate organizer and participants for response
     await meeting.populate('organizer', 'fullName email');
     await meeting.populate('participants', 'fullName email');
+
+    // Send notifications to all participants
+    try {
+      const organizer = await User.findById(req.user.id).select('fullName username');
+      const organizerName = organizer.fullName || organizer.username;
+      
+      for (const participantId of participants) {
+        if (participantId.toString() !== req.user.id.toString()) {
+          const notification = await createNotification(
+            participantId,
+            req.user.id,
+            'meeting_invitation',
+            `Meeting Invitation: ${title}`,
+            `${organizerName} has invited you to a meeting: "${title}"`,
+            {
+              meetingId: meeting._id,
+              roomId: meeting.roomId,
+              startTime: meeting.startTime,
+              durationMinutes: meeting.durationMinutes,
+              location: meeting.location
+            }
+          );
+
+          // Send real-time notification if user is online
+          if (req.app.locals.sendNotification) {
+            req.app.locals.sendNotification(participantId, notification);
+          }
+        }
+      }
+    } catch (notificationError) {
+      console.error('Error sending notifications:', notificationError);
+      // Don't fail the meeting creation if notifications fail
+    }
 
     res.status(201).json(meeting);
   } catch (err) {

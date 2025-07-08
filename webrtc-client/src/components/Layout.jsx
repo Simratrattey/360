@@ -17,6 +17,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import * as conversationAPI from '../api/conversationService';
 
 const navigation = [
@@ -29,6 +30,7 @@ const navigation = [
 
 export default function Layout({ children }) {
   const { user, logout } = useContext(AuthContext);
+  const { unreadCount: notificationCount } = useNotifications();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -215,7 +217,7 @@ export default function Layout({ children }) {
                 onClick={() => navigate('/messages')}
                 className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative"
               >
-                <Bell className="h-6 w-6" />
+                <MessageSquare className="h-6 w-6" />
                 {unreadCount > 0 && (
                   <span className="
                     absolute -top-2 -right-2
@@ -224,6 +226,22 @@ export default function Layout({ children }) {
                     flex items-center justify-center
                   ">
                     {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              <button
+                className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative"
+                title="Notifications"
+              >
+                <Bell className="h-6 w-6" />
+                {notificationCount > 0 && (
+                  <span className="
+                    absolute -top-2 -right-2
+                    bg-orange-500 text-white text-xs font-semibold
+                    rounded-full px-1.5 min-w-[1.25rem] h-5
+                    flex items-center justify-center
+                  ">
+                    {notificationCount > 99 ? '99+' : notificationCount}
                   </span>
                 )}
               </button>

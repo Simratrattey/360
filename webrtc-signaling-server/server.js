@@ -30,6 +30,7 @@ import userRoutes from './src/routes/user.js';
 import fileRoutes from './src/routes/file.js';
 import meetingRoutes from './src/routes/meetings.js';
 import sfuRoutes from './src/routes/sfu.js';
+import notificationRoutes from './src/routes/notification.js';
 
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -458,6 +459,17 @@ const connectedSockets = [];
 const onlineUsers = new Map(); // Track online users
 const messageStatus = new Map(); // Track message status
 
+// Function to send real-time notifications
+const sendNotification = (userId, notification) => {
+  const userSocket = onlineUsers.get(userId);
+  if (userSocket) {
+    io.to(userSocket.socketId).emit('notification:new', notification);
+  }
+};
+
+// Make sendNotification available to routes
+app.locals.sendNotification = sendNotification;
+
 // Socket.io logic
 io.on('connection', async socket => {
   // fetch authenticated user
@@ -795,6 +807,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Serve uploaded message files statically from /uploads/messages at /uploads/messages/*.
 app.use('/uploads/messages', (req, res, next) => {

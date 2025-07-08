@@ -34,7 +34,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
-export default function ScheduleMeetingModal({ open, onClose }) {
+export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -168,6 +168,12 @@ export default function ScheduleMeetingModal({ open, onClose }) {
       await scheduleMeeting(meetingData);
       
       setSuccess(true);
+      
+      // Call the callback to refresh meetings list
+      if (onMeetingScheduled) {
+        onMeetingScheduled();
+      }
+      
       setTimeout(() => {
         onClose();
         resetForm();
