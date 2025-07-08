@@ -7,26 +7,51 @@ export const createMeeting = async (req, res, next) => {
     const {
       title,
       description,
+      location,
       participants,
       startTime,
       durationMinutes,
       recurrence
     } = req.body;
 
+    // Validation
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: 'Meeting title is required' });
+    }
+
+    if (!startTime) {
+      return res.status(400).json({ message: 'Start time is required' });
+    }
+
+    const startDate = new Date(startTime);
+    if (startDate < new Date()) {
+      return res.status(400).json({ message: 'Start time cannot be in the past' });
+    }
+
+    if (!durationMinutes || durationMinutes < 1) {
+      return res.status(400).json({ message: 'Duration must be at least 1 minute' });
+    }
+
     const roomId = randomUUID();
     const meeting = await Meeting.create({
-      title,
-      description,
+      title: title.trim(),
+      description: description?.trim() || '',
+      location: location?.trim() || '',
       organizer: req.user.id,
-      participants,
-      startTime,
+      participants: participants || [],
+      startTime: startDate,
       durationMinutes,
       recurrence,
       roomId,
     });
 
+    // Populate organizer and participants for response
+    await meeting.populate('organizer', 'fullName email');
+    await meeting.populate('participants', 'fullName email');
+
     res.status(201).json(meeting);
   } catch (err) {
+    console.error('Error creating meeting:', err);
     next(err);
   }
 };
@@ -35,8 +60,11 @@ export const getUpcomingMeetings = async (req, res, next) => {
   try {
     const now = new Date();
     const meetings = await Meeting.find({
-      startTime:    { $gte: now },
-      participants: req.user.id
+      startTime: { $gte: now },
+      $or: [
+        { participants: req.user.id },
+        { organizer: req.user.id }
+      ]
     })
       .sort('startTime')
       .populate('organizer', 'fullName email')

@@ -14,6 +14,7 @@ const RecurrenceSchema = new Schema({
 const MeetingSchema = new Schema({
   title:           { type: String, required: true },
   description:     { type: String },
+  location:        { type: String },
   organizer:       { type: Schema.Types.ObjectId, ref: 'User', required: true },
   participants:    [{ type: Schema.Types.ObjectId, ref: 'User' }],
   startTime:       { type: Date, required: true },
