@@ -48,10 +48,14 @@ export const NotificationProvider = ({ children }) => {
       }
     };
 
-    socket.on('notification:new', handleNewNotification);
+    if (socket?.on) {
+      socket.on('notification:new', handleNewNotification);
+    }
 
     return () => {
-      socket.off('notification:new', handleNewNotification);
+      if (socket?.off) {
+        socket.off('notification:new', handleNewNotification);
+      }
     };
   }, [socket, user]);
 
