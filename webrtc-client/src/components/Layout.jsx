@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -17,6 +17,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import * as conversationAPI from '../api/conversationService';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -32,6 +33,19 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    conversationAPI.getConversations()
+      .then(res => {
+        const convos = res.data.conversations || res.data || [];
+        const totalUnread = convos.reduce((sum, c) => sum + (c.unread || 0), 0);
+        setUnreadCount(totalUnread);
+      })
+      .catch(() => {
+        setUnreadCount(0);
+      });
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -185,9 +199,21 @@ export default function Layout({ children }) {
 
             {/* Right icons */}
             <div className="flex items-center space-x-4">
-              <button className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative animate-pulse-once group">
+              <button
+                onClick={() => navigate('/messages')}
+                className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative"
+              >
                 <Bell className="h-6 w-6" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-gradient-to-tr from-pink-500 to-red-500 rounded-full border-2 border-white animate-ping group-hover:animate-none"></span>
+                {unreadCount > 0 && (
+                  <span className="
+                    absolute -top-2 -right-2
+                    bg-red-500 text-white text-xs font-semibold
+                    rounded-full px-1.5 min-w-[1.25rem] h-5
+                    flex items-center justify-center
+                  ">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </button>
               <div className="flex items-center space-x-3">
                 <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform cursor-pointer">
