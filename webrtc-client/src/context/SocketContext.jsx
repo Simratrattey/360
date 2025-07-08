@@ -4,6 +4,14 @@ import { AuthContext } from './AuthContext';
 
 export const SocketContext = createContext();
 
+export const useSocket = () => {
+  const context = useContext(SocketContext);
+  if (!context) {
+    throw new Error('useSocket must be used within a SocketProvider');
+  }
+  return context;
+};
+
 export function SocketProvider({ children }) {
   const { user } = useContext(AuthContext);
   const [socket, setSocket] = useState(null);
