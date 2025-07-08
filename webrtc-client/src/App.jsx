@@ -12,6 +12,7 @@ import MeetingsPage from './pages/MeetingsPage.jsx';
 import ContactsPage from './pages/ContactsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
+import SearchResultsPage from './pages/SearchResultsPage.jsx';
 
 export default function App() {
   const { user } = useContext(AuthContext);
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/search" element={<SearchResultsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

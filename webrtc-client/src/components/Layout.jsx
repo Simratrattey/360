@@ -52,6 +52,13 @@ export default function Layout({ children }) {
     navigate('/login');
   };
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const handleSearch = e => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) navigate(`/search?query=${encodeURIComponent(q)}`);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50">
       {/* Mobile sidebar */}
@@ -186,16 +193,21 @@ export default function Layout({ children }) {
             </div>
 
             {/* Search bar */}
-            <div className="flex-1 flex justify-center">
+            <form
+              onSubmit={handleSearch}
+              className="flex-1 flex justify-center"
+            >
               <div className="relative w-full max-w-md">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-400/80" />
                 <input
                   type="text"
-                  placeholder="Search meetings, contacts..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search meetings, contacts, messages…"
                   className="w-full pl-12 pr-4 py-2 rounded-full bg-white/70 border border-blue-200 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition placeholder:text-blue-300 text-blue-900 text-base"
                 />
               </div>
-            </div>
+            </form>
 
             {/* Right icons */}
             <div className="flex items-center space-x-4">
