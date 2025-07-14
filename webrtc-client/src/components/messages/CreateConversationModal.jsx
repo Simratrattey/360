@@ -228,30 +228,32 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Form Fields */}
         {(conversationType === 'group' || conversationType === 'community') && (
-          <div className="p-3 sm:p-6 border-b border-gray-100 space-y-3 sm:space-y-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700">
-                {conversationType === 'group' ? 'Group Name' : 'Community Name'}
-              </label>
-              <input
-                type="text"
-                placeholder={conversationType === 'group' ? 'Enter group name...' : 'Enter community name...'}
-                value={conversationType === 'group' ? groupName : communityName}
-                onChange={(e) => conversationType === 'group' ? setGroupName(e.target.value) : setCommunityName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700">
-                Description <span className="text-gray-400 font-normal">(Optional)</span>
-              </label>
-              <textarea
-                placeholder={conversationType === 'group' ? 'Enter group description...' : 'Enter community description...'}
-                value={conversationType === 'group' ? groupDescription : communityDescription}
-                onChange={(e) => conversationType === 'group' ? setGroupDescription(e.target.value) : setCommunityDescription(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
-              />
+          <div className="p-3 sm:p-6 border-b border-gray-100">
+            <div className="max-h-40 sm:max-h-56 overflow-y-auto scrollbar-thin space-y-3 sm:space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  {conversationType === 'group' ? 'Group Name' : 'Community Name'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={conversationType === 'group' ? 'Enter group name...' : 'Enter community name...'}
+                  value={conversationType === 'group' ? groupName : communityName}
+                  onChange={(e) => conversationType === 'group' ? setGroupName(e.target.value) : setCommunityName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Description <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <textarea
+                  placeholder={conversationType === 'group' ? 'Enter group description...' : 'Enter community description...'}
+                  value={conversationType === 'group' ? groupDescription : communityDescription}
+                  onChange={(e) => conversationType === 'group' ? setGroupDescription(e.target.value) : setCommunityDescription(e.target.value)}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
+                />
+              </div>
             </div>
           </div>
         )}
@@ -313,7 +315,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* User List with Sticky Search */}
         {conversationType !== 'community' && (
-          <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-0">
+          <div className="relative flex-1 p-0">
             <div className="sticky top-0 z-10 bg-white p-3 sm:p-6 border-b border-gray-100">
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -326,69 +328,76 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
                 />
               </div>
             </div>
-            {loading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
-                <p className="text-gray-500 mt-4 font-medium">Loading users...</p>
-              </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="p-4 rounded-full bg-gray-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <User className="h-8 w-8 text-gray-400" />
-                </div>
-                <p className="text-gray-500 font-medium">
-                  {searchTerm ? 'No users found matching your search' : 'No users available'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 p-3 sm:p-6">
-                {filteredUsers.map((user) => (
-                  <button
-                    key={user._id}
-                    onClick={() => handleUserToggle(user)}
-                    className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
-                      isUserSelected(user) 
-                        ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
-                        : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
-                    }`}
-                  >
-                    <div className="relative">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                        {user.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.fullName || user.username}
-                            className="h-12 w-12 rounded-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-white font-bold text-lg">
-                            {getInitials(user.fullName || user.username)}
-                          </span>
-                        )}
-                      </div>
-                      {isUserSelected(user) && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
-                          <Check className="h-3 w-3 text-white" />
+            <div className="relative">
+              <div className="border-t border-gray-200 shadow-sm"></div>
+              <div className="overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-thumb-rounded max-h-48 sm:max-h-72 space-y-2 p-3 sm:p-6">
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+                    <p className="text-gray-500 mt-4 font-medium">Loading users...</p>
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="p-4 rounded-full bg-gray-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                      <User className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 font-medium">
+                      {searchTerm ? 'No users found matching your search' : 'No users available'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredUsers.map((user) => (
+                      <button
+                        key={user._id}
+                        onClick={() => handleUserToggle(user)}
+                        className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
+                          isUserSelected(user) 
+                            ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
+                            : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
+                        }`}
+                      >
+                        <div className="relative">
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                            {user.avatarUrl ? (
+                              <img
+                                src={user.avatarUrl}
+                                alt={user.fullName || user.username}
+                                className="h-12 w-12 rounded-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-white font-bold text-lg">
+                                {getInitials(user.fullName || user.username)}
+                              </span>
+                            )}
+                          </div>
+                          {isUserSelected(user) && (
+                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                              <Check className="h-3 w-3 text-white" />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
-                        {user.fullName || user.username}
-                      </p>
-                      {user.fullName && (
-                        <p className="text-sm text-gray-500 truncate">@{user.username}</p>
-                      )}
-                    </div>
-                    {conversationType === 'group' && !isUserSelected(user) && (
-                      <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 transition-colors">
-                        <Plus className="h-4 w-4 text-gray-500 group-hover:text-blue-600" />
-                      </div>
-                    )}
-                  </button>
-                ))}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {user.fullName || user.username}
+                          </p>
+                          {user.fullName && (
+                            <p className="text-sm text-gray-500 truncate">@{user.username}</p>
+                          )}
+                        </div>
+                        {conversationType === 'group' && !isUserSelected(user) && (
+                          <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 transition-colors">
+                            <Plus className="h-4 w-4 text-gray-500 group-hover:text-blue-600" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+              {/* Fade effect at bottom */}
+              <div className="pointer-events-none absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-white to-transparent"></div>
+            </div>
           </div>
         )}
 
