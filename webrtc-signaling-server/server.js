@@ -790,6 +790,25 @@ io.on('connection', async socket => {
     socket.to(conversationId).emit('chat:typing', { userId: socket.userId, conversationId, typing });
   });
 
+  // Join all conversations for this user
+  socket.on('joinAllConversations', async () => {
+    try {
+      // Find all conversations where the user is a member
+      const conversations = await Conversation.find({ members: socket.userId }).select('_id');
+      conversations.forEach(conv => {
+        socket.join(conv._id.toString());
+      });
+      // Optionally, join all public communities as well
+      const communities = await Conversation.find({ type: 'community' }).select('_id');
+      communities.forEach(comm => {
+        socket.join(comm._id.toString());
+      });
+      console.log(`[Socket] User ${socket.userId} joined all conversations (${conversations.length + communities.length} rooms)`);
+    } catch (err) {
+      console.error('Error joining all conversations:', err);
+    }
+  });
+
 });
 
 // API endpoint to get active rooms
