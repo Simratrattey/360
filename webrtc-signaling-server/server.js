@@ -787,7 +787,7 @@ io.on('connection', async socket => {
 
   // Typing indicator
   socket.on('chat:typing', ({ conversationId, typing }) => {
-    socket.to(conversationId).emit('chat:typing', { userId: socket.userId, typing });
+    socket.to(conversationId).emit('chat:typing', { userId: socket.userId, conversationId, typing });
   });
 
 });
