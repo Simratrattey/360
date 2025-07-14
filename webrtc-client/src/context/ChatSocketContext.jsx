@@ -107,6 +107,26 @@ export function ChatSocketProvider({ children }) {
     // Debug: Add specific event listeners for debugging
     s.on('chat:new', (message) => {
       console.log('🔔 Received chat:new event:', message);
+      // Show browser notification if message is not from current user
+      if (
+        window.Notification &&
+        Notification.permission === 'granted' &&
+        user &&
+        (
+          (message.senderId && message.senderId !== user.id) ||
+          (typeof message.sender === 'string' && message.sender !== user.id) ||
+          (typeof message.sender === 'object' && message.sender && message.sender._id !== user.id)
+        )
+      ) {
+        const title = message.senderName || (message.sender && message.sender.fullName) || 'New Message';
+        const body = message.text || (message.file ? 'Sent a file' : 'New message');
+        try {
+          new Notification(title, { body });
+          console.log('[Notification Debug] Notification shown:', title, body);
+        } catch (e) {
+          console.error('[Notification Debug] Notification error:', e);
+        }
+      }
     });
 
     s.on('chat:delivered', (data) => {

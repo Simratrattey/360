@@ -191,26 +191,6 @@ export default function MessagesPage() {
         setMessagesCache(cache => ({ ...cache, [msg.conversationId]: updated }));
         return updated;
       });
-      // Show browser notification if message is not from current user
-      if (
-        window.Notification &&
-        Notification.permission === 'granted' &&
-        // Only show notification if the sender is NOT the current user
-        (
-          (msg.senderId && msg.senderId !== user.id) ||
-          (typeof msg.sender === 'string' && msg.sender !== user.id) ||
-          (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
-        )
-      ) {
-        const title = msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message';
-        const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
-        try {
-          new Notification(title, { body });
-          console.log('[Notification Debug] Notification shown:', title, body);
-        } catch (e) {
-          console.error('[Notification Debug] Notification error:', e);
-        }
-      }
     });
     // Edit message
     chatSocket.on('chat:edit', ({ messageId, text }) => {
