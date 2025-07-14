@@ -173,7 +173,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col h-full">
         {/* Header */}
         <div className={`relative p-3 sm:p-6 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
           <div className="flex items-center justify-between">
@@ -260,148 +260,150 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
           </div>
         )}
 
-        {/* Selected Users for Group */}
-        {conversationType === 'group' && selectedUsers.length > 0 && (
-          <div className="p-3 sm:p-6 border-b border-gray-100">
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              Selected Members ({selectedUsers.length})
-            </label>
-            <div className="flex flex-wrap gap-2 max-h-24 sm:max-h-32 overflow-y-auto scrollbar-thin">
-              {selectedUsers.map((user) => (
-                <div key={user._id} className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-2 rounded-full shadow-md">
-                  <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-xs font-semibold">
-                      {getInitials(user.fullName || user.username)}
-                    </span>
-                  </div>
-                  <span className="text-sm font-medium">{user.fullName || user.username}</span>
-                  <button
-                    onClick={() => setSelectedUsers(prev => prev.filter(u => u._id !== user._id))}
-                    className="text-white/80 hover:text-white transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Community Info */}
-        {conversationType === 'community' && (
-          <div className="p-3 sm:p-6 border-b border-gray-100">
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
-              <div className="flex items-start space-x-3">
-                <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white">
-                  <Globe className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-green-800">Public Community</p>
-                  <p className="text-xs text-green-600 mt-1">
-                    All users in the system will automatically be added to this community.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {error && (
-          <div className="p-3 sm:p-6 border-b border-gray-100">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-              <p className="text-red-600 text-sm font-medium">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* User List with Sticky Search */}
-        {conversationType !== 'community' && (
-          <div className="relative flex-1 p-0">
-            <div className="sticky top-0 z-10 bg-white p-3 sm:p-6 border-b border-gray-100">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder={conversationType === 'dm' ? 'Search users...' : 'Search users to add...'}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-                />
-              </div>
-            </div>
-            <div className="relative">
-              <div className="border-t border-gray-200 shadow-sm"></div>
-              <div className="overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-thumb-rounded max-h-48 sm:max-h-72 space-y-2 p-3 sm:p-6">
-                {loading ? (
-                  <div className="text-center py-12">
-                    <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
-                    <p className="text-gray-500 mt-4 font-medium">Loading users...</p>
-                  </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="p-4 rounded-full bg-gray-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                      <User className="h-8 w-8 text-gray-400" />
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Selected Users for Group */}
+          {conversationType === 'group' && selectedUsers.length > 0 && (
+            <div className="p-3 sm:p-6 border-b border-gray-100">
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                Selected Members ({selectedUsers.length})
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-24 sm:max-h-32 overflow-y-auto scrollbar-thin">
+                {selectedUsers.map((user) => (
+                  <div key={user._id} className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-2 rounded-full shadow-md">
+                    <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
+                      <span className="text-xs font-semibold">
+                        {getInitials(user.fullName || user.username)}
+                      </span>
                     </div>
-                    <p className="text-gray-500 font-medium">
-                      {searchTerm ? 'No users found matching your search' : 'No users available'}
+                    <span className="text-sm font-medium">{user.fullName || user.username}</span>
+                    <button
+                      onClick={() => setSelectedUsers(prev => prev.filter(u => u._id !== user._id))}
+                      className="text-white/80 hover:text-white transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Community Info */}
+          {conversationType === 'community' && (
+            <div className="p-3 sm:p-6 border-b border-gray-100">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+                    <Globe className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">Public Community</p>
+                    <p className="text-xs text-green-600 mt-1">
+                      All users in the system will automatically be added to this community.
                     </p>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredUsers.map((user) => (
-                      <button
-                        key={user._id}
-                        onClick={() => handleUserToggle(user)}
-                        className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
-                          isUserSelected(user) 
-                            ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
-                            : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
-                        }`}
-                      >
-                        <div className="relative">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
-                            {user.avatarUrl ? (
-                              <img
-                                src={user.avatarUrl}
-                                alt={user.fullName || user.username}
-                                className="h-12 w-12 rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-white font-bold text-lg">
-                                {getInitials(user.fullName || user.username)}
-                              </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <div className="p-3 sm:p-6 border-b border-gray-100">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p className="text-red-600 text-sm font-medium">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* User List with Sticky Search */}
+          {conversationType !== 'community' && (
+            <div className="relative flex-1 min-h-0 p-0">
+              <div className="sticky top-0 z-10 bg-white p-3 sm:p-6 border-b border-gray-100">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder={conversationType === 'dm' ? 'Search users...' : 'Search users to add...'}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                  />
+                </div>
+              </div>
+              <div className="relative">
+                <div className="border-t border-gray-200 shadow-sm"></div>
+                <div className="overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-thumb-rounded max-h-48 sm:max-h-72 space-y-2 p-3 sm:p-6">
+                  {loading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+                      <p className="text-gray-500 mt-4 font-medium">Loading users...</p>
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="p-4 rounded-full bg-gray-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                        <User className="h-8 w-8 text-gray-400" />
+                      </div>
+                      <p className="text-gray-500 font-medium">
+                        {searchTerm ? 'No users found matching your search' : 'No users available'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredUsers.map((user) => (
+                        <button
+                          key={user._id}
+                          onClick={() => handleUserToggle(user)}
+                          className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
+                            isUserSelected(user) 
+                              ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
+                              : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
+                          }`}
+                        >
+                          <div className="relative">
+                            <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                              {user.avatarUrl ? (
+                                <img
+                                  src={user.avatarUrl}
+                                  alt={user.fullName || user.username}
+                                  className="h-12 w-12 rounded-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-white font-bold text-lg">
+                                  {getInitials(user.fullName || user.username)}
+                                </span>
+                              )}
+                            </div>
+                            {isUserSelected(user) && (
+                              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                <Check className="h-3 w-3 text-white" />
+                              </div>
                             )}
                           </div>
-                          {isUserSelected(user) && (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
-                              <Check className="h-3 w-3 text-white" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 truncate">
+                              {user.fullName || user.username}
+                            </p>
+                            {user.fullName && (
+                              <p className="text-sm text-gray-500 truncate">@{user.username}</p>
+                            )}
+                          </div>
+                          {conversationType === 'group' && !isUserSelected(user) && (
+                            <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 transition-colors">
+                              <Plus className="h-4 w-4 text-gray-500 group-hover:text-blue-600" />
                             </div>
                           )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 truncate">
-                            {user.fullName || user.username}
-                          </p>
-                          {user.fullName && (
-                            <p className="text-sm text-gray-500 truncate">@{user.username}</p>
-                          )}
-                        </div>
-                        {conversationType === 'group' && !isUserSelected(user) && (
-                          <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 transition-colors">
-                            <Plus className="h-4 w-4 text-gray-500 group-hover:text-blue-600" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Fade effect at bottom */}
+                <div className="pointer-events-none absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-white to-transparent"></div>
               </div>
-              {/* Fade effect at bottom */}
-              <div className="pointer-events-none absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-white to-transparent"></div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Action Buttons */}
         {conversationType === 'group' && selectedUsers.length > 0 && (
