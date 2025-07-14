@@ -14,7 +14,7 @@ function getConversationDisplayName(conversation, currentUserId) {
     }
     
     // For DMs, show the other person's name
-    if (conversation.type === 'dm' && conversation.members) {
+    if (conversation.type === 'dm' && Array.isArray(conversation.members)) {
       const otherMember = conversation.members.find(m => m._id !== currentUserId);
       
       if (otherMember && typeof otherMember === 'object') {
@@ -59,7 +59,7 @@ export default function SidebarConversation({
   
   // Get the other user in DM
   const getOtherUser = () => {
-    if (conv.type === 'dm' && conv.members) {
+    if (conv.type === 'dm' && Array.isArray(conv.members)) {
       return conv.members.find(member => member._id !== currentUserId);
     }
     return null;
