@@ -218,4 +218,4 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 ## 🤝 Support
 
-For technical support or questions, please contact the development team.
+For technical support or questions, please contact the development team..
