@@ -308,7 +308,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
               </div>
               <div className="relative">
                 <div className="border-t border-gray-200 shadow-sm"></div>
-                <div className="overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-thumb-rounded max-h-48 sm:max-h-72 space-y-2 p-3 sm:p-6">
+                <div className="overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 scrollbar-thumb-rounded max-h-48 sm:max-h-72 space-y-2 p-3 sm:p-6 overflow-hidden">
                   {loading ? (
                     <div className="text-center py-12">
                       <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
@@ -329,7 +329,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
                         <button
                           key={user._id}
                           onClick={() => handleUserToggle(user)}
-                          className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
+                          className={`w-full min-w-0 flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
                             isUserSelected(user) 
                               ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
                               : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
