@@ -266,7 +266,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
             <label className="block text-sm font-semibold text-gray-700 mb-3">
               Selected Members ({selectedUsers.length})
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 max-h-24 sm:max-h-32 overflow-y-auto scrollbar-thin">
               {selectedUsers.map((user) => (
                 <div key={user._id} className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-2 rounded-full shadow-md">
                   <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
