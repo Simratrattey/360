@@ -26,22 +26,6 @@ export function ChatSocketProvider({ children }) {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-<<<<<<< HEAD
-    });
-
-    s.on('connect', () => {
-      setConnected(true);
-      // Get online users when connected
-      s.emit('getOnlineUsers');
-    });
-
-    s.on('disconnect', () => {
-      setConnected(false);
-    });
-
-    s.on('connect_error', (err) => {
-      console.error('Chat socket connection error:', err);
-=======
       timeout: 20000,
     });
 
@@ -95,23 +79,16 @@ export function ChatSocketProvider({ children }) {
 
     s.on('reconnect_error', (err) => {
       console.error('🔔 Chat socket reconnection error - User ID:', user?.id, 'Error:', err);
->>>>>>> main
     });
 
     // Online status events
     s.on('user:online', ({ userId, user }) => {
-<<<<<<< HEAD
-=======
       console.log('User came online:', user?.username);
->>>>>>> main
       setOnlineUsers(prev => new Map(prev).set(userId, user));
     });
 
     s.on('user:offline', ({ userId }) => {
-<<<<<<< HEAD
-=======
       console.log('User went offline:', userId);
->>>>>>> main
       setOnlineUsers(prev => {
         const newMap = new Map(prev);
         newMap.delete(userId);
@@ -120,18 +97,13 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('onlineUsers', (users) => {
-<<<<<<< HEAD
-=======
       console.log('Received online users:', users.length);
       console.log('🔔 Online users list:', users.map(u => ({ id: u.id, username: u.username })));
->>>>>>> main
       const userMap = new Map();
       users.forEach(user => userMap.set(user.id, user));
       setOnlineUsers(userMap);
     });
 
-<<<<<<< HEAD
-=======
     // Debug: Add specific event listeners for debugging
     s.on('chat:new', (message) => {
       console.log('🔔 Received chat:new event:', message);
@@ -145,7 +117,6 @@ export function ChatSocketProvider({ children }) {
       console.log('🔔 Received chat:read event:', data);
     });
 
->>>>>>> main
     // Message status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
       setMessageStatus(prev => {
@@ -168,8 +139,6 @@ export function ChatSocketProvider({ children }) {
       });
     });
 
-<<<<<<< HEAD
-=======
     // Listen for notification events
     s.on('notify-message', (payload) => {
       try {
@@ -362,7 +331,6 @@ export function ChatSocketProvider({ children }) {
       }
     });
 
->>>>>>> main
     setSocket(s);
 
     return () => {
@@ -385,10 +353,6 @@ export function ChatSocketProvider({ children }) {
 
   // Chat actions
   const joinConversation = (conversationId) => {
-<<<<<<< HEAD
-    if (socket) {
-      socket.emit('joinConversation', conversationId);
-=======
     if (socket && conversationId) {
       try {
         console.log('Joining conversation:', conversationId);
@@ -396,15 +360,10 @@ export function ChatSocketProvider({ children }) {
       } catch (error) {
         console.error('Error joining conversation:', error);
       }
->>>>>>> main
     }
   };
   
   const leaveConversation = (conversationId) => {
-<<<<<<< HEAD
-    if (socket) {
-      socket.emit('leaveConversation', conversationId);
-=======
     if (socket && conversationId) {
       try {
         console.log('Leaving conversation:', conversationId);
@@ -412,15 +371,10 @@ export function ChatSocketProvider({ children }) {
       } catch (error) {
         console.error('Error leaving conversation:', error);
       }
->>>>>>> main
     }
   };
   
   const sendMessage = (data) => {
-<<<<<<< HEAD
-    if (socket) {
-      socket.emit('chat:send', data);
-=======
     if (socket && data) {
       try {
         console.log('Sending message:', data);
@@ -428,7 +382,6 @@ export function ChatSocketProvider({ children }) {
       } catch (error) {
         console.error('Error sending message:', error);
       }
->>>>>>> main
     }
   };
   
