@@ -173,7 +173,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col h-full">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col h-full relative overflow-hidden">
         {/* Header */}
         <div className={`relative p-3 sm:p-6 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
           <div className="flex items-center justify-between">
