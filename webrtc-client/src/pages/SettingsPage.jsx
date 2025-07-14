@@ -17,10 +17,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { uploadAvatar, updateSettings, getUserSettings } from '../api/userService';
-<<<<<<< HEAD
-=======
 import NotificationDebug from '../components/NotificationDebug';
->>>>>>> main
 
 const settingsSections = [
   {
@@ -344,15 +341,12 @@ export default function SettingsPage() {
     if (!settings) return <div className="text-center py-8 text-gray-400">Loading...</div>;
     return (
       <div className="space-y-6">
-<<<<<<< HEAD
-=======
         {/* Notification Debug Component */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-4">Test Notifications</h3>
           <NotificationDebug />
         </div>
         
->>>>>>> main
         <div className="space-y-4">
           {Object.entries(settings.notifications).map(([key, value]) => (
             <div key={key} className="flex items-center justify-between p-4 bg-secondary-50 rounded-lg">

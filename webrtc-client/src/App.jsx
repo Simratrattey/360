@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import React, { useContext } from 'react';
-=======
-import React, { useContext, useEffect } from 'react';
->>>>>>> main
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext.jsx';
 import { Toaster } from 'react-hot-toast';
@@ -22,38 +18,6 @@ import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 export default function App() {
   const { user } = useContext(AuthContext);
 
-<<<<<<< HEAD
-=======
-  // Request notification permission when app loads
-  useEffect(() => {
-    if ('Notification' in window) {
-      console.log('Notification API available, current permission:', Notification.permission);
-      
-      if (Notification.permission === 'default') {
-        console.log('Requesting notification permission...');
-        Notification.requestPermission()
-          .then(permission => {
-            console.log('Notification permission result:', permission);
-            if (permission === 'granted') {
-              console.log('✅ Notification permission granted!');
-            } else {
-              console.warn('❌ Notification permission denied or not granted');
-            }
-          })
-          .catch(error => {
-            console.error('Error requesting notification permission:', error);
-          });
-      } else if (Notification.permission === 'granted') {
-        console.log('✅ Notification permission already granted');
-      } else {
-        console.warn('❌ Notification permission denied by user');
-      }
-    } else {
-      console.warn('❌ Notification API not supported in this browser');
-    }
-  }, []);
-
->>>>>>> main
   // If not logged in, show login page
   if (!user) {
     return (

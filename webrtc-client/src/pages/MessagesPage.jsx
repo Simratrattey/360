@@ -12,10 +12,7 @@ import * as messageAPI from '../api/messageService';
 import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useMediaQuery } from 'react-responsive';
-<<<<<<< HEAD
-=======
 import ConnectionStatus from '../components/ConnectionStatus';
->>>>>>> main
 
 // Placeholder for emoji list
 const emojiList = ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🙏', '🔥', '💯', '✨', '🎉', '🤔', '😎', '🥳', '😴'];
@@ -186,7 +183,6 @@ export default function MessagesPage() {
   // Real-time event listeners
   useEffect(() => {
     if (!chatSocket.socket) return;
-<<<<<<< HEAD
     // New message
     chatSocket.on('chat:new', msg => {
       setMessages(prev => {
@@ -247,219 +243,6 @@ export default function MessagesPage() {
       chatSocket.off('chat:typing');
     };
   }, [chatSocket.socket, selected, user.id]);
-=======
-    
-    // New message
-    chatSocket.on('chat:new', msg => {
-      try {
-        console.log('Received new message:', msg);
-        
-        // Validate message data
-        if (!msg || !msg._id) {
-          console.warn('Invalid message received:', msg);
-          return;
-        }
-
-        // Only update messages if this is for the currently selected conversation
-        if (selected && selected._id === msg.conversation) {
-          setMessages(prev => {
-            try {
-              const updated = [...prev, msg];
-              setMessagesCache(cache => ({ 
-                ...cache, 
-                [msg.conversation]: updated 
-              }));
-              return updated;
-            } catch (error) {
-              console.error('Error updating messages state:', error);
-              return prev; // Return previous state if error
-            }
-          });
-        }
-
-        // Update conversation list to show new message
-        setAllConversations(prev => {
-          return prev.map(section => ({
-            ...section,
-            items: section.items.map(conv => {
-              if (conv._id === msg.conversation) {
-                return {
-                  ...conv,
-                  lastMessage: msg,
-                  unread: conv.unread ? conv.unread + 1 : 1
-                };
-              }
-              return conv;
-            })
-          }));
-        });
-        
-        // Show browser notification if message is not from current user
-        // Only show notification if window is not focused or user is not viewing this conversation
-        if (
-          window.Notification &&
-          Notification.permission === 'granted' &&
-          (msg.senderId !== user.id && msg.sender !== user.id) &&
-          (!windowFocused.current || selected?._id !== msg.conversation)
-        ) {
-          const title = msg.senderName || 'New Message';
-          const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
-          
-          try {
-            const notification = new Notification(title, { 
-              body,
-              icon: '/favicon.ico',
-              tag: `message-${msg._id}`
-            });
-            
-            // Handle notification click
-            notification.onclick = () => {
-              window.focus();
-              // Switch to the conversation if not already viewing it
-              if (selected?._id !== msg.conversation) {
-                const conversation = allConversations.flatMap(s => s.items).find(c => c._id === msg.conversation);
-                if (conversation) {
-                  handleSelect(conversation);
-                }
-              }
-              notification.close();
-            };
-            
-            // Auto-close after 5 seconds
-            setTimeout(() => {
-              notification.close();
-            }, 5000);
-            
-            console.log('Message notification shown:', title, body);
-          } catch (error) {
-            console.error('Error creating message notification:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error handling chat:new event:', error);
-      }
-    });
-    
-    // Edit message
-    chatSocket.on('chat:edit', ({ messageId, text }) => {
-      try {
-        console.log('Message edited:', messageId, text);
-        // Update messages if this is for the currently selected conversation
-        if (selected) {
-          setMessages(prev => prev.map(m => m._id === messageId ? { ...m, text, edited: true } : m));
-        }
-        // Update message cache for all conversations
-        setMessagesCache(cache => {
-          const newCache = { ...cache };
-          Object.keys(newCache).forEach(convId => {
-            newCache[convId] = newCache[convId].map(m => m._id === messageId ? { ...m, text, edited: true } : m);
-          });
-          return newCache;
-        });
-      } catch (error) {
-        console.error('Error handling chat:edit event:', error);
-      }
-    });
-    
-    // Delete message
-    chatSocket.on('chat:delete', ({ messageId }) => {
-      try {
-        console.log('Message deleted:', messageId);
-        // Update messages if this is for the currently selected conversation
-        if (selected) {
-          setMessages(prev => prev.filter(m => m._id !== messageId));
-        }
-        // Update message cache for all conversations
-        setMessagesCache(cache => {
-          const newCache = { ...cache };
-          Object.keys(newCache).forEach(convId => {
-            newCache[convId] = newCache[convId].filter(m => m._id !== messageId);
-          });
-          return newCache;
-        });
-      } catch (error) {
-        console.error('Error handling chat:delete event:', error);
-      }
-    });
-    
-    // React to message
-    chatSocket.on('chat:react', ({ messageId, emoji, userId }) => {
-      try {
-        console.log('Message reaction:', messageId, emoji, userId);
-        // Update messages if this is for the currently selected conversation
-        if (selected) {
-          setMessages(prev => prev.map(m => m._id === messageId ? { ...m, reactions: [...(m.reactions || []), { user: userId, emoji }] } : m));
-        }
-        // Update message cache for all conversations
-        setMessagesCache(cache => {
-          const newCache = { ...cache };
-          Object.keys(newCache).forEach(convId => {
-            newCache[convId] = newCache[convId].map(m => m._id === messageId ? { ...m, reactions: [...(m.reactions || []), { user: userId, emoji }] } : m);
-          });
-          return newCache;
-        });
-        setReactions(prev => ({
-          ...prev,
-          [messageId]: [...(prev[messageId] || []), { user: userId, emoji }]
-        }));
-      } catch (error) {
-        console.error('Error handling chat:react event:', error);
-      }
-    });
-    
-    // Unreact
-    chatSocket.on('chat:unreact', ({ messageId, emoji, userId }) => {
-      try {
-        console.log('Message unreact:', messageId, emoji, userId);
-        // Update messages if this is for the currently selected conversation
-        if (selected) {
-          setMessages(prev => prev.map(m => m._id === messageId ? { ...m, reactions: (m.reactions || []).filter(r => !(r.user === userId && r.emoji === emoji)) } : m));
-        }
-        // Update message cache for all conversations
-        setMessagesCache(cache => {
-          const newCache = { ...cache };
-          Object.keys(newCache).forEach(convId => {
-            newCache[convId] = newCache[convId].map(m => m._id === messageId ? { ...m, reactions: (m.reactions || []).filter(r => !(r.user === userId && r.emoji === emoji)) } : m);
-          });
-          return newCache;
-        });
-        setReactions(prev => ({
-          ...prev,
-          [messageId]: (prev[messageId] || []).filter(r => !(r.user === userId && r.emoji === emoji))
-        }));
-      } catch (error) {
-        console.error('Error handling chat:unreact event:', error);
-      }
-    });
-    
-    // Typing
-    chatSocket.on('chat:typing', ({ userId: typingUserId, typing }) => {
-      try {
-        if (typingUserId !== user.id) {
-          setTyping(prev => ({
-            ...prev,
-            [typingUserId]: typing
-          }));
-        }
-      } catch (error) {
-        console.error('Error handling chat:typing event:', error);
-      }
-    });
-    
-    return () => {
-      try {
-        chatSocket.off('chat:new');
-        chatSocket.off('chat:edit');
-        chatSocket.off('chat:delete');
-        chatSocket.off('chat:react');
-        chatSocket.off('chat:unreact');
-        chatSocket.off('chat:typing');
-      } catch (error) {
-        console.error('Error cleaning up socket listeners:', error);
-      }
-    };
-  }, [chatSocket.socket, selected, user.id, allConversations]);
->>>>>>> main
 
   // Mark messages as read when conversation is selected
   useEffect(() => {
@@ -973,12 +756,9 @@ export default function MessagesPage() {
         conversation={selected}
         currentUserId={user?.id}
       />
-<<<<<<< HEAD
-=======
 
       {/* Connection Status (for debugging) */}
       <ConnectionStatus />
->>>>>>> main
     </div>
   );
 } 

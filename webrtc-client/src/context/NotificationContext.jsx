@@ -36,74 +36,14 @@ export const NotificationProvider = ({ children }) => {
     if (!socket || !user) return;
 
     const handleNewNotification = (notification) => {
-<<<<<<< HEAD
-=======
-      console.log('Received notification:new event:', notification);
->>>>>>> main
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
-      
       // Show browser notification if permission is granted
-<<<<<<< HEAD
       if (window.Notification && Notification.permission === 'granted') {
         new Notification(notification.title, {
           body: notification.message,
           icon: '/favicon.ico'
         });
-=======
-      if (window.Notification) {
-        if (Notification.permission === 'granted') {
-          try {
-            const browserNotification = new Notification(notification.title, {
-              body: notification.message,
-              icon: '/favicon.ico'
-            });
-            
-            // Handle notification click
-            browserNotification.onclick = () => {
-              window.focus();
-              browserNotification.close();
-            };
-            
-            // Auto-close after 5 seconds
-            setTimeout(() => {
-              browserNotification.close();
-            }, 5000);
-          } catch (error) {
-            console.error('Error creating browser notification:', error);
-          }
-        } else if (Notification.permission === 'default') {
-          // Request permission if not yet requested
-          Notification.requestPermission().then(permission => {
-            console.log('Notification permission result:', permission);
-            if (permission === 'granted') {
-              try {
-                const browserNotification = new Notification(notification.title, {
-                  body: notification.message,
-                  icon: '/favicon.ico'
-                });
-                
-                browserNotification.onclick = () => {
-                  window.focus();
-                  browserNotification.close();
-                };
-                
-                setTimeout(() => {
-                  browserNotification.close();
-                }, 5000);
-              } catch (error) {
-                console.error('Error creating browser notification after permission grant:', error);
-              }
-            }
-          }).catch(error => {
-            console.error('Error requesting notification permission:', error);
-          });
-        } else {
-          console.warn('Notification permission denied by user');
-        }
-      } else {
-        console.warn('Notification API not supported in this browser');
->>>>>>> main
       }
     };
 

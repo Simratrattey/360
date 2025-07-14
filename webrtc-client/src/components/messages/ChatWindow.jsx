@@ -46,17 +46,7 @@ export default function ChatWindow({
   );
   const typingNames = typingUsers
     .map(uid => {
-<<<<<<< HEAD
       const user = onlineUsers?.find(u => u._id === uid);
-=======
-      // Handle onlineUsers as Map or Array
-      let user = null;
-      if (onlineUsers instanceof Map) {
-        user = onlineUsers.get(uid);
-      } else if (Array.isArray(onlineUsers)) {
-        user = onlineUsers.find(u => u._id === uid);
-      }
->>>>>>> main
       return user?.fullName || user?.username || 'Someone';
     })
     .filter(Boolean);
