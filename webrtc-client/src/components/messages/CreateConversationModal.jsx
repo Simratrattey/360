@@ -262,31 +262,6 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Selected Users for Group */}
-          {conversationType === 'group' && selectedUsers.length > 0 && (
-            <div className="p-3 sm:p-6 border-b border-gray-100">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Selected Members ({selectedUsers.length})
-              </label>
-              <div className="flex flex-wrap gap-2 max-h-24 sm:max-h-32 overflow-y-auto scrollbar-thin w-full min-w-0">
-                {selectedUsers.map((user) => (
-                  <div key={user._id} className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-2 rounded-full shadow-md max-w-xs min-w-0">
-                    <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
-                      <span className="text-xs font-semibold">
-                        {getInitials(user.fullName || user.username)}
-                      </span>
-                    </div>
-                    <span className="text-sm font-medium truncate min-w-0">{user.fullName || user.username}</span>
-                    <button
-                      onClick={() => setSelectedUsers(prev => prev.filter(u => u._id !== user._id))}
-                      className="text-white/80 hover:text-white transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Community Info */}
           {conversationType === 'community' && (
