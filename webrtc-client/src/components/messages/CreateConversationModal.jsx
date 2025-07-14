@@ -242,18 +242,20 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Description <span className="text-gray-400 font-normal">(Optional)</span>
-                </label>
-                <textarea
-                  placeholder={conversationType === 'group' ? 'Enter group description...' : 'Enter community description...'}
-                  value={conversationType === 'group' ? groupDescription : communityDescription}
-                  onChange={(e) => conversationType === 'group' ? setGroupDescription(e.target.value) : setCommunityDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
-                />
-              </div>
+              {conversationType === 'community' && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    Description <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    placeholder="Enter community description..."
+                    value={communityDescription}
+                    onChange={(e) => setCommunityDescription(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
