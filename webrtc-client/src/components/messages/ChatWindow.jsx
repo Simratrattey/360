@@ -46,7 +46,12 @@ export default function ChatWindow({
   );
   const typingNames = typingUsers
     .map(uid => {
-      const user = onlineUsers?.find(u => u._id === uid);
+      let user = null;
+      if (Array.isArray(onlineUsers)) {
+        user = onlineUsers.find(u => u._id === uid);
+      } else if (onlineUsers && typeof onlineUsers.get === 'function') {
+        user = onlineUsers.get(uid);
+      }
       return user?.fullName || user?.username || 'Someone';
     })
     .filter(Boolean);
