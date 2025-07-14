@@ -233,11 +233,14 @@ export default function MessagesPage() {
       }));
     });
     // Typing
-    chatSocket.on('chat:typing', ({ userId: typingUserId, typing }) => {
-      if (typingUserId !== user.id) {
+    chatSocket.on('chat:typing', ({ userId: typingUserId, conversationId, typing }) => {
+      if (typingUserId !== user.id && conversationId) {
         setTyping(prev => ({
           ...prev,
-          [typingUserId]: typing
+          [conversationId]: {
+            ...prev[conversationId],
+            [typingUserId]: typing
+          }
         }));
       }
     });
@@ -690,7 +693,7 @@ export default function MessagesPage() {
               setEditInput={setEditInput}
               handleEditSave={handleEditSave}
               handleEditCancel={handleEditCancel}
-              typing={typing}
+              typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={chatSocket.onlineUsers}
             />
