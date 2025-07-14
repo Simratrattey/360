@@ -185,12 +185,14 @@ export default function MessagesPage() {
     if (!chatSocket.socket) return;
     // New message
     chatSocket.on('chat:new', msg => {
+      console.log('[Notification Debug] Received chat:new:', msg);
       setMessages(prev => {
         const updated = [...prev, msg];
         setMessagesCache(cache => ({ ...cache, [msg.conversationId]: updated }));
         return updated;
       });
       // Show browser notification if message is not from current user
+      console.log('[Notification Debug] Notification.permission:', Notification.permission);
       if (
         window.Notification &&
         Notification.permission === 'granted' &&
@@ -198,7 +200,12 @@ export default function MessagesPage() {
       ) {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
-        new Notification(title, { body });
+        try {
+          new Notification(title, { body });
+          console.log('[Notification Debug] Notification shown:', title, body);
+        } catch (e) {
+          console.error('[Notification Debug] Notification error:', e);
+        }
       }
     });
     // Edit message
