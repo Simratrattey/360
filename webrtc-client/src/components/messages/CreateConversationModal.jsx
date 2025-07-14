@@ -172,10 +172,10 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
   const currentConfig = getTypeConfig(conversationType);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className={`relative p-6 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
+        <div className={`relative p-3 sm:p-6 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className={`p-2 rounded-xl bg-gradient-to-r ${currentConfig.gradient} text-white shadow-lg`}>
@@ -196,8 +196,8 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
         </div>
 
         {/* Type Selector */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 sm:p-6 border-b border-gray-100">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {['dm', 'group', 'community'].map((type) => {
               const config = getTypeConfig(type);
               const isActive = conversationType === type;
@@ -228,7 +228,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Form Fields */}
         {(conversationType === 'group' || conversationType === 'community') && (
-          <div className="p-6 border-b border-gray-100 space-y-4">
+          <div className="p-3 sm:p-6 border-b border-gray-100 space-y-3 sm:space-y-4">
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700">
                 {conversationType === 'group' ? 'Group Name' : 'Community Name'}
@@ -258,7 +258,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Selected Users for Group */}
         {conversationType === 'group' && selectedUsers.length > 0 && (
-          <div className="p-6 border-b border-gray-100">
+          <div className="p-3 sm:p-6 border-b border-gray-100">
             <label className="block text-sm font-semibold text-gray-700 mb-3">
               Selected Members ({selectedUsers.length})
             </label>
@@ -285,7 +285,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Community Info */}
         {conversationType === 'community' && (
-          <div className="p-6 border-b border-gray-100">
+          <div className="p-3 sm:p-6 border-b border-gray-100">
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
               <div className="flex items-start space-x-3">
                 <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white">
@@ -304,32 +304,28 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Error Display */}
         {error && (
-          <div className="p-6 border-b border-gray-100">
+          <div className="p-3 sm:p-6 border-b border-gray-100">
             <div className="bg-red-50 border border-red-200 rounded-xl p-4">
               <p className="text-red-600 text-sm font-medium">{error}</p>
             </div>
           </div>
         )}
 
-        {/* User Search */}
+        {/* User List with Sticky Search */}
         {conversationType !== 'community' && (
-          <div className="p-6 border-b border-gray-100">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder={conversationType === 'dm' ? 'Search users...' : 'Search users to add...'}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
-              />
+          <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-0">
+            <div className="sticky top-0 z-10 bg-white p-3 sm:p-6 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder={conversationType === 'dm' ? 'Search users...' : 'Search users to add...'}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                />
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* User List */}
-        {conversationType !== 'community' && (
-          <div className="flex-1 overflow-y-auto p-6">
             {loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
@@ -345,12 +341,12 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 p-3 sm:p-6">
                 {filteredUsers.map((user) => (
                   <button
                     key={user._id}
                     onClick={() => handleUserToggle(user)}
-                    className={`w-full flex items-center space-x-4 p-4 rounded-xl transition-all duration-200 text-left group ${
+                    className={`w-full flex items-center space-x-4 p-3 sm:p-4 rounded-xl min-h-[44px] transition-all duration-200 text-left group ${
                       isUserSelected(user) 
                         ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
                         : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
@@ -398,7 +394,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Action Buttons */}
         {conversationType === 'group' && selectedUsers.length > 0 && (
-          <div className="p-6 border-t border-gray-100">
+          <div className="p-3 sm:p-6 border-t border-gray-100">
             <button
               onClick={() => handleCreateConversation()}
               disabled={!groupName.trim()}
@@ -410,7 +406,7 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
         )}
         
         {conversationType === 'community' && (
-          <div className="p-6 border-t border-gray-100">
+          <div className="p-3 sm:p-6 border-t border-gray-100">
             <button
               onClick={() => handleCreateConversation([])}
               disabled={!communityName.trim()}
