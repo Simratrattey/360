@@ -19,6 +19,7 @@ import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
+import { useChatSocket } from '../context/ChatSocketContext';
 
 const stats = [
   { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
@@ -36,6 +37,7 @@ const recentMeetings = [
 
 export default function DashboardPage() {
   const { user } = useContext(AuthContext);
+  const chatSocket = useChatSocket();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,29 +83,55 @@ export default function DashboardPage() {
     fetchUnread();
   }, [user]);
 
-  // Fetch message notifications (reuse logic from MessagesPage)
+  // Real-time message notification updates
   useEffect(() => {
-    async function fetchNotifications() {
-      try {
-        const res = await conversationAPI.getConversations();
-        const conversations = res.data.conversations || res.data || [];
-        const notifications = conversations
-          .filter(c => c.unread > 0)
-          .map(c => ({
-            id: c._id,
-            type: c.type,
-            name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
-            unread: c.unread,
-            avatar: c.avatar,
-            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash
-          }));
-        setMessageNotifications(notifications);
-      } catch (err) {
-        setMessageNotifications([]);
+    if (!chatSocket || !chatSocket.socket) return;
+    const handleNewMessage = (msg) => {
+      // Only show notification if the sender is NOT the current user
+      if (
+        (msg.senderId && msg.senderId !== user.id) ||
+        (typeof msg.sender === 'string' && msg.sender !== user.id) ||
+        (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
+      ) {
+        setMessageNotifications(prev => {
+          // Find if this conversation already exists
+          const idx = prev.findIndex(n => n.id === msg.conversationId);
+          if (idx !== -1) {
+            // Update unread count and move to top
+            const updated = [...prev];
+            updated[idx] = {
+              ...updated[idx],
+              unread: (updated[idx].unread || 0) + 1,
+              lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
+              lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
+            };
+            // Move to top
+            const [item] = updated.splice(idx, 1);
+            return [item, ...updated];
+          } else {
+            // New conversation notification
+            return [
+              {
+                id: msg.conversationId,
+                type: msg.conversationType || 'dm',
+                name: msg.conversationName || msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
+                unread: 1,
+                avatar: msg.conversationAvatar || '',
+                icon: msg.conversationType === 'group' ? Users : msg.conversationType === 'community' ? Hash : User,
+                lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
+                lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
+              },
+              ...prev
+            ];
+          }
+        });
       }
-    }
-    fetchNotifications();
-  }, [user]);
+    };
+    chatSocket.on('chat:new', handleNewMessage);
+    return () => {
+      chatSocket.off('chat:new', handleNewMessage);
+    };
+  }, [chatSocket, user.id]);
 
   const createNewMeeting = () => {
     const roomId = Date.now().toString();
@@ -148,7 +176,7 @@ export default function DashboardPage() {
           Message Notifications
         </h2>
         {messageNotifications.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {messageNotifications.map((notif, idx) => (
               <motion.div
                 key={notif.id}
@@ -171,6 +199,9 @@ export default function DashboardPage() {
                   <h3 className="text-lg font-bold text-primary-800">
                     {notif.name || (notif.type === 'group' ? 'Group' : notif.type === 'community' ? 'Community' : 'Direct Message')}
                   </h3>
+                  {notif.lastText && (
+                    <p className="text-secondary-500 text-xs truncate max-w-xs">{notif.lastSender}: {notif.lastText}</p>
+                  )}
                   <p className="text-secondary-600 text-sm">
                     {notif.unread} new message{notif.unread > 1 ? 's' : ''} {notif.type === 'dm' ? 'from this person' : notif.type === 'group' ? 'from this group' : 'from this community'}
                   </p>
