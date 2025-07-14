@@ -500,8 +500,8 @@ export default function MessagesPage() {
   };
 
   const handleTyping = (isTyping) => {
-    if (selected && chatSocket.socket) {
-      chatSocket.socket.emit('chat:typing', { conversationId: selected._id, typing: isTyping });
+    if (selected && chatSocket.sendTyping) {
+      chatSocket.sendTyping({ conversationId: selected._id, typing: isTyping });
     }
   };
 
