@@ -269,14 +269,15 @@ export default function MessagesPage() {
       try {
         const displayName = getConversationDisplayName(conv, user?.id);
         
-        const memberNames = conv.members?.map(m => {
-          // Ensure we're not accidentally rendering the member object
-          if (typeof m === 'object' && m !== null) {
-            const name = m.fullName || m.username || m.email || '';
-            return String(name);
-          }
-          return '';
-        }).join(' ') || '';
+        const memberNames = Array.isArray(conv.members)
+          ? conv.members.map(m => {
+              if (typeof m === 'object' && m !== null) {
+                const name = m.fullName || m.username || m.email || '';
+                return String(name);
+              }
+              return '';
+            }).join(' ')
+          : '';
         
         const result = displayName.toLowerCase().includes(search.toLowerCase()) || 
                memberNames.toLowerCase().includes(search.toLowerCase());
