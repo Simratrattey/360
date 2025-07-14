@@ -192,13 +192,17 @@ export default function MessagesPage() {
         return updated;
       });
       // Show browser notification if message is not from current user
-      console.log('[Notification Debug] Notification.permission:', Notification.permission);
       if (
         window.Notification &&
         Notification.permission === 'granted' &&
-        (msg.senderId !== user.id && msg.sender !== user.id)
+        // Only show notification if the sender is NOT the current user
+        (
+          (msg.senderId && msg.senderId !== user.id) ||
+          (typeof msg.sender === 'string' && msg.sender !== user.id) ||
+          (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
+        )
       ) {
-        const title = msg.senderName || 'New Message';
+        const title = msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         try {
           new Notification(title, { body });
