@@ -1,14 +1,6 @@
 // llm.js
 import axios from 'axios';
 
-// Only initialize OpenAI if API key is provided
-let openai = null;
-if (process.env.OPENAI_API_KEY) {
-  openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
-}
-
 export async function generateReply(prompt) {
   // ✅ new: call our internal Avatar Chat API
   const solrhost    = process.env.SOLR_HOST   || 'clavisds01.feeltiptop.com';
