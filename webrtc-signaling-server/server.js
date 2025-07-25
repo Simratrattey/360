@@ -305,8 +305,9 @@ let cachedIceServers = [];
 
 // ─── USE ONLY YOUR EC2 coturn ───────────────────────────────
 async function refreshIceServers() {
-  const host = process.env.TURN_HOST;
+  const host = process.env.TURN_HOST || '54.210.247.10';
   const port = process.env.TURN_PORT || '3478';
+ 
   cachedIceServers = [
     {
       urls: [
