@@ -1,0 +1,30 @@
+{
+  "type": "module",
+  "name": "webrtc-signaling-server",
+  "version": "1.0.0",
+  "description": "Express + Socket.IO signaling server for WebRTC",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "google-auth-library": "^10.1.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mediasoup": "^3.16.4",
+    "mongodb": "^6.17.0",
+    "mongoose": "^8.16.0",
+    "multer": "^2.0.0",
+    "rrule": "^2.8.1",
+    "socket.io": "^4.6.2"
+  }
+}

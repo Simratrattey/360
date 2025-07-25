@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+NAME=comm360-coturn-staging
+IMAGE=comm360-coturn
+
+docker stop ${NAME} 2>/dev/null || true
+docker rm   ${NAME} 2>/dev/null || true
+
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519github
+date > timedatenow.txt
+timestamp=$(date +%Y%m%d%H%M%S)
+
+docker build --ssh default \
+  -t ${IMAGE}:latest \
+  -f coturn/Dockerfile \
+  .
+docker tag ${IMAGE}:latest ${IMAGE}:${timestamp}
+
+docker run -d --network=host \
+  --env-file .env \
+  --name ${NAME} \
+  ${IMAGE}:${timestamp}

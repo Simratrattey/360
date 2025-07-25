@@ -1,0 +1,117 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Test Frontend
+test-frontend:
+  stage: test
+  image: node:18-alpine
+  script:
+    - cd webrtc-client
+    - npm ci
+    - npm run lint
+    - npm test --if-present
+    - npm run build
+  artifacts:
+    paths:
+      - webrtc-client/dist/
+    expire_in: 1 hour
+
+# Test Backend
+test-backend:
+  stage: test
+  image: node:18-alpine
+  services:
+    - name: mongo:6.0
+      alias: mongodb
+  variables:
+    MONGO_INITDB_ROOT_USERNAME: mongoadmin
+    MONGO_INITDB_ROOT_PASSWORD: secretpassword
+    MONGO_URI: mongodb://mongoadmin:secretpassword@mongodb:27017/
+  script:
+    - apk add --no-cache mongodb-tools
+    - echo "Waiting for MongoDB to be ready..."
+    - until mongo --host mongodb -u mongoadmin -p secretpassword --eval "db.adminCommand('ping')"; do sleep 2; done
+    - cd webrtc-signaling-server
+    - npm ci
+    - npm run lint --if-present
+    - npm test --if-present
+    - npm audit --audit-level=moderate
+  allow_failure: true
+
+# Build Docker Images
+build-images:
+  stage: build
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    
+    # Build frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA ./webrtc-client
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:latest ./webrtc-client
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
+    
+    # Build backend
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA ./webrtc-signaling-server
+    - docker build -t $CI_REGISTRY_IMAGE/backend:latest ./webrtc-signaling-server
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE/backend:latest
+  only:
+    - main
+    - develop
+
+# Deploy to Staging
+deploy-staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$STAGING_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+  script:
+    - ssh -o StrictHostKeyChecking=no $STAGING_USER@$STAGING_HOST "
+        cd /opt/app &&
+        docker-compose pull &&
+        docker-compose up -d &&
+        docker system prune -f"
+  environment:
+    name: staging
+    url: https://staging.yourapp.com
+  only:
+    - develop
+
+# Deploy to Production
+deploy-production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$PRODUCTION_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+  script:
+    - ssh -o StrictHostKeyChecking=no $PRODUCTION_USER@$PRODUCTION_HOST "
+        cd /opt/app &&
+        docker-compose pull &&
+        docker-compose up -d &&
+        docker system prune -f"
+  environment:
+    name: production
+    url: https://yourapp.com
+  only:
+    - main
+  when: manual 

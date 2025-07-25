@@ -1,0 +1,1 @@
+// This file is deprecated. Groq speech-to-text integration has been removed.

@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "scripts": {
+    "lint": "npm --prefix webrtc-client run lint && npm --prefix webrtc-signaling-server run lint --if-present"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.4.2",
+    "@react-three/fiber": "^9.1.4",
+    "mongodb": "^6.17.0",
+    "react-datepicker": "^8.4.0",
+    "react-responsive": "^10.0.1",
+    "rrule": "^2.8.1",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.178.0"
+  }
+}
