@@ -53,8 +53,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Enable CORS for your front-end origin ──────────────────────────────────
-const cors = require('cors');
-
 const whitelist = (process.env.CORS_WHITELIST || '')
   .split(',')
   .map(origin => origin.trim())
