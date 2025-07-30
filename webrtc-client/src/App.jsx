@@ -16,6 +16,7 @@ import MessagesPage from './pages/MessagesPage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 
+
 export default function App() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
