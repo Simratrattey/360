@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+docker network create comm360-net 2>/dev/null || true
+
 NAME=comm360-coturn-staging
 IMAGE=comm360-coturn
 
@@ -17,7 +19,10 @@ docker build --no-cache --ssh default \
   .
 docker tag ${IMAGE}:latest ${IMAGE}:${timestamp}
 
-docker run -d --network=host \
+docker run -d \
+  --network comm360-net \
+  -p 3478:3478 \
+  -p 3478:3478/udp \
   --env-file .env \
   --name ${NAME} \
   ${IMAGE}:${timestamp}

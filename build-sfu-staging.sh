@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+docker network create comm360-net 2>/dev/null || true
+
 BRANCH=${1:-main}
 
 NAME=comm360-sfu-staging
@@ -21,7 +23,9 @@ docker build --no-cache --ssh default \
   .
 docker tag ${IMAGE}:latest ${IMAGE}:${timestamp}
 
-docker run -d --network=host \
+docker run -d \
+  --network comm360-net \
+  -p 8181:8181 \
   --name ${NAME} \
   --env-file .env \
   -e PORT=8181 \
