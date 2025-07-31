@@ -33,4 +33,5 @@ docker run -d \
   -p 5050:5050 \
   --name ${NAME} \
   --env-file .env \
+  -e PORT=5050 \
   ${IMAGE}:${timestamp}
