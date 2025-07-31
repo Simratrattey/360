@@ -14,11 +14,10 @@ docker rm   ${NAME} 2>/dev/null || true
 # 2️⃣ ssh-agent + cache‑bust
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519github
-date > timedatenow.txt
 timestamp=$(date +%Y%m%d%H%M%S)
 
-# 3️⃣ build & tag
-docker build --ssh default \
+# 3️⃣ build & tag (no cache)
+docker build --no-cache --ssh default \
   --build-arg GIT_BRANCH=${BRANCH} \
   --build-arg SERVER_PORT=5050 \
   -t ${IMAGE}:latest \
