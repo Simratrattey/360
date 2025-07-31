@@ -16,6 +16,8 @@ RUN --mount=type=ssh git clone --depth 1 \
       --branch "${GIT_BRANCH}" \
       'git@github.com:/TipTop-Tech/Comm360.git' /app
 WORKDIR /app/webrtc-client
+
+COPY .env .env
 RUN npm ci && npm run build
 
 # ─── Production (nginx) ───────────────────────────────────────────────────

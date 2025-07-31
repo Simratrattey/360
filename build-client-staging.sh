@@ -15,6 +15,8 @@ eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519github
 timestamp=$(date +%Y%m%d%H%M%S)
 
+cp .env webrtc-client/.env
+
 docker build --no-cache --ssh default \
   --build-arg GIT_BRANCH=${BRANCH} \
   -t ${IMAGE}:latest \
