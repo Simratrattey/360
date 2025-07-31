@@ -24,4 +24,5 @@ docker tag ${IMAGE}:latest ${IMAGE}:${timestamp}
 docker run -d --network=host \
   --name ${NAME} \
   --env-file .env \
+  -e PORT=8181 \
   ${IMAGE}:${timestamp}
