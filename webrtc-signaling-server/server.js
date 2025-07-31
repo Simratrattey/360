@@ -96,7 +96,7 @@ import mediasoup from 'mediasoup';
 let worker, router;
 async function initMediasoup() {
   worker = await mediasoup.createWorker({ 
-    rtcMinPort: 10000, rtcMaxPort: 10100 
+    rtcMinPort: 30000, rtcMaxPort: 30100 
   });
   router = await worker.createRouter({
     mediaCodecs: [
