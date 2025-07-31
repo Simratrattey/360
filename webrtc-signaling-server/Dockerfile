@@ -25,6 +25,7 @@ RUN npm ci --only=production
 FROM node:20-slim
 RUN apt-get update \
  && apt-get install -y python3 make g++ libffi-dev libssl-dev \
+ && apt-get install -y curl \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -35,7 +36,7 @@ COPY --from=builder /app/webrtc-signaling-server ./
 RUN mkdir -p uploads recordings tmp && chmod 755 uploads recordings tmp
 
 EXPOSE ${SERVER_PORT:-5050}
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:${SERVER_PORT:-5050}/healthz',(r)=>process.exit(r.statusCode===200?0:1))" || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD curl -fsS http://localhost:${PORT:-5050}/healthz || exit 1
 
 CMD ["node","server.js"]
