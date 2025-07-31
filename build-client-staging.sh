@@ -19,7 +19,7 @@ docker build --no-cache --ssh default \
   --build-arg GIT_BRANCH=${BRANCH} \
   -t ${IMAGE}:latest \
   -f webrtc-client/Dockerfile \
-  .
+  webrtc-client
 docker tag ${IMAGE}:latest ${IMAGE}:${timestamp}
 
 docker run -d \
