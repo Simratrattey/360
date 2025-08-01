@@ -29,4 +29,5 @@ docker run -d \
   --name ${NAME} \
   --env-file .env \
   -e PORT=8181 \
+  -p 10000-10100:10000-10100/udp \
   ${IMAGE}:${timestamp}
