@@ -2,7 +2,7 @@ FROM debian:stable-slim
 
 # Install coturn
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y coturn \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y coturn  iproute2\
  && rm -rf /var/lib/apt/lists/*
 
 # Copy our startup script
