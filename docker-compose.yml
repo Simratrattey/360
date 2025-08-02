@@ -58,6 +58,7 @@ services:
     env_file: .env
     environment:
       - PORT=8181
+      - DEBUG=mediasoup*
     extra_hosts:
       - "comm360.feeltiptop.com:131.153.168.218"
 
