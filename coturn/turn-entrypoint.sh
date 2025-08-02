@@ -12,7 +12,7 @@ lt-cred-mech
 realm=comm360
 user=webrtc:webrtc
 
-external-ip=${EXTERNAL_IP}
+external-ip=131.153.168.218/172.20.0.5
 
 min-port=30000
 max-port=30010
