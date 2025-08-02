@@ -1,0 +1,72 @@
+version: '3.8'
+
+networks:
+  comm360-net:
+    driver: bridge
+
+services:
+  client:
+    build:
+      context: ./webrtc-client
+      dockerfile: Dockerfile
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: main
+    container_name: comm360-client-staging
+    networks:
+      - comm360-net
+    ports:
+      - "3050:80"
+    env_file: .env
+
+  signaling:
+    build:
+      context: .
+      dockerfile: webrtc-signaling-server/Dockerfile
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: main
+        SERVER_PORT: 5050
+    container_name: comm360-signaling-staging
+    networks:
+      - comm360-net
+    ports:
+      - "5050:5050"
+    env_file: .env
+    environment:
+      - PORT=5050
+
+  sfu:
+    build:
+      context: .
+      dockerfile: webrtc-signaling-server/Dockerfile.sfu
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: main
+        SERVER_PORT: 8181
+    container_name: comm360-sfu-staging
+    networks:
+      - comm360-net
+    ports:
+      - "8181:8181"
+      - "10000-10100:10000-10100/udp"
+    env_file: .env
+    environment:
+      - PORT=8181
+
+  coturn:
+    build:
+      context: .
+      dockerfile: coturn/Dockerfile
+      ssh:
+        - default
+    container_name: comm360-coturn-staging
+    networks:
+      - comm360-net
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+    env_file: .env
