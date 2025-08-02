@@ -29,6 +29,25 @@ router.post('/transports', async (req, res) => {
     iceServers
   });
 
+  // ─── ICE / DTLS DEBUG LOGGING ──────────────────────────────────────────
+  transport.on('icestatechange', (iceState) => {
+    console.log(`[SFU][ICE] transport ${transport.id} iceConnectionState → ${iceState}`);
+  });
+
+  transport.on('iceselectedcandidatepairchange', (pair) => {
+    console.log(
+      `[SFU][ICE] transport ${transport.id} selected pair:\n` +
+      `  local  ${pair.local.ip}:${pair.local.port}\n` +
+      `  remote ${pair.remote.ip}:${pair.remote.port}`
+    );
+  });
+
+  transport.on('dtlsstatechange', (dtlsState) => {
+    console.log(`[SFU][DTLS] transport ${transport.id} dtlsState → ${dtlsState}`);
+  });
+  // ─────────────────────────────────────────────────────────────────────
+
+
   // Store transport
   transports.set(transport.id, { transport, direction });
 

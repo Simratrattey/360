@@ -57,6 +57,23 @@ export function useWebRTC() {
       iceServers: data.iceServers || []
     });
 
+    // ─── ICE / DTLS DEBUG LOGGING ─────────────────────────────────────
+    // Mediasoup-client exposes an Observer interface on every transport:
+    transport.observer.on('icestatechange', (iceState) => {
+      console.log(`[WebRTC][ICE] sendTransport ${transport.id} iceConnectionState →`, iceState);
+    });
+    transport.observer.on('selectedtuplechange', (tuple) => {
+      console.log(
+        `[WebRTC][ICE] sendTransport ${transport.id} selected tuple:\n` +
+        `  local  ${tuple.localIp}:${tuple.localPort}\n` +
+        `  remote ${tuple.remoteIp}:${tuple.remotePort}`
+      );
+    });
+    transport.observer.on('dtlsstatechange', (dtlsState) => {
+      console.log(`[WebRTC][DTLS] sendTransport ${transport.id} dtlsState →`, dtlsState);
+    });
+    // ─────────────────────────────────────────────────────────────────
+
     transport.on('connect', async ({ dtlsParameters }, callback, errback) => {
       try {
         await meetingService.connectTransport(data.id, dtlsParameters);
@@ -114,6 +131,16 @@ export function useWebRTC() {
       iceServers: data.iceServers || []
     });
     console.log('[ICE] Recv transport created with remote ICE candidates:', data.iceCandidates);
+
+    transport.observer.on('icestatechange', iceState =>
+      console.log(`[WebRTC][ICE] recvTransport ${transport.id} iceConnectionState →`, iceState)
+    );
+    transport.observer.on('selectedtuplechange', tuple =>
+      console.log(`[WebRTC][ICE] recvTransport ${transport.id} selected tuple → local ${tuple.localIp}:${tuple.localPort}, remote ${tuple.remoteIp}:${tuple.remotePort}`)
+    );
+    transport.observer.on('dtlsstatechange', dtlsState =>
+      console.log(`[WebRTC][DTLS] recvTransport ${transport.id} dtlsState →`, dtlsState)
+    );
 
     transport.on('connect', async ({ dtlsParameters }, callback, errback) => {
       console.log('[ICE] Recv transport "connect" event fired; sending DTLS params:', dtlsParameters);
