@@ -23,6 +23,7 @@ docker run -d \
   --network comm360-net \
   -p 3478:3478 \
   -p 3478:3478/udp \
+  -p 30000-30010:30000-30010/udp \
   --env-file .env \
   --name ${NAME} \
   ${IMAGE}:${timestamp}

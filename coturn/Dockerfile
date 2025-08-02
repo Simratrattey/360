@@ -11,5 +11,6 @@ RUN chmod +x /usr/local/bin/turn-entrypoint.sh
 
 # Expose TURN ports
 EXPOSE 3478/tcp 3478/udp
+EXPOSE 30000-30010/udp
 
 ENTRYPOINT ["turn-entrypoint.sh"]
