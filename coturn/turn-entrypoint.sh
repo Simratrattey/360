@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+echo "🔧 turn-entrypoint.sh is running"
 set -e
 
 # Generate turnserver.conf from env vars
