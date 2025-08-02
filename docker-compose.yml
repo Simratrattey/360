@@ -37,6 +37,8 @@ services:
     env_file: .env
     environment:
       - PORT=5050
+    extra_hosts:
+      - "comm360.feeltiptop.com:131.153.168.218"
 
   sfu:
     build:
@@ -56,6 +58,8 @@ services:
     env_file: .env
     environment:
       - PORT=8181
+    extra_hosts:
+      - "comm360.feeltiptop.com:131.153.168.218"
 
   coturn:
     build:
