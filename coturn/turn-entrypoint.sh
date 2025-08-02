@@ -2,8 +2,9 @@
 echo "🔧 turn-entrypoint.sh is running"
 set -e
 
-PRIVATE_IP=$(ip route get 8.8.8.8 \
-             | awk '/src/ { print $7; exit }')
+PRIVATE_IP=$(ip -4 addr show eth0 \
+             | awk '/inet /{print $2}' \
+             | cut -d/ -f1)
 
 echo "→ Detected PRIVATE_IP: $PRIVATE_IP"
 
