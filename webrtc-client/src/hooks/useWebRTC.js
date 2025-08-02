@@ -52,7 +52,10 @@ export function useWebRTC() {
     const { success, data, error: transportError } = await meetingService.createTransport('send');
     if (!success) throw new Error(transportError);
 
-    const transport = deviceRef.current.createSendTransport(data);
+    const transport = deviceRef.current.createSendTransport({
+      ...data,
+      iceServers: data.iceServers || []
+    });
 
     transport.on('connect', async ({ dtlsParameters }, callback, errback) => {
       try {
