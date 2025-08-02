@@ -96,7 +96,15 @@ import mediasoup from 'mediasoup';
 let worker, router;
 async function initMediasoup() {
   worker = await mediasoup.createWorker({ 
-    rtcMinPort: 10000, rtcMaxPort: 10100 
+    rtcMinPort : 10000,
+    rtcMaxPort : 10100,
+    logLevel   : 'debug',
+    logTags    : [
+      'ice',   // ICE candidate gathering & checks
+      'dtls',  // DTLS handshake
+      'rtp',   // RTP packets
+      'rtcp'   // RTCP reports
+    ]
   });
   router = await worker.createRouter({
     mediaCodecs: [
@@ -309,6 +317,7 @@ async function refreshIceServers() {
   const port = process.env.TURN_PORT || '3478';
  
   cachedIceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
     {
       urls: [
         `turn:${host}:${port}?transport=udp`,
