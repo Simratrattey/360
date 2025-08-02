@@ -25,6 +25,8 @@ COPY --from=builder /app/webrtc-signaling-server ./
 RUN mkdir -p uploads recordings tmp && chmod 755 uploads recordings tmp
 
 EXPOSE ${SERVER_PORT:-8181}
+EXPOSE 10000/udp
+
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:${SERVER_PORT:-8181}/healthz',(r)=>process.exit(r.statusCode===200?0:1))" || exit 1
 
