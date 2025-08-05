@@ -24,6 +24,7 @@ docker run -d \
   -p 3478:3478 \
   -p 3478:3478/udp \
   -p 30000-30010:30000-30010/udp \
+  -e EXTERNAL_IP=$(curl -s ifconfig.me) \
   --env-file .env \
   --name ${NAME} \
   ${IMAGE}:${timestamp}
