@@ -220,7 +220,7 @@ app.use(
 //  • Else if client POSTs JSON { text }, we skip STT and go straight to LLM.
 // Returns JSON { reply: "…assistant response text…" }.
 app.post(
-  '/bot/reply',
+  '/api/bot/reply',
   upload.single('audio'),           // parse an uploaded audio file
   express.json({ limit: '1mb' }),   // parse JSON text fallback
   async (req, res) => {
@@ -252,7 +252,7 @@ app.post(
       // 4) Return JSON
       return res.json({ reply: replyText });
     } catch (err) {
-      console.error('❌ /bot/reply error:', err);
+      console.error('❌ /api/bot/reply error:', err);
       return res.status(500).json({ error: 'Bot reply failed', details: err.toString() });
     } finally {
       // Clean up uploaded file
