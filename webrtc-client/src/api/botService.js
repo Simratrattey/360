@@ -8,15 +8,7 @@ class BotService {
       let response;
       
       if (text) {
-        // Text-based reply
-        const SFU = import.meta.env.VITE_API_URL;
-        response = await axios.post(
-          `${SFU}/bot/reply`,
-          { text },
-          {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-          }
-        );
+        response = await API.post('/bot/reply', { text });
       } else if (audioBlob) {
         // Audio-based reply
         const formData = new FormData();
