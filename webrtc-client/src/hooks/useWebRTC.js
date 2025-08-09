@@ -212,28 +212,44 @@ export function useWebRTC() {
 
   // === Consume Producers ===
   const consumeProducers = useCallback(async (roomId) => {
-    const { success, data: producers } = await meetingService.getProducers(roomId);
-    if (!success) throw new Error(prodError);
+    const { success, data: producers, error } = await meetingService.getProducers(roomId);
+    if (!success) throw new Error(error || 'Failed to get producers');
     console.log('[WebRTC] 🔍 consumeProducers →', producers);
 
     const myIds = producersRef.current.map(p => p.id);
-    for (const producer of producers.filter(p => !myIds.includes(p.id))) {
+    console.log('[WebRTC] 🔍 My producer IDs:', myIds);
+    
+    const otherProducers = producers.filter(p => !myIds.includes(p.id));
+    console.log('[WebRTC] 🔍 Other producers to consume:', otherProducers);
+    
+    if (otherProducers.length === 0) {
+      console.log('[WebRTC] ℹ️ No other producers to consume');
+      return;
+    }
+    
+    for (const producer of otherProducers) {
+      console.log('[WebRTC] 🔄 Attempting to consume producer:', producer.id, 'kind:', producer.kind, 'peerId:', producer.peerId);
+      
       const { success, data: consumerParams, error: consumeError } = await meetingService.consume(
         recvTransportRef.current.id,
         producer.id,
         deviceRef.current.rtpCapabilities
       );
       if (!success) {
-        console.error('❌ Consume failed:', consumeError);
+        console.error('❌ Consume failed for producer', producer.id, ':', consumeError);
         continue;
       }
 
+      console.log('[WebRTC] ✅ Consumer params received:', consumerParams);
+      
       const consumer = await recvTransportRef.current.consume({
         id: consumerParams.id,
         producerId: consumerParams.producerId,
         kind: consumerParams.kind,
         rtpParameters: consumerParams.rtpParameters,
       });
+      
+      console.log('[WebRTC] ✅ Consumer created:', consumer.id, 'kind:', consumer.kind);
 
       consumersRef.current.push(consumer);
       await consumer.resume();
@@ -255,12 +271,26 @@ export function useWebRTC() {
 
   // — listen for newly-produced tracks in this room —
   useEffect(() => {
-    sfuSocket.on('newProducer', async ({ producerId, peerId: incomingPeerId }) => {
+    const handleNewProducer = async ({ producerId, peerId: incomingPeerId }) => {
       console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId);
+      
       if (producersRef.current.some(p => p.id === producerId)) {
         console.log('[WebRTC] ↪ newProducer is ours, skipping:', producerId);
         return;
       }
+      
+      if (!recvTransportRef.current) {
+        console.error('[WebRTC] ❌ No receive transport available for newProducer');
+        return;
+      }
+      
+      if (!deviceRef.current) {
+        console.error('[WebRTC] ❌ No device available for newProducer');
+        return;
+      }
+      
+      console.log('[WebRTC] 🔄 Processing newProducer:', producerId);
+      
       try {
         const { success, data } = await meetingService.consume(
           recvTransportRef.current.id,
@@ -268,11 +298,14 @@ export function useWebRTC() {
           deviceRef.current.rtpCapabilities
         );
         if (!success) {
-          console.error('consume error', data);
+          console.error('[WebRTC] ❌ consume error for newProducer', producerId, ':', data);
           return;
         }
+        
+        console.log('[WebRTC] ✅ Consumer params for newProducer:', data);
         const consumer = await recvTransportRef.current.consume(data);
         await consumer.resume();
+        console.log('[WebRTC] ✅ Consumer resumed for newProducer:', consumer.id);
         
         // Use consistent peer identification - always use incomingPeerId if available
         if (!incomingPeerId) {
@@ -286,10 +319,12 @@ export function useWebRTC() {
         peerStreamsRef.current.set(incomingPeerId, merged);
         setRemoteStreams(new Map(peerStreamsRef.current));
       } catch (err) {
-        console.error('Error consuming new producer', err);
+        console.error('[WebRTC] ❌ Error consuming new producer', producerId, ':', err);
       }
-    });
-    return () => sfuSocket.off('newProducer');
+    };
+    
+    sfuSocket.on('newProducer', handleNewProducer);
+    return () => sfuSocket.off('newProducer', handleNewProducer);
   }, [sfuSocket]);
 
   // — listen for peers hanging up and remove their stream —
@@ -375,8 +410,16 @@ export function useWebRTC() {
       // Produce local tracks after room join
       await produceLocalTracks(stream);
       
+      // Small delay before consuming to let producers propagate
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       // Then consume existing producers in the room
-      await consumeProducers(roomId);
+      try {
+        await consumeProducers(roomId);
+      } catch (err) {
+        console.error('[WebRTC] ❌ Failed to consume producers:', err);
+        // Continue anyway, newProducer events will handle new ones
+      }
     } catch (err) {
       console.error('❌ Join meeting failed:', err);
       setError('Failed to join meeting: ' + err.message);
