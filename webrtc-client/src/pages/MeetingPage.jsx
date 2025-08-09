@@ -5,7 +5,7 @@ import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import AvatarSidebar from '../components/AvatarSidebar';
@@ -191,17 +191,75 @@ export default function MeetingPage() {
   };
 
   const startRecording = () => {
-    if (!localStream) return;
-    const combined = new MediaStream();
-    localStream.getTracks().forEach(t => combined.addTrack(t));
-    remoteStreams.forEach(s => s.getTracks().forEach(t => combined.addTrack(t)));
-    const recorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp8,opus' });
-    const chunks = [];
-    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
-    recorder.onstop = () => setRecordedChunks(chunks);
-    recorder.start();
-    setMediaRecorder(recorder);
-    setIsRecording(true);
+    if (!localStream) {
+      console.error('No local stream available for recording');
+      return;
+    }
+    
+    try {
+      const combined = new MediaStream();
+      
+      // Add local stream tracks
+      localStream.getTracks().forEach(track => {
+        if (track.readyState === 'live') {
+          combined.addTrack(track);
+        }
+      });
+      
+      // Add remote stream tracks
+      remoteStreams.forEach(stream => {
+        stream.getTracks().forEach(track => {
+          if (track.readyState === 'live') {
+            combined.addTrack(track);
+          }
+        });
+      });
+      
+      if (combined.getTracks().length === 0) {
+        console.error('No active tracks available for recording');
+        return;
+      }
+      
+      // Check if the browser supports the required codec
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') 
+        ? 'video/webm;codecs=vp8,opus'
+        : MediaRecorder.isTypeSupported('video/webm') 
+        ? 'video/webm'
+        : '';
+      
+      if (!mimeType) {
+        console.error('Browser does not support required video codec for recording');
+        return;
+      }
+      
+      const recorder = new MediaRecorder(combined, { mimeType });
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        console.log('Recording stopped, collected', chunks.length, 'chunks');
+        setRecordedChunks(chunks);
+      };
+      
+      recorder.onerror = (e) => {
+        console.error('MediaRecorder error:', e);
+        setIsRecording(false);
+        setMediaRecorder(null);
+      };
+      
+      recorder.start(1000); // Record in 1-second intervals
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      console.log('Recording started with', combined.getTracks().length, 'tracks');
+      
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+    }
   };
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -209,6 +267,21 @@ export default function MeetingPage() {
       setMediaRecorder(null);
       setIsRecording(false);
     }
+  };
+
+  const downloadRecording = () => {
+    if (recordedChunks.length === 0) return;
+    
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `meeting-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleLeave = () => {
@@ -301,16 +374,21 @@ export default function MeetingPage() {
       </div>
       {/* Controls */}
       <div className="sticky bottom-0 w-full bg-gray-900 bg-opacity-75 backdrop-blur-md p-4 flex justify-center space-x-6 z-10">
-        <button onClick={toggleAudio} className="p-3 rounded-full bg-gray-600 text-white">
+        <button onClick={toggleAudio} className="p-3 rounded-full bg-gray-600 text-white" title={isAudioEnabled ? "Mute audio" : "Unmute audio"}>
           {isAudioEnabled ? <Mic size={20}/> : <MicOff size={20}/>} 
         </button>
-        <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white">
+        <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white" title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}>
           {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
         </button>
-        <button onClick={isRecording ? stopRecording : startRecording} className="p-3 rounded-full bg-gray-600 text-white">
+        <button onClick={isRecording ? stopRecording : startRecording} className="p-3 rounded-full bg-gray-600 text-white" title={isRecording ? "Stop recording" : "Start recording"}>
           {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
         </button>
-        <button onClick={handleLeave} className="p-3 rounded-full bg-red-600 text-white">
+        {recordedChunks.length > 0 && (
+          <button onClick={downloadRecording} className="p-3 rounded-full bg-green-600 text-white" title="Download recording">
+            <Download size={20}/>
+          </button>
+        )}
+        <button onClick={handleLeave} className="p-3 rounded-full bg-red-600 text-white" title="Leave meeting">
           <PhoneOff size={20}/>
         </button>
         <button
