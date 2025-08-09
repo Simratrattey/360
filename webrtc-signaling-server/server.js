@@ -29,7 +29,7 @@ import messageRoutes from './src/routes/message.js';
 import userRoutes from './src/routes/user.js';
 import fileRoutes from './src/routes/file.js';
 import meetingRoutes from './src/routes/meetings.js';
-import sfuRoutes from './src/routes/sfu.js';
+import sfuRoutes, { producers } from './src/routes/sfu.js';
 import notificationRoutes from './src/routes/notification.js';
 import { createNotification } from './src/controllers/notificationController.js';
 
@@ -466,6 +466,25 @@ io.on('connection', async socket => {
 
     io.to(roomId).emit('roomParticipants', rooms[roomId].participants);
     socket.emit('availableOffers', rooms[roomId].offers);
+    
+    // 🔥 NEW: Broadcast existing producers in the room to the newly joined participant
+    // This ensures they receive newProducer events for existing participants
+    setTimeout(() => {
+      if (producers && producers.size > 0) {
+        console.log(`[Signaling] 🔍 Checking ${producers.size} producers for room ${roomId}, new joiner: ${socket.id}`);
+        for (const [producerId, entry] of producers) {
+          if (entry.roomId === roomId && entry.peerId !== socket.id) {
+            console.log(`[Signaling] 📡 Broadcasting existing producer ${producerId} (${entry.producer.kind}) from ${entry.peerId} to new joiner ${socket.id}`);
+            socket.emit('newProducer', {
+              producerId: producerId,
+              peerId: entry.peerId
+            });
+          }
+        }
+      } else {
+        console.log(`[Signaling] ℹ️ No existing producers found for room ${roomId}`);
+      }
+    }, 100); // Small delay to let the client finish setup
   });
 
   socket.on('newOffer', newOffer => {

@@ -5,6 +5,9 @@ const transports = new Map();
 const producers = new Map();
 const consumers = new Map();
 
+// Export producers map for server access
+export { producers };
+
 function getTransportById(id) {
   const entry = transports.get(id);
   return entry && entry.transport;
@@ -111,7 +114,15 @@ router.post('/produce', async (req, res) => {
     
     const io = req.app.locals.io;
     if (roomId) {
-      console.log(`[SFU] 📡 Broadcasting newProducer to room ${roomId}: producerId=${producer.id}, peerId=${peerId}`);
+      // Check which sockets are in the room
+      const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+      const socketCount = socketsInRoom ? socketsInRoom.size : 0;
+      console.log(`[SFU] 📡 Broadcasting newProducer to room ${roomId} (${socketCount} sockets): producerId=${producer.id}, peerId=${peerId}`);
+      
+      if (socketsInRoom) {
+        console.log(`[SFU] 🔍 Sockets in room ${roomId}:`, Array.from(socketsInRoom));
+      }
+      
       io.to(roomId).emit('newProducer', {
         producerId: producer.id,
         peerId
