@@ -85,12 +85,18 @@ export function useWebRTC() {
     });
 
     transport.on('produce', async ({ kind, rtpParameters}, callback, errback) => {
-      // Ensure we have a valid socket ID
-      const peerId = sfuSocket?.id;
+      // Ensure we have a valid socket ID with retry mechanism
+      let peerId = sfuSocket?.id;
       if (!peerId) {
-        console.error('❌ No socket ID available for produce');
-        errback(new Error('Socket not connected'));
-        return;
+        console.warn('⚠️ No socket ID available for produce, waiting...');
+        // Wait briefly for socket to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        peerId = sfuSocket?.id;
+        if (!peerId) {
+          console.error('❌ No socket ID available for produce after retry');
+          errback(new Error('Socket not connected'));
+          return;
+        }
       }
       
       console.log('[WebRTC] 📤 Transport produce event - peerId:', peerId, 'kind:', kind);
@@ -189,18 +195,18 @@ export function useWebRTC() {
 
   // === Produce Local Tracks ===
   const produceLocalTracks = useCallback(async (stream) => {
+    if (!sfuSocket?.id) {
+      console.error('[WebRTC] ❌ Cannot produce tracks without socket ID');
+      throw new Error('Socket not ready');
+    }
+    
     for (const track of stream.getTracks()) {
-      // Get the current socket ID as peerId for consistent identification
-      const peerId = sfuSocket?.id;
+      const peerId = sfuSocket.id;
       console.log('[WebRTC] 📤 Producing track with peerId:', peerId, 'track kind:', track.kind);
       
       const producer = await sendTransportRef.current.produce({ track });
       producersRef.current.push(producer);
-      console.log(`📤 Produced ${track.kind} with producer ID:`, producer.id);
-      
-      // Now we need to update the backend with the peerId for this producer
-      // This should be done through the SFU API, but for now we'll rely on the socket ID
-      // being consistent across the session
+      console.log(`📤 Produced ${track.kind} with producer ID:`, producer.id, 'peerId:', peerId);
     }
   }, [localStream, sfuSocket]);
 
@@ -232,8 +238,12 @@ export function useWebRTC() {
       consumersRef.current.push(consumer);
       await consumer.resume();
 
-      // Use consistent peer identification - prefer peerId if available, otherwise use producerId
-      const peerId = producer.peerId || producer.id;
+      // Use consistent peer identification - always use peerId if available
+      const peerId = producer.peerId;
+      if (!peerId) {
+        console.error('[WebRTC] ❌ No peerId for producer:', producer.id, 'skipping stream assignment');
+        continue;
+      }
       console.log('[WebRTC] 📺 Adding stream for peer:', peerId, 'producer:', producer.id);
       
       const merged = peerStreamsRef.current.get(peerId) || new MediaStream();
@@ -264,13 +274,16 @@ export function useWebRTC() {
         const consumer = await recvTransportRef.current.consume(data);
         await consumer.resume();
         
-        // Use consistent peer identification - prefer incomingPeerId if available, otherwise use producerId
-        const key = incomingPeerId || producerId;
-        console.log('[WebRTC] 📺 Adding new producer stream for peer:', key, 'producer:', producerId);
+        // Use consistent peer identification - always use incomingPeerId if available
+        if (!incomingPeerId) {
+          console.error('[WebRTC] ❌ No peerId for new producer:', producerId, 'skipping stream assignment');
+          return;
+        }
+        console.log('[WebRTC] 📺 Adding new producer stream for peer:', incomingPeerId, 'producer:', producerId);
         
-        const merged = peerStreamsRef.current.get(key) || new MediaStream();
+        const merged = peerStreamsRef.current.get(incomingPeerId) || new MediaStream();
         merged.addTrack(consumer.track);
-        peerStreamsRef.current.set(key, merged);
+        peerStreamsRef.current.set(incomingPeerId, merged);
         setRemoteStreams(new Map(peerStreamsRef.current));
       } catch (err) {
         console.error('Error consuming new producer', err);
@@ -338,15 +351,31 @@ export function useWebRTC() {
       });
     }
     
-    console.log('[WebRTC] 🚀 Starting join meeting process with socket ID:', sfuSocket?.id);
+    // Double-check socket ID is available
+    if (!sfuSocket?.id) {
+      console.error('[WebRTC] ❌ No socket ID available after connection');
+      setError('Socket connection failed - no ID assigned');
+      return;
+    }
+    
+    console.log('[WebRTC] 🚀 Starting join meeting process with socket ID:', sfuSocket.id);
     
     try {
       const stream = await getUserMedia();
       await loadDevice();
       await createSendTransport(roomId);
       await createRecvTransport();
-      await produceLocalTracks(stream);
+      
+      // Join the room first to establish participant presence
       joinRoom(roomId);
+      
+      // Small delay to ensure room join is processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Produce local tracks after room join
+      await produceLocalTracks(stream);
+      
+      // Then consume existing producers in the room
       await consumeProducers(roomId);
     } catch (err) {
       console.error('❌ Join meeting failed:', err);

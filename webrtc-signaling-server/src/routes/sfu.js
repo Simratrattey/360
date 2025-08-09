@@ -89,16 +89,30 @@ router.post('/transports/:id/connect', async (req, res) => {
 // 4) Produce (send) a track
 router.post('/produce', async (req, res) => {
   const roomId = req.body.roomId;
-  console.log(`[SFU] ▶️  produce() → roomId=${roomId}`, { transportId: req.body.transportId, kind: req.body.kind });
   const { transportId, kind, rtpParameters, peerId } = req.body;
+  
+  console.log(`[SFU] ▶️  produce() → roomId=${roomId}`, { 
+    transportId, 
+    kind, 
+    peerId: peerId || 'undefined' 
+  });
+  
+  if (!peerId) {
+    console.error('❌ No peerId provided for produce');
+    return res.status(400).json({ error: 'peerId is required' });
+  }
+  
   const transport = getTransportById(transportId);
 
   try {
     const producer = await transport.produce({ kind, rtpParameters });
     producers.set(producer.id, { producer, roomId, peerId });
+    console.log(`[SFU] ✅ Producer created: id=${producer.id}, peerId=${peerId}, kind=${kind}`);
+    
     const io = req.app.locals.io;
-    if (req.body.roomId) {
-      io.to(req.body.roomId).emit('newProducer', {
+    if (roomId) {
+      console.log(`[SFU] 📡 Broadcasting newProducer to room ${roomId}: producerId=${producer.id}, peerId=${peerId}`);
+      io.to(roomId).emit('newProducer', {
         producerId: producer.id,
         peerId
       });
@@ -148,13 +162,20 @@ router.get('/producers', (req, res) => {
   const list = [];
   for (const [id, entry] of producers) {
     if (!roomId || entry.roomId === roomId) {
-      list.push({
-        id: entry.producer.id,
-        kind: entry.producer.kind,
-        peerId: entry.peerId
-      });
+      // Only include producers that have a valid peerId
+      if (entry.peerId) {
+        list.push({
+          id: entry.producer.id,
+          kind: entry.producer.kind,
+          peerId: entry.peerId
+        });
+      } else {
+        console.warn(`[SFU] ⚠️ Producer ${id} has no peerId, excluding from list`);
+      }
     }
   }
+  console.log(`[SFU] 📋 Returning ${list.length} producers for room ${roomId}:`, 
+    list.map(p => `${p.kind}:${p.peerId}`).join(', '));
   res.json(list);
 });
 
