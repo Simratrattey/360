@@ -155,22 +155,26 @@ router.post('/consume', async (req, res) => {
   });
 });
 
-// Return all active producers
+// Return all active producers (excluding the requesting client's own producers)
 router.get('/producers', (req, res) => {
   const roomId = req.query.roomId;
-  console.log(`[SFU] 🔍 getProducers() for roomId=`, roomId);
+  const requestingPeerId = req.query.peerId; // Add peerId as query param to exclude own producers
+  
+  console.log(`[SFU] 🔍 getProducers() for roomId=${roomId}, excluding peerId=${requestingPeerId}`);
   const list = [];
   for (const [id, entry] of producers) {
     if (!roomId || entry.roomId === roomId) {
-      // Only include producers that have a valid peerId
-      if (entry.peerId) {
+      // Only include producers that have a valid peerId and are not from the requesting client
+      if (entry.peerId && entry.peerId !== requestingPeerId) {
         list.push({
           id: entry.producer.id,
           kind: entry.producer.kind,
           peerId: entry.peerId
         });
-      } else {
+      } else if (!entry.peerId) {
         console.warn(`[SFU] ⚠️ Producer ${id} has no peerId, excluding from list`);
+      } else if (entry.peerId === requestingPeerId) {
+        console.log(`[SFU] 🔄 Excluding own producer ${id} (${entry.producer.kind}) from list`);
       }
     }
   }

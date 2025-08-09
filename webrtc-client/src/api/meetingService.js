@@ -152,18 +152,16 @@ class MeetingService {
     }
   }
 
-  // Get all active producers
-  async getProducers(roomId) {
-    const params = {};
-    if (typeof roomId === 'string') {
-      params.roomId = roomId;
-    } else if (roomId && typeof roomId === 'object' && roomId.roomId) {
-      params.roomId = roomId.roomId;
-    }
+  // Get all active producers (excluding own producers)
+  async getProducers(roomId, excludePeerId) {
     try {
       const params = {};
-      if (typeof roomId === 'string')        params.roomId = roomId;
-      else if (roomId && roomId.roomId)      params.roomId = roomId.roomId;
+      if (typeof roomId === 'string') params.roomId = roomId;
+      else if (roomId && roomId.roomId) params.roomId = roomId.roomId;
+      
+      // Add peerId to exclude own producers
+      if (excludePeerId) params.peerId = excludePeerId;
+      
       const response = await SFU.get('/sfu/producers', { params });
       return { success: true, data: response.data };
     } catch (error) {

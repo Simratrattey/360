@@ -212,9 +212,15 @@ export function useWebRTC() {
 
   // === Consume Producers ===
   const consumeProducers = useCallback(async (roomId) => {
-    const { success, data: producers, error } = await meetingService.getProducers(roomId);
+    const myPeerId = sfuSocket?.id;
+    if (!myPeerId) {
+      console.error('[WebRTC] ❌ No peerId available for getProducers');
+      return;
+    }
+    
+    const { success, data: producers, error } = await meetingService.getProducers(roomId, myPeerId);
     if (!success) throw new Error(error || 'Failed to get producers');
-    console.log('[WebRTC] 🔍 consumeProducers →', producers);
+    console.log('[WebRTC] 🔍 consumeProducers → (excluding peerId:', myPeerId, ') →', producers);
 
     const myIds = producersRef.current.map(p => p.id);
     console.log('[WebRTC] 🔍 My producer IDs:', myIds);
@@ -267,7 +273,7 @@ export function useWebRTC() {
       peerStreamsRef.current.set(peerId, merged);
       setRemoteStreams(new Map(peerStreamsRef.current));
     }
-  }, []);
+  }, [sfuSocket]);
 
   // — listen for newly-produced tracks in this room —
   useEffect(() => {
