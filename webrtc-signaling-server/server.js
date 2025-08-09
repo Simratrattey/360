@@ -836,6 +836,36 @@ app.get('/api/rooms', (req, res) => {
   res.json({ rooms: activeRooms });
 });
 
+// 🔥 NEW: Endpoint for SFU server to broadcast newProducer events
+app.post('/api/broadcast/newProducer', express.json(), (req, res) => {
+  const { roomId, producerId, peerId } = req.body;
+  
+  if (!roomId || !producerId || !peerId) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  
+  // Check how many sockets are in the room
+  const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+  const socketCount = socketsInRoom ? socketsInRoom.size : 0;
+  
+  console.log(`[Signaling] 📡 Broadcasting newProducer to room ${roomId} (${socketCount} sockets): producerId=${producerId}, peerId=${peerId}`);
+  
+  if (socketsInRoom && socketCount > 0) {
+    console.log(`[Signaling] 🔍 Sockets in room ${roomId}:`, Array.from(socketsInRoom));
+    
+    // Broadcast to all sockets in the room
+    io.to(roomId).emit('newProducer', {
+      producerId,
+      peerId
+    });
+    
+    res.json({ success: true, socketCount });
+  } else {
+    console.log(`[Signaling] ⚠️ No sockets found in room ${roomId}`);
+    res.json({ success: true, socketCount: 0 });
+  }
+});
+
 // Register new conversation and message routes
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);

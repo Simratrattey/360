@@ -1,4 +1,5 @@
 import express from 'express';
+import fetch from 'node-fetch';
 const router = express.Router();
 
 const transports = new Map();
@@ -112,21 +113,39 @@ router.post('/produce', async (req, res) => {
     producers.set(producer.id, { producer, roomId, peerId });
     console.log(`[SFU] ✅ Producer created: id=${producer.id}, peerId=${peerId}, kind=${kind}`);
     
-    const io = req.app.locals.io;
+    // 🔥 NEW: Call signaling server to broadcast newProducer event
     if (roomId) {
-      // Check which sockets are in the room
-      const socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-      const socketCount = socketsInRoom ? socketsInRoom.size : 0;
-      console.log(`[SFU] 📡 Broadcasting newProducer to room ${roomId} (${socketCount} sockets): producerId=${producer.id}, peerId=${peerId}`);
-      
-      if (socketsInRoom) {
-        console.log(`[SFU] 🔍 Sockets in room ${roomId}:`, Array.from(socketsInRoom));
+      try {
+        console.log(`[SFU] 📡 Requesting signaling server to broadcast newProducer: room=${roomId}, producer=${producer.id}, peerId=${peerId}`);
+        
+        // Call signaling server endpoint to broadcast the event
+        const broadcastResponse = await fetch(`http://comm360-signaling-staging:5050/api/broadcast/newProducer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            roomId,
+            producerId: producer.id,
+            peerId
+          })
+        });
+        
+        const broadcastResult = await broadcastResponse.json();
+        console.log(`[SFU] ✅ Signaling server broadcast result:`, broadcastResult);
+        
+      } catch (error) {
+        console.error(`[SFU] ❌ Failed to broadcast newProducer via signaling server:`, error);
+        
+        // Fallback to local broadcast (won't work across containers but better than nothing)
+        const io = req.app.locals.io;
+        if (io) {
+          io.to(roomId).emit('newProducer', {
+            producerId: producer.id,
+            peerId
+          });
+        }
       }
-      
-      io.to(roomId).emit('newProducer', {
-        producerId: producer.id,
-        peerId
-      });
     }
     res.json({ id: producer.id });
   } catch (err) {
