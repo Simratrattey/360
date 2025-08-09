@@ -84,7 +84,7 @@ app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot')) {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast')) {
     return next();
   }
   return authMiddleware(req, res, next);

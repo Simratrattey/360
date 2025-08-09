@@ -277,6 +277,8 @@ export function useWebRTC() {
 
   // — listen for newly-produced tracks in this room —
   useEffect(() => {
+    console.log('[WebRTC] 🔧 Setting up newProducer event listener, sfuSocket:', !!sfuSocket, 'connected:', sfuSocket?.connected);
+    
     const handleNewProducer = async ({ producerId, peerId: incomingPeerId }) => {
       const myPeerId = sfuSocket?.id;
       console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId, 'myPeerId:', myPeerId);
