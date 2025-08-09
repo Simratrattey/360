@@ -278,10 +278,16 @@ export function useWebRTC() {
   // — listen for newly-produced tracks in this room —
   useEffect(() => {
     const handleNewProducer = async ({ producerId, peerId: incomingPeerId }) => {
-      console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId);
+      const myPeerId = sfuSocket?.id;
+      console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId, 'myPeerId:', myPeerId);
       
       if (producersRef.current.some(p => p.id === producerId)) {
-        console.log('[WebRTC] ↪ newProducer is ours, skipping:', producerId);
+        console.log('[WebRTC] ↪ newProducer is ours (by producer ID), skipping:', producerId);
+        return;
+      }
+      
+      if (incomingPeerId === myPeerId) {
+        console.log('[WebRTC] ↪ newProducer is ours (by peer ID), skipping:', producerId, 'peerId:', incomingPeerId);
         return;
       }
       
@@ -329,7 +335,21 @@ export function useWebRTC() {
       }
     };
     
-    sfuSocket.on('newProducer', handleNewProducer);
+    // Debug: Log ALL events on this socket
+    const originalOn = sfuSocket.on.bind(sfuSocket);
+    const debugOn = (event, handler) => {
+      if (event === 'newProducer') {
+        console.log('[WebRTC] 🔧 Registering newProducer event handler');
+      }
+      return originalOn(event, (data) => {
+        if (event === 'newProducer') {
+          console.log('[WebRTC] 📥 Raw newProducer event received:', data);
+        }
+        return handler(data);
+      });
+    };
+    
+    debugOn('newProducer', handleNewProducer);
     return () => sfuSocket.off('newProducer', handleNewProducer);
   }, [sfuSocket]);
 
