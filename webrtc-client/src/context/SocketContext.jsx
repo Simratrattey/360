@@ -31,6 +31,7 @@ export function SocketProvider({ children }) {
   const [avatarOutput, setAvatarOutput] = useState(null);
   const [avatarNavigate, setAvatarNavigate] = useState(null);
   const [participantMap, setParticipantMap] = useState({});
+  const [recordingStatus, setRecordingStatus] = useState({ isRecording: false, recordedBy: null });
 
   useEffect(() => {
     if (user) {
@@ -120,6 +121,16 @@ export function SocketProvider({ children }) {
         setAvatarNavigate(index);
       });
 
+      sfuSocket.on('recordingStarted', ({ recordedBy }) => {
+        console.log('[SocketContext] Recording started by:', recordedBy);
+        setRecordingStatus({ isRecording: true, recordedBy });
+      });
+
+      sfuSocket.on('recordingStopped', ({ recordedBy }) => {
+        console.log('[SocketContext] Recording stopped by:', recordedBy);
+        setRecordingStatus({ isRecording: false, recordedBy: null });
+      });
+
       setChatSocket(chatSocket);
       setSfuSocket(sfuSocket);
 
@@ -199,6 +210,18 @@ export function SocketProvider({ children }) {
     }
   };
 
+  const notifyRecordingStarted = () => {
+    if (sfuSocket && user) {
+      sfuSocket.emit('recordingStarted', { recordedBy: user.name || user.email });
+    }
+  };
+
+  const notifyRecordingStopped = () => {
+    if (sfuSocket && user) {
+      sfuSocket.emit('recordingStopped', { recordedBy: user.name || user.email });
+    }
+  };
+
   return (
     <SocketContext.Provider value={{
       chatSocket,
@@ -219,6 +242,9 @@ export function SocketProvider({ children }) {
       avatarOutput,
       avatarNavigate,
       participantMap,
+      recordingStatus,
+      notifyRecordingStarted,
+      notifyRecordingStopped,
     }}>
       {children}
     </SocketContext.Provider>

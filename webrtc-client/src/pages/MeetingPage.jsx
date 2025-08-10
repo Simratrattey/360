@@ -16,13 +16,14 @@ export default function MeetingPage() {
   const { user } = useContext(AuthContext);
   const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
   const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate } = useContext(SocketContext);
-  const { participantMap } = useContext(SocketContext);
+  const { participantMap, recordingStatus, notifyRecordingStarted, notifyRecordingStopped } = useContext(SocketContext);
 
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isRecording, setIsRecording]       = useState(false);
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
+  const [recordingStream, setRecordingStream] = useState(null);
 
   const [showAvatar, setShowAvatar]             = useState(false);
   const [avatarClips, setAvatarClips]           = useState([]);
@@ -190,37 +191,51 @@ export default function MeetingPage() {
     }
   };
 
-  const startRecording = () => {
-    if (!localStream) {
-      console.error('No local stream available for recording');
-      return;
-    }
-    
+  const startRecording = async () => {
     try {
-      const combined = new MediaStream();
+      console.log('Starting screen capture recording...');
       
-      // Add local stream tracks
-      localStream.getTracks().forEach(track => {
-        if (track.readyState === 'live') {
-          combined.addTrack(track);
-        }
-      });
+      // Try to capture the entire screen or current tab
+      let captureStream;
       
-      // Add remote stream tracks
-      remoteStreams.forEach(stream => {
-        stream.getTracks().forEach(track => {
-          if (track.readyState === 'live') {
-            combined.addTrack(track);
+      try {
+        // First try to get display media (screen/tab capture)
+        captureStream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            mediaSource: 'screen',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
           }
         });
-      });
+        
+        console.log('Screen capture successful');
+      } catch (screenError) {
+        console.log('Screen capture failed, falling back to canvas-based recording:', screenError);
+        
+        // Fallback: Create a canvas-based recording of the meeting grid
+        captureStream = await createCanvasRecording();
+      }
       
-      if (combined.getTracks().length === 0) {
-        console.error('No active tracks available for recording');
+      if (!captureStream) {
+        console.error('No capture stream available');
         return;
       }
       
-      // Check if the browser supports the required codec
+      // Add audio from the meeting if available and no audio in capture stream
+      if (captureStream.getAudioTracks().length === 0 && localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          captureStream.addTrack(audioTrack.clone());
+        }
+      }
+      
+      // Check codec support
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') 
         ? 'video/webm;codecs=vp8,opus'
         : MediaRecorder.isTypeSupported('video/webm') 
@@ -229,10 +244,14 @@ export default function MeetingPage() {
       
       if (!mimeType) {
         console.error('Browser does not support required video codec for recording');
+        captureStream.getTracks().forEach(track => track.stop());
         return;
       }
       
-      const recorder = new MediaRecorder(combined, { mimeType });
+      const recorder = new MediaRecorder(captureStream, { 
+        mimeType,
+        videoBitsPerSecond: 2500000 // 2.5 Mbps for good quality
+      });
       const chunks = [];
       
       recorder.ondataavailable = (e) => {
@@ -244,21 +263,36 @@ export default function MeetingPage() {
       recorder.onstop = () => {
         console.log('Recording stopped, collected', chunks.length, 'chunks');
         setRecordedChunks(chunks);
+        captureStream.getTracks().forEach(track => track.stop());
+        setRecordingStream(null);
       };
       
       recorder.onerror = (e) => {
         console.error('MediaRecorder error:', e);
         setIsRecording(false);
         setMediaRecorder(null);
+        captureStream.getTracks().forEach(track => track.stop());
+        setRecordingStream(null);
       };
+      
+      // Handle user stopping screen share
+      captureStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        console.log('Screen sharing ended by user');
+        stopRecording();
+      });
       
       recorder.start(1000); // Record in 1-second intervals
       setMediaRecorder(recorder);
+      setRecordingStream(captureStream);
       setIsRecording(true);
-      console.log('Recording started with', combined.getTracks().length, 'tracks');
+      
+      // Notify all participants that recording has started
+      notifyRecordingStarted();
+      console.log('Screen recording started successfully');
       
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error('Failed to start screen recording:', error);
+      alert('Failed to start recording. Please make sure you grant screen sharing permission.');
     }
   };
   const stopRecording = () => {
@@ -266,6 +300,145 @@ export default function MeetingPage() {
       mediaRecorder.stop();
       setMediaRecorder(null);
       setIsRecording(false);
+      
+      // Notify all participants that recording has stopped
+      notifyRecordingStopped();
+    }
+    
+    // Clean up recording stream
+    if (recordingStream) {
+      recordingStream.getTracks().forEach(track => track.stop());
+      setRecordingStream(null);
+    }
+  };
+
+  // Canvas-based recording fallback
+  const createCanvasRecording = async () => {
+    try {
+      console.log('Creating canvas-based recording...');
+      
+      // Create a canvas to composite all video streams
+      const canvas = document.createElement('canvas');
+      canvas.width = 1920;
+      canvas.height = 1080;
+      const ctx = canvas.getContext('2d');
+      
+      // Get all video elements from the meeting grid
+      const videoElements = [];
+      
+      // Add local video
+      if (localVideoRef.current) {
+        videoElements.push({
+          video: localVideoRef.current,
+          label: 'You',
+          isLocal: true
+        });
+      }
+      
+      // Add remote videos
+      remoteStreams.forEach((stream, id) => {
+        const videoEl = document.getElementById(`remote-video-${id}`);
+        if (videoEl) {
+          videoElements.push({
+            video: videoEl,
+            label: participantMap[id] || 'Guest',
+            isLocal: false
+          });
+        }
+      });
+      
+      console.log('Found', videoElements.length, 'video elements for canvas recording');
+      
+      if (videoElements.length === 0) {
+        throw new Error('No video elements found for recording');
+      }
+      
+      // Calculate grid layout (same as your UI)
+      const tileCount = videoElements.length;
+      const columns = tileCount === 2 ? 2 : Math.ceil(Math.sqrt(tileCount));
+      const rows = Math.ceil(tileCount / columns);
+      
+      const tileWidth = canvas.width / columns;
+      const tileHeight = canvas.height / rows;
+      
+      // Start the drawing loop
+      let animationId;
+      const drawFrame = () => {
+        // Clear canvas
+        ctx.fillStyle = '#1F2937'; // bg-gray-800
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw each video tile
+        videoElements.forEach((element, index) => {
+          const col = index % columns;
+          const row = Math.floor(index / columns);
+          const x = col * tileWidth;
+          const y = row * tileHeight;
+          
+          if (element.video && element.video.videoWidth > 0) {
+            try {
+              // Draw video with aspect ratio preservation
+              const videoAspect = element.video.videoWidth / element.video.videoHeight;
+              const tileAspect = tileWidth / tileHeight;
+              
+              let drawWidth, drawHeight, drawX, drawY;
+              
+              if (videoAspect > tileAspect) {
+                drawHeight = tileHeight;
+                drawWidth = tileHeight * videoAspect;
+                drawX = x + (tileWidth - drawWidth) / 2;
+                drawY = y;
+              } else {
+                drawWidth = tileWidth;
+                drawHeight = tileWidth / videoAspect;
+                drawX = x;
+                drawY = y + (tileHeight - drawHeight) / 2;
+              }
+              
+              ctx.drawImage(element.video, drawX, drawY, drawWidth, drawHeight);
+              
+              // Draw label
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+              ctx.fillRect(x + 10, y + tileHeight - 40, ctx.measureText(element.label).width + 20, 30);
+              ctx.fillStyle = 'white';
+              ctx.font = '16px Arial';
+              ctx.fillText(element.label, x + 20, y + tileHeight - 20);
+              
+            } catch (drawError) {
+              console.warn('Failed to draw video element:', drawError);
+            }
+          } else {
+            // Draw placeholder for video off state
+            ctx.fillStyle = '#374151'; // bg-gray-700
+            ctx.fillRect(x + 10, y + 10, tileWidth - 20, tileHeight - 20);
+            ctx.fillStyle = '#9CA3AF'; // text-gray-400
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Camera Off', x + tileWidth / 2, y + tileHeight / 2);
+            ctx.textAlign = 'left';
+          }
+        });
+        
+        animationId = requestAnimationFrame(drawFrame);
+      };
+      
+      drawFrame();
+      
+      // Create stream from canvas
+      const stream = canvas.captureStream(30); // 30 FPS
+      
+      // Stop drawing when stream ends
+      const originalStop = stream.getTracks()[0].stop.bind(stream.getTracks()[0]);
+      stream.getTracks()[0].stop = () => {
+        cancelAnimationFrame(animationId);
+        originalStop();
+      };
+      
+      return stream;
+      
+    } catch (error) {
+      console.error('Canvas recording failed:', error);
+      return null;
     }
   };
 
@@ -318,6 +491,16 @@ export default function MeetingPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
+      {/* Recording notification banner */}
+      {recordingStatus.isRecording && (
+        <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
+          <CircleDot size={16} className="animate-pulse" />
+          <span>
+            This meeting is being recorded by {recordingStatus.recordedBy}
+          </span>
+        </div>
+      )}
+      
       {/* Video Grid */}
       <div
         className="meeting-grid grid auto-rows-fr gap-4 p-4 flex-1 overflow-auto"
@@ -380,7 +563,7 @@ export default function MeetingPage() {
         <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white" title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}>
           {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
         </button>
-        <button onClick={isRecording ? stopRecording : startRecording} className="p-3 rounded-full bg-gray-600 text-white" title={isRecording ? "Stop recording" : "Start recording"}>
+        <button onClick={isRecording ? stopRecording : startRecording} className="p-3 rounded-full bg-gray-600 text-white" title={isRecording ? "Stop screen recording" : "Record meeting (screen capture)"}>
           {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
         </button>
         {recordedChunks.length > 0 && (

@@ -623,6 +623,23 @@ io.on('connection', async socket => {
     if (rid) io.to(rid).emit('avatarNavigate', { index });
   });
 
+  // Recording notifications
+  socket.on('recordingStarted', ({ recordedBy }) => {
+    const rid = socket.currentRoom;
+    if (rid) {
+      console.log(`[Signaling] Recording started by ${recordedBy} in room ${rid}`);
+      io.to(rid).emit('recordingStarted', { recordedBy });
+    }
+  });
+
+  socket.on('recordingStopped', ({ recordedBy }) => {
+    const rid = socket.currentRoom;
+    if (rid) {
+      console.log(`[Signaling] Recording stopped by ${recordedBy} in room ${rid}`);
+      io.to(rid).emit('recordingStopped', { recordedBy });
+    }
+  });
+
   // --- Real-time chat events ---
 
   // Join a conversation room
