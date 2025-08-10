@@ -217,7 +217,6 @@ export default function DashboardPage() {
                       </span>
                     )}
                   </div>
-                  </h3>
                   {notif.lastText && (
                     <p className="text-secondary-500 text-xs truncate max-w-xs">{notif.lastSender}: {notif.lastText}</p>
                   )}
