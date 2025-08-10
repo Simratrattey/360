@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useChatSocket } from './ChatSocketContext'; // ✅ Changed from useSocket
 import * as notificationService from '../services/notificationService';
-import { simulateNotification } from '../utils/notificationTest'; // Import the simulateNotification function
 
 const NotificationContext = createContext();
 
@@ -22,7 +21,6 @@ export const NotificationProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   // Load notifications on mount and when user changes
-  simulateNotification(); // Call to simulate a notification for testing
   useEffect(() => {
     if (user) {
       loadNotifications();
@@ -36,13 +34,6 @@ export const NotificationProvider = ({ children }) => {
   // Request notification permission on mount
   useEffect(() => {
     if ('Notification' in window) {
-  Notification.requestPermission().then(permission => {
-    console.log('📢 Notification permission:', permission);
-    if (permission === 'granted') {
-      simulateNotification(); // Call to simulate a notification after permission is granted
-    }
-  });
-}
       Notification.requestPermission().then(permission => {
         console.log('📢 Notification permission:', permission);
       });
