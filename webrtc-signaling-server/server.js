@@ -575,27 +575,29 @@ io.on('connection', async socket => {
   // Handle disconnections
   socket.on('disconnect', () => {
     const rid = socket.currentRoom;
-    if (!rid) return;
+    
     // Remove user from online users
     onlineUsers.delete(socket.userId);
     io.emit('user:offline', { userId: socket.userId });
     console.log('[Signaling] 🔔 disconnect handler on server for', socket.id);
+    
     if (rid) {
       socket.to(rid).emit('hangup', socket.id);
-    }
-    // Clean up the same way as hangup
-    if (rid && rooms[rid]) {
-      rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
-      rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       
-      // Broadcast updated participants to room
-      io.to(rid).emit('roomParticipants', rooms[rid].participants);
-      io.to(rid).emit('availableOffers', rooms[rid].offers);
-      
-      // If room is empty, clean it up
-      if (rooms[rid].participants.length === 0) {
-        io.emit('roomClosed', rid);
-        delete rooms[rid];
+      // Clean up the same way as hangup
+      if (rooms[rid]) {
+        rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
+        rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
+        
+        // Broadcast updated participants to room
+        io.to(rid).emit('roomParticipants', rooms[rid].participants);
+        io.to(rid).emit('availableOffers', rooms[rid].offers);
+        
+        // If room is empty, clean it up
+        if (rooms[rid].participants.length === 0) {
+          io.emit('roomClosed', rid);
+          delete rooms[rid];
+        }
       }
     }
     
@@ -699,45 +701,58 @@ io.on('connection', async socket => {
       
       io.to(conversationId).emit('chat:new', messageForClient);
       
-      // ✅ ALWAYS CREATE NOTIFICATIONS (regardless of online status)
-      const conversation = await Conversation.findById(conversationId).populate('members');
-      if (conversation) {
-        const sender = populated.sender;
-        const messagePreview = text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) 
-                                    : file ? `📎 ${file.originalName}` : 'New message';
-        
-        // Create notifications for all members except the sender
-        const recipientIds = conversation.members
-          .filter(member => member._id.toString() !== userId)
-          .map(member => member._id.toString());
-        
-        console.log(`📢 Creating notifications for ${recipientIds.length} recipients:`, recipientIds);
-        
-        for (const recipientId of recipientIds) {
-          try {
-            // ✅ Always create notification in database
-            const notification = await createNotification(
-              recipientId,
-              userId,
-              'message',
-              `${sender.fullName || sender.username}`,
-              messagePreview,
-              { 
-                conversationId: conversationId,
-                messageId: messageId,
-                senderAvatar: sender.avatarUrl 
+        // ✅ ALWAYS CREATE NOTIFICATIONS (regardless of online status)
+        const conversation = await Conversation.findById(conversationId).populate('members');
+        if (conversation) {
+          const sender = populated.sender;
+          const messagePreview = text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) 
+                                      : file ? `📎 ${file.originalName}` : 'New message';
+          
+          // Create notifications for all members except the sender
+          const recipientIds = conversation.members
+            .filter(member => member._id.toString() !== userId)
+            .map(member => member._id.toString());
+          
+          console.log(`📢 Creating notifications for ${recipientIds.length} recipients:`, recipientIds);
+          
+          for (const recipientId of recipientIds) {
+            try {
+              // ✅ Always create notification in database
+              const notification = await createNotification(
+                recipientId,
+                userId,
+                'message',
+                `${sender.fullName || sender.username}`,
+                messagePreview,
+                { 
+                  conversationId: conversationId,
+                  messageId: messageId,
+                  senderAvatar: sender.avatarUrl 
+                }
+              );
+              
+              console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
+              
+              // ✅ Send real-time notification via socket
+              sendNotificationToUser(recipientId, notification);
+              
+              // ✅ Also send browser notification event for immediate display
+              const recipientSocket = onlineUsers.get(recipientId);
+              if (recipientSocket) {
+                console.log(`📢 Sending notify-message event to user ${recipientId}`);
+                io.to(recipientSocket.socketId).emit('notify-message', {
+                  title: `${sender.fullName || sender.username}`,
+                  body: messagePreview,
+                  conversationId: conversationId,
+                  messageId: messageId,
+                  type: 'message'
+                });
               }
-            );
-            
-            console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
-            
-            // ✅ Try to send real-time notification (don't depend on online status)
-            sendNotificationToUser(recipientId, notification);
-            
-          } catch (error) {
-            console.error('Error creating notification for user:', recipientId, error);
+              
+            } catch (error) {
+              console.error('Error creating notification for user:', recipientId, error);
+            }
           }
-        }
         
         // Mark as delivered for online users in the conversation
         const onlineRecipients = recipientIds.filter(id => onlineUsers.has(id));

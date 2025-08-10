@@ -31,6 +31,15 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user]);
 
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('📢 Notification permission:', permission);
+      });
+    }
+  }, []);
+
   // Listen for real-time notifications
   useEffect(() => {
     if (!socket || !user) return;
@@ -39,12 +48,36 @@ export const NotificationProvider = ({ children }) => {
       console.log('📢 New notification received:', notification);
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
+      
       // Show browser notification if permission is granted
       if (window.Notification && Notification.permission === 'granted') {
-        new Notification(notification.title, {
-          body: notification.message,
-          icon: notification.data?.senderAvatar || '/favicon.ico'
-        });
+        try {
+          const browserNotification = new Notification(notification.title, {
+            body: notification.message,
+            icon: notification.data?.senderAvatar || '/favicon.ico',
+            tag: `notification-${notification._id}`,
+            requireInteraction: false,
+            silent: false
+          });
+
+          browserNotification.onclick = () => {
+            window.focus();
+            // Handle notification click based on type
+            if (notification.type === 'message' && notification.data?.conversationId) {
+              window.location.href = `/messages?conversation=${notification.data.conversationId}`;
+            } else if (notification.type === 'meeting_invitation' && notification.data?.meetingId) {
+              window.location.href = `/meetings/${notification.data.meetingId}`;
+            }
+            browserNotification.close();
+          };
+
+          // Auto-close after 5 seconds
+          setTimeout(() => {
+            browserNotification.close();
+          }, 5000);
+        } catch (error) {
+          console.error('Error showing browser notification:', error);
+        }
       }
     };
 
