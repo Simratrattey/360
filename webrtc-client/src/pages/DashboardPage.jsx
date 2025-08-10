@@ -20,6 +20,7 @@ import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
+import { useNotifications } from '../context/NotificationContext';
 
 const stats = [
   { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
@@ -39,9 +40,9 @@ export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const navigate = useNavigate();
+  const { unreadCount: globalUnreadCount } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [unreadNotifications, setUnreadNotifications] = useState([]);
   const [messageNotifications, setMessageNotifications] = useState([]);
   const [scheduling, setScheduling] = useState(false);
 
@@ -64,8 +65,8 @@ export default function DashboardPage() {
       try {
         const res = await conversationAPI.getConversations();
         const conversations = res.data.conversations || res.data || [];
-        // Aggregate unread counts by type
-        const notifications = conversations
+        // Create message notifications for unread messages
+        const messageNotifs = conversations
           .filter(c => c.unread > 0)
           .map(c => ({
             id: c._id,
@@ -73,11 +74,14 @@ export default function DashboardPage() {
             name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
             unread: c.unread,
             avatar: c.avatar,
-            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash
+            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash,
+            lastText: 'New messages',
+            lastSender: ''
           }));
-        setUnreadNotifications(notifications);
+        setMessageNotifications(messageNotifs);
       } catch (err) {
-        setUnreadNotifications([]);
+        console.error('Error fetching unread messages:', err);
+        setMessageNotifications([]);
       }
     }
     fetchUnread();
@@ -169,17 +173,24 @@ export default function DashboardPage() {
         </motion.button>
       </motion.div>
 
-      {/* Message Notifications Section */}
+      {/* Notifications Section */}
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="glass-effect card bg-white/80 shadow-xl rounded-2xl p-6 border border-white/30">
-        <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
-          <MessageSquare className="h-6 w-6 text-blue-400" />
-          Message Notifications
-        </h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-primary-800 flex items-center gap-2">
+            <MessageSquare className="h-6 w-6 text-blue-400" />
+            Notifications
+          </h2>
+          {globalUnreadCount > 0 && (
+            <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+              {globalUnreadCount} unread
+            </span>
+          )}
+        </div>
         {messageNotifications.length > 0 ? (
-          <div className="space-y-3 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
+          <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {messageNotifications.map((notif, idx) => (
               <motion.div
-                key={notif.id}
+                key={`${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
@@ -196,8 +207,16 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-primary-800">
-                    {notif.name || (notif.type === 'group' ? 'Group' : notif.type === 'community' ? 'Community' : 'Direct Message')}
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-primary-800">
+                      {notif.name || (notif.type === 'group' ? 'Group' : notif.type === 'community' ? 'Community' : 'Direct Message')}
+                    </h3>
+                    {notif.unread > 0 && (
+                      <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        {notif.unread}
+                      </span>
+                    )}
+                  </div>
                   </h3>
                   {notif.lastText && (
                     <p className="text-secondary-500 text-xs truncate max-w-xs">{notif.lastSender}: {notif.lastText}</p>

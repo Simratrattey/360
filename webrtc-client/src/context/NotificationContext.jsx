@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useChatSocket } from './ChatSocketContext'; // ✅ Changed from useSocket
 import * as notificationService from '../services/notificationService';
+import { simulateNotification } from '../utils/notificationTest'; // Import the simulateNotification function
 
 const NotificationContext = createContext();
 
@@ -21,6 +22,7 @@ export const NotificationProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   // Load notifications on mount and when user changes
+  simulateNotification(); // Call to simulate a notification for testing
   useEffect(() => {
     if (user) {
       loadNotifications();
@@ -33,7 +35,14 @@ export const NotificationProvider = ({ children }) => {
 
   // Request notification permission on mount
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ('Notification' in window) {
+  Notification.requestPermission().then(permission => {
+    console.log('📢 Notification permission:', permission);
+    if (permission === 'granted') {
+      simulateNotification(); // Call to simulate a notification after permission is granted
+    }
+  });
+}
       Notification.requestPermission().then(permission => {
         console.log('📢 Notification permission:', permission);
       });
@@ -42,31 +51,62 @@ export const NotificationProvider = ({ children }) => {
 
   // Listen for real-time notifications
   useEffect(() => {
-    if (!socket || !user) return;
+    if (!socket || !user) {
+      console.log('📢 Notification socket not ready - socket:', !!socket, 'user:', !!user);
+      return () => {}; // Return empty cleanup function
+    }
+
+    console.log('📢 Setting up notification listener on socket:', socket.id);
+    console.log('📢 Current socket connection state:', {
+      connected: socket.connected,
+      disconnected: socket.disconnected,
+      hasListeners: socket.hasListeners('notification:new')
+    });
 
     const handleNewNotification = (notification) => {
       console.log('📢 New notification received:', notification);
+      console.log('📢 Current notification state before update:', {
+        currentUnreadCount: unreadCount,
+        notificationsCount: notifications.length
+      });
+      
+      // Update notifications list and unread count
       setNotifications(prev => [notification, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      setUnreadCount(prev => {
+        const newCount = prev + 1;
+        console.log('📢 Updated unread count:', newCount);
+        return newCount;
+      });
       
       // Show browser notification if permission is granted
       if (window.Notification && Notification.permission === 'granted') {
         try {
-          const browserNotification = new Notification(notification.title, {
+          console.log('📢 Attempting to show browser notification');
+          const notificationOptions = {
             body: notification.message,
             icon: notification.data?.senderAvatar || '/favicon.ico',
-            tag: `notification-${notification._id}`,
+            tag: `notification-${notification._id || Date.now()}`,
             requireInteraction: false,
-            silent: false
-          });
+            silent: false,
+            data: notification.data || {}
+          };
+          
+          console.log('📢 Notification options:', notificationOptions);
+          
+          const browserNotification = new Notification(notification.title, notificationOptions);
 
           browserNotification.onclick = () => {
+            console.log('📢 Notification clicked, handling navigation');
             window.focus();
             // Handle notification click based on type
             if (notification.type === 'message' && notification.data?.conversationId) {
-              window.location.href = `/messages?conversation=${notification.data.conversationId}`;
+              const url = `/messages?conversation=${notification.data.conversationId}`;
+              console.log('📢 Navigating to message:', url);
+              window.location.href = url;
             } else if (notification.type === 'meeting_invitation' && notification.data?.meetingId) {
-              window.location.href = `/meetings/${notification.data.meetingId}`;
+              const url = `/meetings/${notification.data.meetingId}`;
+              console.log('📢 Navigating to meeting:', url);
+              window.location.href = url;
             }
             browserNotification.close();
           };
@@ -75,23 +115,60 @@ export const NotificationProvider = ({ children }) => {
           setTimeout(() => {
             browserNotification.close();
           }, 5000);
+          
+          console.log('📢 Browser notification shown successfully');
         } catch (error) {
-          console.error('Error showing browser notification:', error);
+          console.error('❌ Error showing browser notification:', error);
         }
+      } else {
+        console.log('📢 Browser notifications not available or permission not granted');
       }
     };
 
-    if (socket?.on) {
+    // Setup socket event listeners
+    const setupListeners = () => {
+      if (!socket) return;
+      
+      console.log('📢 Adding notification listeners to socket');
+      
+      // Handle new notifications
       socket.on('notification:new', handleNewNotification);
-      console.log('📢 Listening for notifications on socket:', socket.id);
-    }
+      
+      // Handle socket connection events
+      socket.on('connect', () => {
+        console.log('📢 Socket connected, ready for notifications');
+      });
+      
+      socket.on('disconnect', (reason) => {
+        console.log('📢 Socket disconnected:', reason);
+      });
+      
+      socket.on('connect_error', (error) => {
+        console.error('📢 Socket connection error:', error);
+      });
+      
+      console.log('📢 Current socket event listeners:', {
+        notification: socket.hasListeners('notification:new'),
+        connect: socket.hasListeners('connect'),
+        disconnect: socket.hasListeners('disconnect'),
+        connect_error: socket.hasListeners('connect_error')
+      });
+    };
 
+    // Setup listeners
+    setupListeners();
+
+    // Cleanup function
     return () => {
-      if (socket?.off) {
+      if (socket) {
+        console.log('📢 Cleaning up notification listeners');
         socket.off('notification:new', handleNewNotification);
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('connect_error');
       }
     };
-  }, [socket, user]);
+  }, [socket, user, unreadCount, notifications.length]); // Added missing dependencies
 
   const loadNotifications = async () => {
     try {

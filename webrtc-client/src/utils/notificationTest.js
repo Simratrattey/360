@@ -1,4 +1,20 @@
 // Utility functions to test notifications
+
+// Function to simulate a notification
+export const simulateNotification = () => {
+  const testNotification = {
+    title: 'Test Notification',
+    body: 'This is a test notification from Comm360!',
+    conversationId: 'test-conversation-id'
+  };
+
+  // Show browser notification if permission is granted
+  if (window.Notification && Notification.permission === 'granted') {
+    new Notification(testNotification.title, { body: testNotification.body });
+  } else {
+    console.warn('Notification permission not granted');
+  }
+};
 export const testBrowserNotification = () => {
   if (!('Notification' in window)) {
     console.error('❌ Browser notifications not supported');
