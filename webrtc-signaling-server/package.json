@@ -24,6 +24,7 @@
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",
     "multer": "^2.0.0",
+    "node-fetch": "^3.3.2",
     "rrule": "^2.8.1",
     "socket.io": "^4.6.2"
   }
