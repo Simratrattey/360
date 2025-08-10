@@ -24,6 +24,7 @@ export default function MeetingPage() {
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
+  const audioContextRef = useRef(null);
 
   const [showAvatar, setShowAvatar]             = useState(false);
   const [avatarClips, setAvatarClips]           = useState([]);
@@ -227,12 +228,21 @@ export default function MeetingPage() {
         return;
       }
       
-      // Add audio from the meeting if available and no audio in capture stream
-      if (captureStream.getAudioTracks().length === 0 && localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          captureStream.addTrack(audioTrack.clone());
-        }
+      // Create mixed audio stream from all participants
+      const mixedAudioStream = await createMixedAudioStream();
+      
+      // If we have mixed audio, replace or add it to the capture stream
+      if (mixedAudioStream) {
+        // Remove existing audio tracks from capture stream
+        captureStream.getAudioTracks().forEach(track => {
+          captureStream.removeTrack(track);
+          track.stop();
+        });
+        
+        // Add the mixed audio track
+        mixedAudioStream.getAudioTracks().forEach(track => {
+          captureStream.addTrack(track);
+        });
       }
       
       // Check codec support
@@ -309,6 +319,86 @@ export default function MeetingPage() {
     if (recordingStream) {
       recordingStream.getTracks().forEach(track => track.stop());
       setRecordingStream(null);
+    }
+    
+    // Clean up audio context
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(err => 
+        console.warn('Failed to close audio context:', err)
+      );
+      audioContextRef.current = null;
+    }
+  };
+
+  // Create mixed audio stream from all participants
+  const createMixedAudioStream = async () => {
+    try {
+      console.log('Creating mixed audio stream...');
+      
+      // Create audio context for mixing
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const destination = audioContext.createMediaStreamDestination();
+      
+      let hasSources = false;
+      
+      // Add local audio if available
+      if (localStream) {
+        const localAudioTracks = localStream.getAudioTracks();
+        if (localAudioTracks.length > 0 && localAudioTracks[0].enabled) {
+          const localAudioStream = new MediaStream([localAudioTracks[0]]);
+          const localSource = audioContext.createMediaStreamSource(localAudioStream);
+          
+          // Create gain node for local audio (slightly lower to avoid echo)
+          const localGain = audioContext.createGain();
+          localGain.gain.value = 0.8;
+          
+          localSource.connect(localGain);
+          localGain.connect(destination);
+          hasSources = true;
+          
+          console.log('Added local audio to mix');
+        }
+      }
+      
+      // Add remote audio streams
+      remoteStreams.forEach((stream, peerId) => {
+        const audioTracks = stream.getAudioTracks();
+        if (audioTracks.length > 0 && audioTracks[0].readyState === 'live') {
+          try {
+            const remoteAudioStream = new MediaStream([audioTracks[0]]);
+            const remoteSource = audioContext.createMediaStreamSource(remoteAudioStream);
+            
+            // Create gain node for remote audio
+            const remoteGain = audioContext.createGain();
+            remoteGain.gain.value = 1.0;
+            
+            remoteSource.connect(remoteGain);
+            remoteGain.connect(destination);
+            hasSources = true;
+            
+            console.log(`Added remote audio from peer ${peerId} to mix`);
+          } catch (err) {
+            console.warn(`Failed to add remote audio from peer ${peerId}:`, err);
+          }
+        }
+      });
+      
+      if (!hasSources) {
+        console.warn('No audio sources available for mixing');
+        audioContext.close();
+        return null;
+      }
+      
+      console.log('Mixed audio stream created successfully');
+      
+      // Store audio context for cleanup later
+      audioContextRef.current = audioContext;
+      
+      return destination.stream;
+      
+    } catch (error) {
+      console.error('Failed to create mixed audio stream:', error);
+      return null;
     }
   };
 
@@ -425,16 +515,24 @@ export default function MeetingPage() {
       drawFrame();
       
       // Create stream from canvas
-      const stream = canvas.captureStream(30); // 30 FPS
+      const videoStream = canvas.captureStream(30); // 30 FPS
+      
+      // Add mixed audio to the canvas stream
+      const mixedAudioStream = await createMixedAudioStream();
+      if (mixedAudioStream) {
+        mixedAudioStream.getAudioTracks().forEach(track => {
+          videoStream.addTrack(track);
+        });
+      }
       
       // Stop drawing when stream ends
-      const originalStop = stream.getTracks()[0].stop.bind(stream.getTracks()[0]);
-      stream.getTracks()[0].stop = () => {
+      const originalStop = videoStream.getTracks()[0].stop.bind(videoStream.getTracks()[0]);
+      videoStream.getTracks()[0].stop = () => {
         cancelAnimationFrame(animationId);
         originalStop();
       };
       
-      return stream;
+      return videoStream;
       
     } catch (error) {
       console.error('Canvas recording failed:', error);
@@ -458,6 +556,10 @@ export default function MeetingPage() {
   };
 
   const handleLeave = () => {
+    // Stop recording if active before leaving
+    if (isRecording) {
+      stopRecording();
+    }
     leaveMeeting();
     navigate('/meetings');
   };
