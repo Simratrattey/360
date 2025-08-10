@@ -5,7 +5,7 @@ import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import AvatarSidebar from '../components/AvatarSidebar';
@@ -24,6 +24,8 @@ export default function MeetingPage() {
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
+  const [recordingMethod, setRecordingMethod] = useState('canvas'); // 'canvas' or 'screen'
+  const [showRecordingSettings, setShowRecordingSettings] = useState(false);
   const audioContextRef = useRef(null);
 
   const [showAvatar, setShowAvatar]             = useState(false);
@@ -149,6 +151,18 @@ export default function MeetingPage() {
     setAvatarTranscript(avatarClips[avatarNavigate]?.snippet || '');
   }, [avatarNavigate, avatarClips]);
 
+  // Close recording settings on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showRecordingSettings && !event.target.closest('[data-recording-settings]')) {
+        setShowRecordingSettings(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showRecordingSettings]);
+
   const handlePrev = () => {
     const i = Math.max(0, avatarIndex - 1);
     setAvatarIndex(i);
@@ -194,33 +208,34 @@ export default function MeetingPage() {
 
   const startRecording = async () => {
     try {
-      console.log('Starting screen capture recording...');
+      console.log('Starting meeting recording with method:', recordingMethod);
       
-      // Try to capture the entire screen or current tab
       let captureStream;
       
-      try {
-        // First try to get display media (screen/tab capture)
-        captureStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            mediaSource: 'screen',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            sampleRate: 44100
-          }
-        });
-        
-        console.log('Screen capture successful');
-      } catch (screenError) {
-        console.log('Screen capture failed, falling back to canvas-based recording:', screenError);
-        
-        // Fallback: Create a canvas-based recording of the meeting grid
+      if (recordingMethod === 'canvas') {
+        // Use canvas recording (no screen sharing required)
+        console.log('Using canvas-based recording...');
         captureStream = await createCanvasRecording();
+      } else {
+        // Use screen capture method
+        console.log('Using screen capture...');
+        try {
+          captureStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              frameRate: { ideal: 30 }
+            },
+            audio: false, // We'll add our mixed audio instead
+            selfBrowserSurface: 'include',
+            systemAudio: 'exclude'
+          });
+          
+          console.log('Screen capture successful');
+        } catch (screenError) {
+          console.log('Screen capture failed, falling back to canvas:', screenError);
+          captureStream = await createCanvasRecording();
+        }
       }
       
       if (!captureStream) {
@@ -665,9 +680,53 @@ export default function MeetingPage() {
         <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white" title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}>
           {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
         </button>
-        <button onClick={isRecording ? stopRecording : startRecording} className="p-3 rounded-full bg-gray-600 text-white" title={isRecording ? "Stop screen recording" : "Record meeting (screen capture)"}>
-          {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
-        </button>
+        <div className="flex items-center space-x-1">
+          <button 
+            onClick={isRecording ? stopRecording : startRecording} 
+            className="p-3 rounded-full bg-gray-600 text-white" 
+            title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
+          >
+            {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
+          </button>
+          {!isRecording && (
+            <div className="relative" data-recording-settings>
+              <button 
+                onClick={() => setShowRecordingSettings(!showRecordingSettings)}
+                className="p-2 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                title="Recording settings"
+              >
+                <Settings size={14}/>
+              </button>
+              {showRecordingSettings && (
+                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-50 border border-gray-600">
+                  <div className="space-y-1">
+                    <div 
+                      className={`cursor-pointer px-2 py-1 rounded ${recordingMethod === 'canvas' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+                      onClick={() => {
+                        setRecordingMethod('canvas');
+                        setShowRecordingSettings(false);
+                      }}
+                    >
+                      📹 Direct Capture (Recommended)
+                    </div>
+                    <div 
+                      className={`cursor-pointer px-2 py-1 rounded ${recordingMethod === 'screen' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+                      onClick={() => {
+                        setRecordingMethod('screen');
+                        setShowRecordingSettings(false);
+                      }}
+                    >
+                      🖥️ Screen Share
+                    </div>
+                  </div>
+                  <div className="text-xs mt-2 text-gray-400 max-w-48">
+                    Direct Capture: No screen sharing required, records only meeting participants
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {recordedChunks.length > 0 && (
           <button onClick={downloadRecording} className="p-3 rounded-full bg-green-600 text-white" title="Download recording">
             <Download size={20}/>
