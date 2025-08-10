@@ -25,7 +25,7 @@ export default function MeetingPage() {
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
   const [recordingMethod, setRecordingMethod] = useState('canvas'); // 'canvas' or 'screen'
-  const [showRecordingSettings, setShowRecordingSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const audioContextRef = useRef(null);
 
   const [showAvatar, setShowAvatar]             = useState(false);
@@ -151,17 +151,17 @@ export default function MeetingPage() {
     setAvatarTranscript(avatarClips[avatarNavigate]?.snippet || '');
   }, [avatarNavigate, avatarClips]);
 
-  // Close recording settings on click outside
+  // Close settings on click outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showRecordingSettings && !event.target.closest('[data-recording-settings]')) {
-        setShowRecordingSettings(false);
+      if (showSettings && !event.target.closest('[data-settings-panel]')) {
+        setShowSettings(false);
       }
     };
     
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showRecordingSettings]);
+  }, [showSettings]);
 
   const handlePrev = () => {
     const i = Math.max(0, avatarIndex - 1);
@@ -683,53 +683,13 @@ export default function MeetingPage() {
         <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white" title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}>
           {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
         </button>
-        <div className="flex items-center space-x-1">
-          <button 
-            onClick={isRecording ? stopRecording : startRecording} 
-            className="p-3 rounded-full bg-gray-600 text-white" 
-            title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
-          >
-            {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
-          </button>
-          {!isRecording && (
-            <div className="relative" data-recording-settings>
-              <button 
-                onClick={() => setShowRecordingSettings(!showRecordingSettings)}
-                className="p-2 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition-colors"
-                title="Recording settings"
-              >
-                <Settings size={14}/>
-              </button>
-              {showRecordingSettings && (
-                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap z-50 border border-gray-600">
-                  <div className="space-y-1">
-                    <div 
-                      className={`cursor-pointer px-2 py-1 rounded ${recordingMethod === 'canvas' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-                      onClick={() => {
-                        setRecordingMethod('canvas');
-                        setShowRecordingSettings(false);
-                      }}
-                    >
-                      📹 Direct Capture (Recommended)
-                    </div>
-                    <div 
-                      className={`cursor-pointer px-2 py-1 rounded ${recordingMethod === 'screen' ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-                      onClick={() => {
-                        setRecordingMethod('screen');
-                        setShowRecordingSettings(false);
-                      }}
-                    >
-                      🖥️ Screen Share
-                    </div>
-                  </div>
-                  <div className="text-xs mt-2 text-gray-400 max-w-48">
-                    Direct Capture: No screen sharing required, records only meeting participants
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <button 
+          onClick={isRecording ? stopRecording : startRecording} 
+          className="p-3 rounded-full bg-gray-600 text-white" 
+          title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
+        >
+          {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
+        </button>
         {recordedChunks.length > 0 && (
           <button onClick={downloadRecording} className="p-3 rounded-full bg-green-600 text-white" title="Download recording">
             <Download size={20}/>
@@ -738,15 +698,79 @@ export default function MeetingPage() {
         <button onClick={handleLeave} className="p-3 rounded-full bg-red-600 text-white" title="Leave meeting">
           <PhoneOff size={20}/>
         </button>
-        <button
-          onClick={() => {
-            console.log('🖱️ Avatar toggle clicked, was=', showAvatar);
-            setShowAvatar(v => !v)}
-          }
-          className="p-3 rounded-full bg-blue-600 text-white"
-        >
-          Avatar
-        </button>
+        <div className="relative" data-settings-panel>
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className="p-3 rounded-full bg-gray-600 text-white" 
+            title="Meeting settings"
+          >
+            <Settings size={20}/>
+          </button>
+          {showSettings && (
+            <div className="absolute bottom-full mb-2 right-0 bg-gray-800 text-white rounded-lg py-3 px-4 shadow-xl border border-gray-600 z-50 min-w-64">
+              <h3 className="text-sm font-semibold mb-3 text-gray-200">Meeting Settings</h3>
+              
+              {/* Recording Settings */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording Method</h4>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="recordingMethod"
+                      value="canvas"
+                      checked={recordingMethod === 'canvas'}
+                      onChange={(e) => setRecordingMethod(e.target.value)}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm">
+                      📹 Direct Capture <span className="text-green-400 text-xs">(Recommended)</span>
+                    </span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="recordingMethod"
+                      value="screen"
+                      checked={recordingMethod === 'screen'}
+                      onChange={(e) => setRecordingMethod(e.target.value)}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm">🖥️ Screen Share</span>
+                  </label>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Direct Capture records only meeting participants without screen sharing.
+                  </p>
+                </div>
+              </div>
+
+              {/* Avatar Settings */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-300 mb-2">Features</h4>
+                <button
+                  onClick={() => {
+                    setShowAvatar(!showAvatar);
+                    setShowSettings(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                    showAvatar ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                >
+                  🤖 AI Avatar {showAvatar ? '(Active)' : ''}
+                </button>
+              </div>
+
+              {/* Video Settings */}
+              <div className="border-t border-gray-700 pt-3">
+                <h4 className="text-xs font-medium text-gray-300 mb-2">Video</h4>
+                <div className="text-xs text-gray-400">
+                  ✅ Local video mirroring enabled<br/>
+                  📺 Recording quality: 1920x1080 @ 30fps
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       {showAvatar && (
         <AvatarSidebar
