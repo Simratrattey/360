@@ -19,8 +19,11 @@ import Message from './src/models/message.js';
 import Conversation from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
-// import { transcribeAudio } from './stt.js';
-// import { generateAudio } from './tts.js';
+import { 
+  transcribeAudio, 
+  generateAudio, 
+  translateText 
+} from './realtime-speech/index.js';
 
 import authRoutes from './src/routes/auth.js';
 import authMiddleware from './src/middleware/auth.js';
@@ -299,6 +302,37 @@ app.post(
       return res.status(500).json({
         error:   'TTS generation failed',
         details: detail || err.message
+      });
+    }
+  }
+);
+
+// Translation endpoint: accepts { text, sourceLanguage, targetLanguage }
+app.post(
+  '/api/translate',
+  express.json({ limit: '200kb' }),
+  async (req, res) => {
+    try {
+      const { text, sourceLanguage = 'auto', targetLanguage = 'en' } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ error: 'No "text" provided' });
+      }
+
+      const translatedText = await translateText(text, sourceLanguage, targetLanguage);
+      
+      return res.json({ 
+        originalText: text,
+        translatedText,
+        sourceLanguage,
+        targetLanguage
+      });
+
+    } catch (err) {
+      console.error('❌ /api/translate error:', err.message);
+      return res.status(500).json({
+        error: 'Translation failed',
+        details: err.message
       });
     }
   }

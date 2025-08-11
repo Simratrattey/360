@@ -782,12 +782,10 @@ export default function MeetingPage() {
       let translatedText = originalText;
       let isTranslated = false;
       
-      if (multilingualEnabled && targetLanguage !== 'en' && sourceLanguage !== targetLanguage) {
-        const translationPrompt = `Translate the following text to ${supportedLanguages.find(l => l.code === targetLanguage)?.name || targetLanguage}. Return only the translated text without any additional formatting or explanation:\n\n"${originalText}"`;
-        
-        const translationResult = await BotService.getBotReply(translationPrompt);
-        if (translationResult.success && translationResult.data?.reply) {
-          translatedText = translationResult.data.reply.trim().replace(/^["']|["']$/g, '');
+      if (multilingualEnabled && targetLanguage !== sourceLanguage) {
+        const translationResult = await BotService.translateText(originalText, sourceLanguage, targetLanguage);
+        if (translationResult.success && translationResult.data?.translatedText) {
+          translatedText = translationResult.data.translatedText;
           isTranslated = true;
           console.log(`Translated text: ${translatedText}`);
         } else {
