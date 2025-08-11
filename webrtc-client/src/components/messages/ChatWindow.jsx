@@ -13,6 +13,12 @@ function groupMessagesByDate(messages) {
 
 export default function ChatWindow({
   messages = [],
+  /**
+   * When true the chat window will display a loading spinner instead of
+   * the messages list. This allows the parent component to signal that
+   * it is fetching messages from the server.
+   */
+  loading = false,
   currentUserId,
   onEdit,
   onDelete,
@@ -33,6 +39,17 @@ export default function ChatWindow({
 }) {
   const chatRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
+
+  // If the loading flag is set, render a spinner instead of the message list.
+  // This avoids the UI jumping between an empty state and the messages list
+  // and provides visual feedback to the user that messages are being loaded.
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (chatRef.current) {

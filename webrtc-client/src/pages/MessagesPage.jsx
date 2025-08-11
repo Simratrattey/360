@@ -81,6 +81,8 @@ export default function MessagesPage() {
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
+  // Loading state to display a spinner while messages are being fetched
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -170,16 +172,40 @@ export default function MessagesPage() {
   // Fetch messages when a conversation is selected (REST, then join room)
   useEffect(() => {
     if (selected && selected._id) {
-      if (messagesCache[selected._id]) {
-        setMessages(messagesCache[selected._id]);
+      const convId = selected._id;
+      
+      if (messagesCache[convId]) {
+        // Messages are in cache, use them
+        setMessages(messagesCache[convId]);
+        setMessagesLoading(false);
       } else {
-        messageAPI.getMessages(selected._id).then(res => {
-          setMessages(res.data.messages);
-          setMessagesCache(prev => ({ ...prev, [selected._id]: res.data.messages }));
-        });
+        // No cache, fetch messages from the server
+        setMessagesLoading(true);
+        messageAPI.getMessages(convId)
+          .then(res => {
+            setMessages(res.data.messages);
+            setMessagesCache(prev => ({ ...prev, [convId]: res.data.messages }));
+          })
+          .catch(error => {
+            console.error('Error fetching messages:', error);
+            // Optionally show an error message to the user
+          })
+          .finally(() => {
+            setMessagesLoading(false);
+          });
       }
-      chatSocket.joinConversation(selected._id);
-      return () => chatSocket.leaveConversation(selected._id);
+      
+      // Join the conversation room for real-time updates
+      chatSocket.joinConversation(convId);
+      
+      // Cleanup function to leave the conversation when component unmounts or conversation changes
+      return () => {
+        chatSocket.leaveConversation(convId);
+      };
+    } else {
+      // No conversation selected, reset messages and loading state
+      setMessages([]);
+      setMessagesLoading(false);
     }
   }, [selected]);
 
@@ -734,6 +760,7 @@ export default function MessagesPage() {
           {/* Messages */}
           {selected && (
             <ChatWindow
+              loading={messagesLoading}
               messages={messages}
               currentUserId={user?.id}
               onEdit={handleEdit}
