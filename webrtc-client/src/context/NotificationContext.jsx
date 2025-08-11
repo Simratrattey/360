@@ -91,26 +91,15 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
-  // Listen for real-time notifications
-  useEffect(() => {
-    if (!socket || !user) {
-      console.log('📢 Notification socket not ready - socket:', !!socket, 'user:', !!user);
-      return () => {}; // Return empty cleanup function
-    }
-
-    console.log('📢 Setting up notification listener on socket:', socket.id);
-    console.log('📢 Current socket connection state:', {
-      connected: socket.connected,
-      disconnected: socket.disconnected,
-      hasListeners: socket.hasListeners('notification:new')
-    });
-
-    const markAsRead = useCallback(async (notificationId) => {
+  // Mark notification as read function
+  const markAsRead = useCallback(async (notificationId) => {
     try {
       await notificationService.markAsRead(notificationId);
       setNotifications(prev => 
-        prev.map(n => 
-          n._id === notificationId ? { ...n, read: true } : n
+        prev.map(notification => 
+          notification._id === notificationId 
+            ? { ...notification, read: true }
+            : notification
         )
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -120,37 +109,38 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
-    if (!window.Notification || Notification.permission !== 'granted') {
-      console.log('Browser notifications not supported or permission not granted');
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      console.log('📢 Browser notifications not supported or permission not granted');
       return null;
     }
-
-    const config = getNotificationConfig(notification.type);
-    const notificationId = notification._id || `notif-${Date.now()}`;
-    
-    // Skip showing notification if not applicable (e.g., user is on the same conversation)
-    if (!shouldShowNotification(notification)) {
-      console.log('Skipping notification display based on context');
-      return null;
-    }
-
-    const notificationOptions = {
-      body: notification.message,
-      icon: notification.data?.senderAvatar || '/favicon.ico',
-      tag: `notification-${notificationId}`,
-      requireInteraction: config.requiresAck,
-      silent: false,
-      data: {
-        ...notification.data,
-        notificationId,
-        type: notification.type
-      },
-      badge: '/notification-badge.png',
-      timestamp: notification.createdAt ? new Date(notification.createdAt).getTime() : Date.now()
-    };
 
     try {
+      const config = getNotificationConfig(notification.type);
+      const notificationId = notification._id || `notif-${Date.now()}`;
+      
+      // Skip showing notification if not applicable (e.g., user is on the same conversation)
+      if (!shouldShowNotification(notification)) {
+        console.log('Skipping notification display based on context');
+        return null;
+      }
+
+      const notificationOptions = {
+        body: notification.message,
+        icon: notification.data?.senderAvatar || '/favicon.ico',
+        tag: `notification-${notificationId}`,
+        requireInteraction: config.requiresAck,
+        silent: false,
+        data: {
+          ...notification.data,
+          notificationId,
+          type: notification.type
+        },
+        badge: '/notification-badge.png',
+        timestamp: notification.createdAt ? new Date(notification.createdAt).getTime() : Date.now()
+      };
+
       const browserNotification = new Notification(
         notification.title || config.title, 
         notificationOptions
@@ -192,6 +182,11 @@ export const NotificationProvider = ({ children }) => {
         }
       };
 
+      // Auto-close after 5 seconds
+      setTimeout(() => {
+        browserNotification.close();
+      }, 5000);
+
       return browserNotification;
     } catch (error) {
       console.error('Error showing browser notification:', error);
@@ -199,6 +194,7 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [markAsRead]);
 
+  // Handle new notification
   const handleNewNotification = useCallback((notification) => {
     console.log('📢 New notification received:', notification);
     
@@ -233,71 +229,69 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [notifications, showBrowserNotification]);
 
-  // Set up socket event listeners
-  useEffect(() => {
-    if (!socket || !user) return;
+  // Setup socket event listeners
+  const setupListeners = useCallback(() => {
+    if (!socket) {
+      console.log('📢 Socket not available for notification listeners');
+      return () => {}; // Return empty cleanup function
+    }
+
+    console.log('📢 Setting up notification listeners');
     
     const handleConnect = () => {
       console.log('📢 Socket connected, setting up notification listeners');
-      socket.on('notification:new', handleNewNotification);
+      if (socket) {
+        socket.on('notification:new', handleNewNotification);
+      }
     };
 
+    const handleDisconnect = (reason) => {
+      console.log('📢 Socket disconnected:', reason);
+    };
+    
+    const handleConnectError = (error) => {
+      console.error('📢 Socket connection error:', error);
+    };
+
+    // Set up event listeners
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
+    
+    // Set up initial connection if already connected
     if (socket.connected) {
       handleConnect();
-    } else {
-      socket.on('connect', handleConnect);
     }
-
-    return () => {
-      socket.off('notification:new', handleNewNotification);
-      socket.off('connect', handleConnect);
-    };
-  }, [socket, user, handleNewNotification]);
-
-  // Setup socket event listeners
-    const setupListeners = () => {
-      if (!socket) return;
-      
-      console.log('📢 Adding notification listeners to socket');
-      
-      // Handle new notifications
-      socket.on('notification:new', handleNewNotification);
-      
-      // Handle socket connection events
-      socket.on('connect', () => {
-        console.log('📢 Socket connected, ready for notifications');
-      });
-      
-      socket.on('disconnect', (reason) => {
-        console.log('📢 Socket disconnected:', reason);
-      });
-      
-      socket.on('connect_error', (error) => {
-        console.error('📢 Socket connection error:', error);
-      });
-      
-      console.log('📢 Current socket event listeners:', {
-        notification: socket.hasListeners('notification:new'),
-        connect: socket.hasListeners('connect'),
-        disconnect: socket.hasListeners('disconnect'),
-        connect_error: socket.hasListeners('connect_error')
-      });
-    };
-
-    // Setup listeners
-    setupListeners();
+    
+    console.log('📢 Current socket event listeners:', {
+      notification: socket.hasListeners('notification:new'),
+      connect: socket.hasListeners('connect'),
+      disconnect: socket.hasListeners('disconnect'),
+      connect_error: socket.hasListeners('connect_error')
+    });
 
     // Cleanup function
     return () => {
+      console.log('📢 Cleaning up notification listeners');
       if (socket) {
-        console.log('📢 Cleaning up notification listeners');
         socket.off('notification:new', handleNewNotification);
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('connect_error');
+        socket.off('connect', handleConnect);
+        socket.off('disconnect', handleDisconnect);
+        socket.off('connect_error', handleConnectError);
       }
     };
-  }, [socket, user, unreadCount, notifications.length]); // Added missing dependencies
+  }, [socket, handleNewNotification]);
+
+  // Initialize socket listeners when socket or user changes
+  useEffect(() => {
+    if (!socket || !user) {
+      console.log('📢 Socket or user not ready for notification listeners');
+      return () => {};
+    }
+
+    const cleanup = setupListeners();
+    return cleanup;
+  }, [socket, user, setupListeners]);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -354,21 +348,7 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [isOnline]);
 
-  const markAsRead = async (notificationId) => {
-    try {
-      await notificationService.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification._id === notificationId 
-            ? { ...notification, read: true }
-            : notification
-        )
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
+
 
   const markAllAsRead = async () => {
     try {
