@@ -81,9 +81,10 @@ export default function MessagesPage() {
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
-  // Derived state for backwards compatibility with existing JSX
-  // messagesLoading is true when messages is null (loading), false otherwise
-  const messagesLoading = messages === null;
+  // Track whether messages are currently being fetched. When true, the chat
+  // window will display a loading spinner. Messages remain an array to avoid
+  // errors in event handlers that spread or map over the messages array.
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -176,20 +177,27 @@ export default function MessagesPage() {
       const convId = selected._id;
       
       if (messagesCache[convId]) {
-        // Messages are in cache, use them
+        // Messages are in cache, use them and indicate loading has finished
         setMessages(messagesCache[convId]);
+        setMessagesLoading(false);
       } else {
-        // No cache, set messages to null to indicate loading
-        setMessages(null);
-        // Fetch messages from the server
+        // No cache; start loading and fetch messages
+        setMessagesLoading(true);
         messageAPI.getMessages(convId)
           .then(res => {
-            setMessages(res.data.messages);
-            setMessagesCache(prev => ({ ...prev, [convId]: res.data.messages }));
+            const messages = res.data.messages || [];
+            setMessages(messages);
+            setMessagesCache(prev => ({
+              ...prev,
+              [convId]: messages
+            }));
           })
           .catch(error => {
             console.error('Error fetching messages:', error);
-            setMessages([]); // Set to empty array on error
+            setMessages([]);
+          })
+          .finally(() => {
+            setMessagesLoading(false);
           });
       }
       
@@ -199,8 +207,9 @@ export default function MessagesPage() {
       // Cleanup function to leave the conversation when component unmounts or conversation changes
       return () => chatSocket.leaveConversation(convId);
     } else {
-      // No conversation selected, reset messages
+      // No conversation selected, reset messages and loading state
       setMessages([]);
+      setMessagesLoading(false);
     }
   }, [selected]);
 

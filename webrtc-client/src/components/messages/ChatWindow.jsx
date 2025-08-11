@@ -13,6 +13,11 @@ function groupMessagesByDate(messages) {
 
 export default function ChatWindow({
   messages = [],
+  /**
+   * Indicates whether the parent component is currently fetching messages.
+   * When true, a spinner will be rendered instead of the message list.
+   */
+  loading = false,
   currentUserId,
   onEdit,
   onDelete,
@@ -33,7 +38,7 @@ export default function ChatWindow({
 }) {
   // Ref used to scroll to bottom on new messages
   const chatRef = useRef(null);
-  // When loading, messages may be null. groupMessagesByDate safely handles null or array
+  // Group messages by date; safe to pass an empty array
   const grouped = groupMessagesByDate(messages);
 
   // Scroll to bottom whenever messages or typing users change
@@ -43,8 +48,8 @@ export default function ChatWindow({
     }
   }, [messages, typing]);
 
-  // Determine if we are currently loading messages (messages is null)
-  const isLoading = messages === null;
+  // Use the passed-in loading prop to determine if messages are being fetched
+  const isLoading = loading;
 
   // Determine typing users excluding the current user
   const typingUsers = Object.keys(typing || {}).filter(
