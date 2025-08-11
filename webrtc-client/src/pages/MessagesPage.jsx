@@ -82,7 +82,7 @@ export default function MessagesPage() {
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
   // Loading state to display a spinner while messages are being fetched
-  const [messagesLoading, setMessagesLoading] = useState(false);
+  // messagesLoading state removed; messages will be `null` while loading
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -177,10 +177,10 @@ export default function MessagesPage() {
       if (messagesCache[convId]) {
         // Messages are in cache, use them
         setMessages(messagesCache[convId]);
-        setMessagesLoading(false);
       } else {
-        // No cache, fetch messages from the server
-        setMessagesLoading(true);
+        // No cache, set messages to null to indicate loading
+        setMessages(null);
+        // Fetch messages from the server
         messageAPI.getMessages(convId)
           .then(res => {
             setMessages(res.data.messages);
@@ -188,10 +188,7 @@ export default function MessagesPage() {
           })
           .catch(error => {
             console.error('Error fetching messages:', error);
-            // Optionally show an error message to the user
-          })
-          .finally(() => {
-            setMessagesLoading(false);
+            setMessages([]); // Set to empty array on error
           });
       }
       
@@ -201,9 +198,8 @@ export default function MessagesPage() {
       // Cleanup function to leave the conversation when component unmounts or conversation changes
       return () => chatSocket.leaveConversation(convId);
     } else {
-      // No conversation selected, reset messages and loading state
+      // No conversation selected, reset messages
       setMessages([]);
-      setMessagesLoading(false);
     }
   }, [selected]);
 
