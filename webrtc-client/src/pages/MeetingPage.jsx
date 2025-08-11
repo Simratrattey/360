@@ -645,8 +645,12 @@ export default function MeetingPage() {
   const startSubtitles = async () => {
     console.log('Starting subtitle recognition for remote participants');
     
+    // Check STT service health first
+    const healthCheck = await SubtitleService.checkHealth();
+    console.log('STT Service Health:', healthCheck);
+    
     // Enable debug mode for testing (set to false for production)
-    // SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
+    SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
     
     setSubtitlesEnabled(true);
     

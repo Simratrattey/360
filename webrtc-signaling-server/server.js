@@ -344,19 +344,32 @@ app.post(
   upload.single('audio'),
   async (req, res) => {
     try {
+      console.log('[STT] Request received:', {
+        hasFile: !!req.file,
+        body: req.body,
+        fileSize: req.file?.size,
+        filename: req.file?.filename,
+        mimetype: req.file?.mimetype
+      });
+
       if (!req.file) {
+        console.error('[STT] No audio file provided');
         return res.status(400).json({ error: 'No audio file provided' });
       }
 
+      console.log('[STT] Reading audio file...');
       const audioBuffer = await fs.promises.readFile(req.file.path);
       const { language = 'auto', translate = false } = req.body;
       
-      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, translate=${translate}`);
+      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, language=${language}, translate=${translate}`);
+      console.log(`[STT] GROQ_API_KEY exists: ${!!process.env.GROQ_API_KEY}`);
       
       const transcription = await transcribeAudio(audioBuffer, {
         language,
         translate: translate === 'true'
       });
+      
+      console.log(`[STT] Transcription successful: ${transcription}`);
       
       return res.json({ 
         transcription,
@@ -366,6 +379,7 @@ app.post(
 
     } catch (err) {
       console.error('❌ /api/stt error:', err.message);
+      console.error('❌ /api/stt stack:', err.stack);
       return res.status(500).json({
         error: 'Speech-to-text failed',
         details: err.message
@@ -378,6 +392,25 @@ app.post(
     }
   }
 );
+
+// STT health check endpoint
+app.get('/api/stt-health', async (req, res) => {
+  try {
+    const { transcribeAudio } = await import('./realtime-speech/index.js');
+    res.json({ 
+      status: 'ok',
+      sttAvailable: typeof transcribeAudio === 'function',
+      groqKeyConfigured: !!process.env.GROQ_API_KEY,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.json({ 
+      status: 'error', 
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 // Test FFmpeg availability endpoint
 app.get('/api/test-ffmpeg', async (req, res) => {

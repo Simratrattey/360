@@ -54,6 +54,18 @@ class SubtitleService {
     console.log(`🐛 SubtitleService debug mode: ${enabled ? 'ENABLED' : 'DISABLED'}`);
   }
 
+  // Check STT service health
+  async checkHealth() {
+    try {
+      const response = await API.get('/stt-health');
+      console.log('🏥 STT Health Check:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('🏥 STT Health Check Failed:', error);
+      return { status: 'error', error: error.message };
+    }
+  }
+
   // Debug version for testing without API keys
   async speechToTextDebug(audioBlob, language = 'auto', translate = false) {
     try {
