@@ -199,9 +199,7 @@ export default function MessagesPage() {
       chatSocket.joinConversation(convId);
       
       // Cleanup function to leave the conversation when component unmounts or conversation changes
-      return () => {
-        chatSocket.leaveConversation(convId);
-      };
+      return () => chatSocket.leaveConversation(convId);
     } else {
       // No conversation selected, reset messages and loading state
       setMessages([]);

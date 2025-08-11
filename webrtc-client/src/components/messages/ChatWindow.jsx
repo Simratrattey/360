@@ -11,13 +11,13 @@ function groupMessagesByDate(messages) {
   }, {});
 }
 
+/**
+ * ChatWindow renders the list of chat messages and manages scrolling. A
+ * `loading` flag can be passed to display a spinner while messages are
+ * being fetched.
+ */
 export default function ChatWindow({
   messages = [],
-  /**
-   * When true the chat window will display a loading spinner instead of
-   * the messages list. This allows the parent component to signal that
-   * it is fetching messages from the server.
-   */
   loading = false,
   currentUserId,
   onEdit,
