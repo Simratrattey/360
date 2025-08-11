@@ -11,6 +11,8 @@ export async function transcribeAudio(audioBuffer, options = {}) {
   } = options;
 
   try {
+    console.log(`[STT] transcribeAudio called with ${audioBuffer.length} bytes, options:`, options);
+    
     let processedAudioBuffer = audioBuffer;
     let filename = 'audio.webm';
     let contentType = 'audio/webm';
@@ -69,6 +71,8 @@ export async function transcribeAudio(audioBuffer, options = {}) {
       // Continue with original audio
     }
 
+    console.log(`[STT] Preparing FormData with file: ${filename} (${contentType}), ${processedAudioBuffer.length} bytes`);
+    
     const formData = new FormData();
     formData.append('file', processedAudioBuffer, {
       filename,
@@ -94,6 +98,10 @@ export async function transcribeAudio(audioBuffer, options = {}) {
       ? 'https://api.groq.com/openai/v1/audio/translations'
       : 'https://api.groq.com/openai/v1/audio/transcriptions';
 
+    console.log(`[STT] Calling Groq API: ${endpoint}, model: ${model}`);
+    console.log(`[STT] API Key configured: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
+    console.log(`[STT] API Key prefix: ${process.env.GROQ_API_KEY?.substring(0, 10)}...`);
+
     const response = await axios.post(
       endpoint,
       formData,
@@ -105,6 +113,8 @@ export async function transcribeAudio(audioBuffer, options = {}) {
         timeout: 30000
       }
     );
+    
+    console.log(`[STT] Groq API response status: ${response.status}`);
 
     // Handle response (Groq returns plain text with response_format: 'text')
     if (typeof response.data === 'string') {
@@ -116,7 +126,21 @@ export async function transcribeAudio(audioBuffer, options = {}) {
     }
 
   } catch (error) {
-    console.error('Groq STT Error:', error.response?.data || error.message);
+    console.error('❌ Groq STT Error:', error.response?.data || error.message);
+    console.error('❌ Groq STT Response Status:', error.response?.status);
+    console.error('❌ Groq STT Response Headers:', error.response?.headers);
+    
+    // If it's a 400 error, it might be audio format related
+    if (error.response?.status === 400) {
+      console.error('❌ Groq returned 400 - likely audio format issue');
+      console.error('❌ Audio details:', {
+        filename,
+        contentType,
+        audioSize: processedAudioBuffer.length,
+        model: translate ? 'whisper-large-v3' : 'whisper-large-v3-turbo'
+      });
+    }
+    
     throw new Error(`Speech-to-text failed: ${error.message}`);
   }
 }

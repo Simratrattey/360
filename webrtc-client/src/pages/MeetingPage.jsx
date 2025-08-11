@@ -650,7 +650,7 @@ export default function MeetingPage() {
     console.log('STT Service Health:', healthCheck);
     
     // Enable debug mode for testing (set to false for production)
-    SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
+    // SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
     
     setSubtitlesEnabled(true);
     
