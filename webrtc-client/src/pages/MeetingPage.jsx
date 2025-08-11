@@ -26,7 +26,31 @@ export default function MeetingPage() {
   const [recordingStream, setRecordingStream] = useState(null);
   const [recordingMethod, setRecordingMethod] = useState('canvas'); // 'canvas' or 'screen'
   const [showSettings, setShowSettings] = useState(false);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
+  const [currentSubtitle, setCurrentSubtitle] = useState('');
+  const [subtitleHistory, setSubtitleHistory] = useState([]);
+  const [subtitleLanguage, setSubtitleLanguage] = useState('en'); // Source language
+  const [translationLanguage, setTranslationLanguage] = useState('en'); // Target language
+  const [translationEnabled, setTranslationEnabled] = useState(false);
   const audioContextRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
+
+  // Supported languages for subtitles and translation
+  const supportedLanguages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+    { code: 'fr', name: 'French', flag: '🇫🇷' },
+    { code: 'de', name: 'German', flag: '🇩🇪' },
+    { code: 'it', name: 'Italian', flag: '🇮🇹' },
+    { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
+    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+    { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+    { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+    { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+    { code: 'auto', name: 'Auto-detect', flag: '🌐' }
+  ];
 
   const [showAvatar, setShowAvatar]             = useState(false);
   const [avatarClips, setAvatarClips]           = useState([]);
@@ -570,10 +594,328 @@ export default function MeetingPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Translation function using your existing bot service
+  const translateText = async (text, targetLanguage) => {
+    if (!text || !targetLanguage || targetLanguage === 'en') return text;
+    
+    try {
+      const translationPrompt = `Translate the following text to ${supportedLanguages.find(l => l.code === targetLanguage)?.name || targetLanguage}. Return only the translated text without any additional formatting or explanation:\n\n"${text}"`;
+      
+      const result = await BotService.getBotReply(translationPrompt);
+      if (result.success && result.data?.reply) {
+        return result.data.reply.trim().replace(/^["']|["']$/g, ''); // Remove quotes
+      }
+      return text; // Fallback to original text
+    } catch (error) {
+      console.warn('Translation failed:', error);
+      return text; // Fallback to original text
+    }
+  };
+
+  // Enhanced subtitle processing with translation
+  const processSubtitleText = async (text, speaker = 'You') => {
+    const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let displayText = text;
+    let translatedText = null;
+    
+    // Translate if enabled and target language is different
+    if (translationEnabled && translationLanguage !== 'en' && translationLanguage !== subtitleLanguage) {
+      try {
+        translatedText = await translateText(text, translationLanguage);
+      } catch (error) {
+        console.warn('Translation failed:', error);
+      }
+    }
+    
+    const subtitleEntry = {
+      original: text,
+      translated: translatedText,
+      text: translatedText || text, // Use translated text if available
+      timestamp,
+      speaker,
+      sourceLanguage: subtitleLanguage,
+      targetLanguage: translationEnabled ? translationLanguage : subtitleLanguage
+    };
+    
+    setSubtitleHistory(prev => [
+      ...prev.slice(-4), // Keep only last 5 entries
+      subtitleEntry
+    ]);
+  };
+
+  // Check browser compatibility for speech recognition
+  const getSpeechRecognitionSupport = () => {
+    const hasNativeSpeech = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    return {
+      hasNativeSpeech,
+      isSafari,
+      isIOS,
+      canUseNative: hasNativeSpeech && !isIOS, // iOS Safari has issues with continuous speech
+      needsFallback: !hasNativeSpeech || isIOS || isSafari
+    };
+  };
+
+  // Speech recognition for subtitles with Safari fallback
+  const startSubtitles = async () => {
+    const support = getSpeechRecognitionSupport();
+    
+    if (support.canUseNative) {
+      // Use native speech recognition for Chrome/Edge
+      startNativeSpeechRecognition();
+    } else if (support.needsFallback) {
+      // Use fallback method for Safari/iOS
+      await startFallbackSpeechRecognition();
+    } else {
+      alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+  };
+
+  // Native speech recognition (Chrome/Edge)
+  const startNativeSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = subtitleLanguage === 'auto' ? 'en-US' : `${subtitleLanguage}-${subtitleLanguage === 'en' ? 'US' : subtitleLanguage === 'es' ? 'ES' : 'XX'}`;
+    
+    recognition.onstart = () => {
+      console.log('Native speech recognition started');
+      setSubtitlesEnabled(true);
+    };
+    
+    recognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      
+      // Update current subtitle with interim results
+      setCurrentSubtitle(interimTranscript);
+      
+      // Add final results to history with translation
+      if (finalTranscript) {
+        processSubtitleText(finalTranscript.trim(), 'You');
+        setCurrentSubtitle(''); // Clear interim text
+      }
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('Native speech recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        alert('Microphone access is required for subtitles. Please allow microphone permissions.');
+      } else if (event.error === 'network') {
+        console.warn('Network error, trying fallback method...');
+        startFallbackSpeechRecognition();
+        return;
+      }
+    };
+    
+    recognition.onend = () => {
+      console.log('Native speech recognition ended');
+      if (subtitlesEnabled && speechRecognitionRef.current) {
+        // Restart if subtitles are still enabled
+        setTimeout(() => {
+          if (subtitlesEnabled) {
+            recognition.start();
+          }
+        }, 100);
+      }
+    };
+    
+    speechRecognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  // Fallback speech recognition for Safari/iOS using Web Audio API + Server
+  const startFallbackSpeechRecognition = async () => {
+    try {
+      console.log('Starting fallback speech recognition for Safari...');
+      setSubtitlesEnabled(true);
+      
+      // Create audio context for Safari
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Get user media stream
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      
+      let audioChunks = [];
+      let isRecording = false;
+      let silenceCount = 0;
+      const SILENCE_THRESHOLD = 0.01;
+      const MAX_SILENCE = 50; // ~2 seconds of silence
+      
+      processor.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0);
+        
+        // Simple voice activity detection
+        const volume = Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length);
+        
+        if (volume > SILENCE_THRESHOLD) {
+          silenceCount = 0;
+          if (!isRecording) {
+            isRecording = true;
+            audioChunks = [];
+            setCurrentSubtitle('Listening...');
+          }
+          // Convert float32 to int16 for better compatibility
+          const int16Data = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767));
+          }
+          audioChunks.push(int16Data);
+        } else if (isRecording) {
+          silenceCount++;
+          if (silenceCount >= MAX_SILENCE) {
+            // End of speech detected, process audio
+            processAudioChunks(audioChunks);
+            isRecording = false;
+            audioChunks = [];
+            silenceCount = 0;
+            setCurrentSubtitle('');
+          }
+        }
+      };
+      
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      // Store for cleanup
+      speechRecognitionRef.current = {
+        audioContext,
+        stream,
+        processor,
+        source,
+        stop: () => {
+          processor.disconnect();
+          source.disconnect();
+          stream.getTracks().forEach(track => track.stop());
+          audioContext.close();
+        }
+      };
+      
+      console.log('Safari fallback speech recognition started');
+      
+    } catch (error) {
+      console.error('Fallback speech recognition failed:', error);
+      alert('Microphone access is required for subtitles. Please allow microphone permissions.');
+      setSubtitlesEnabled(false);
+    }
+  };
+
+  // Process audio chunks using Web Speech API or server endpoint
+  const processAudioChunks = async (chunks) => {
+    if (chunks.length === 0) return;
+    
+    try {
+      // Try Web Speech API first (if available in Safari)
+      if (window.webkitSpeechRecognition || window.SpeechRecognition) {
+        await processSafariWebSpeech(chunks);
+      } else {
+        // Fallback to showing generic message
+        const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        setSubtitleHistory(prev => [
+          ...prev.slice(-4),
+          { text: '[Speech detected - transcription not available in this browser]', timestamp, speaker: 'You' }
+        ]);
+      }
+    } catch (error) {
+      console.error('Audio processing failed:', error);
+    }
+  };
+
+  // Safari-specific Web Speech API processing
+  const processSafariWebSpeech = async (chunks) => {
+    return new Promise((resolve) => {
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+      
+      recognition.onresult = (event) => {
+        const result = event.results[0][0].transcript;
+        if (result.trim()) {
+          processSubtitleText(result.trim(), 'You');
+        }
+        resolve();
+      };
+      
+      recognition.onerror = () => {
+        resolve(); // Fail silently
+      };
+      
+      recognition.onend = () => {
+        resolve();
+      };
+      
+      try {
+        recognition.start();
+        // Stop after 3 seconds to prevent hanging
+        setTimeout(() => {
+          recognition.stop();
+          resolve();
+        }, 3000);
+      } catch (error) {
+        resolve();
+      }
+    });
+  };
+
+  const stopSubtitles = () => {
+    if (speechRecognitionRef.current) {
+      if (typeof speechRecognitionRef.current.stop === 'function') {
+        // Native or fallback recognition
+        speechRecognitionRef.current.stop();
+      } else if (speechRecognitionRef.current.audioContext) {
+        // Fallback recognition with audio context
+        speechRecognitionRef.current.stop();
+      }
+      speechRecognitionRef.current = null;
+    }
+    setSubtitlesEnabled(false);
+    setCurrentSubtitle('');
+  };
+
+  const toggleSubtitles = () => {
+    if (subtitlesEnabled) {
+      stopSubtitles();
+    } else {
+      startSubtitles();
+    }
+  };
+
   const handleLeave = () => {
     // Stop recording if active before leaving
     if (isRecording) {
       stopRecording();
+    }
+    // Stop subtitles if active
+    if (subtitlesEnabled) {
+      stopSubtitles();
     }
     leaveMeeting();
     navigate('/meetings');
@@ -675,6 +1017,73 @@ export default function MeetingPage() {
           </div>
         ))}
       </div>
+      {/* Subtitles Display */}
+      {subtitlesEnabled && (
+        <div className="fixed bottom-24 left-4 right-4 max-w-4xl mx-auto z-20">
+          <div className="bg-black bg-opacity-80 text-white rounded-lg p-4 backdrop-blur-sm">
+            {/* Browser compatibility notice */}
+            {(() => {
+              const support = getSpeechRecognitionSupport();
+              if (support.isSafari || support.isIOS) {
+                return (
+                  <div className="mb-3 p-2 bg-orange-900 bg-opacity-50 rounded text-xs text-orange-200 border border-orange-600">
+                    🍎 Safari Mode: Using enhanced speech recognition. May have brief delays.
+                  </div>
+                );
+              } else if (support.canUseNative) {
+                return (
+                  <div className="mb-3 p-2 bg-green-900 bg-opacity-50 rounded text-xs text-green-200 border border-green-600">
+                    ✅ Premium Mode: Real-time continuous speech recognition active.
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            
+            {/* Recent subtitles history */}
+            {subtitleHistory.slice(-3).map((subtitle, index) => (
+              <div key={index} className="mb-3 text-sm opacity-70 border-l-2 border-blue-500 pl-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-blue-300 font-medium">{subtitle.speaker}</span>
+                  <span className="text-gray-400 text-xs">{subtitle.timestamp}</span>
+                  {subtitle.translated && (
+                    <span className="text-xs bg-green-900 text-green-300 px-1 py-0.5 rounded">
+                      {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag} Translated
+                    </span>
+                  )}
+                </div>
+                
+                {/* Show original text if translated */}
+                {subtitle.translated && (
+                  <div className="mt-1 text-xs text-gray-400 italic">
+                    Original: "{subtitle.original}"
+                  </div>
+                )}
+                
+                {/* Main subtitle text */}
+                <div className="mt-1 text-white">{subtitle.text}</div>
+              </div>
+            ))}
+            
+            {/* Current live subtitle */}
+            {currentSubtitle && (
+              <div className="text-sm border-t border-gray-600 pt-2 mt-2">
+                <span className="text-blue-300 font-medium">You</span>
+                <span className="text-gray-400 ml-2 text-xs">Live</span>
+                <div className="mt-1 text-yellow-200">{currentSubtitle}</div>
+              </div>
+            )}
+            
+            {/* Show when no content yet */}
+            {subtitleHistory.length === 0 && !currentSubtitle && (
+              <div className="text-sm text-gray-400 text-center py-2">
+                🎤 Listening for speech...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="sticky bottom-0 w-full bg-gray-900 bg-opacity-75 backdrop-blur-md p-4 flex justify-center space-x-6 z-10">
         <button onClick={toggleAudio} className="p-3 rounded-full bg-gray-600 text-white" title={isAudioEnabled ? "Mute audio" : "Unmute audio"}>
@@ -744,21 +1153,87 @@ export default function MeetingPage() {
                 </div>
               </div>
 
-              {/* Avatar Settings */}
+              {/* Features Settings */}
               <div className="mb-4">
                 <h4 className="text-xs font-medium text-gray-300 mb-2">Features</h4>
-                <button
-                  onClick={() => {
-                    setShowAvatar(!showAvatar);
-                    setShowSettings(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                    showAvatar ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
-                >
-                  🤖 AI Avatar {showAvatar ? '(Active)' : ''}
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setShowAvatar(!showAvatar);
+                      setShowSettings(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      showAvatar ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    🤖 AI Avatar {showAvatar ? '(Active)' : ''}
+                  </button>
+                  <button
+                    onClick={() => {
+                      toggleSubtitles();
+                      setShowSettings(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
+                  </button>
+                </div>
               </div>
+
+              {/* Subtitle Language Settings */}
+              {subtitlesEnabled && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">Subtitle Languages</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Speech Language</label>
+                      <select
+                        value={subtitleLanguage}
+                        onChange={(e) => setSubtitleLanguage(e.target.value)}
+                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                      >
+                        {supportedLanguages.map(lang => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.flag} {lang.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="translation-enabled"
+                        checked={translationEnabled}
+                        onChange={(e) => setTranslationEnabled(e.target.checked)}
+                        className="text-blue-600"
+                      />
+                      <label htmlFor="translation-enabled" className="text-xs text-gray-300">
+                        Enable Translation
+                      </label>
+                    </div>
+                    
+                    {translationEnabled && (
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Translate to</label>
+                        <select
+                          value={translationLanguage}
+                          onChange={(e) => setTranslationLanguage(e.target.value)}
+                          className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                        >
+                          {supportedLanguages.filter(lang => lang.code !== 'auto').map(lang => (
+                            <option key={lang.code} value={lang.code}>
+                              {lang.flag} {lang.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Video Settings */}
               <div className="border-t border-gray-700 pt-3">
