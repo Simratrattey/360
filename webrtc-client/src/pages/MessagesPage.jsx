@@ -81,8 +81,9 @@ export default function MessagesPage() {
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
-  // Loading state to display a spinner while messages are being fetched
-  // messagesLoading state removed; messages will be `null` while loading
+  // Derived state for backwards compatibility with existing JSX
+  // messagesLoading is true when messages is null (loading), false otherwise
+  const messagesLoading = messages === null;
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
