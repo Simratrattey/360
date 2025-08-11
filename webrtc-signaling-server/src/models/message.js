@@ -24,4 +24,7 @@ const messageSchema = new mongoose.Schema({
   edited: { type: Boolean, default: false },
 }, { timestamps: true });
 
+// Create a compound index on conversation and createdAt to accelerate queries and sorting
+messageSchema.index({ conversation: 1, createdAt: 1 });
+
 export default mongoose.model('Message', messageSchema); 

@@ -5,10 +5,16 @@ import Conversation from '../models/conversation.js';
 export async function listMessages(req, res, next) {
   try {
     const { conversationId } = req.params;
+    // Support pagination via ?limit=50&skip=0 query parameters. Default limit=50, skip=0.
+    const { limit = 50, skip = 0 } = req.query;
     const messages = await Message.find({ conversation: conversationId })
       .populate('sender', 'username fullName avatarUrl')
       .populate('replyTo', 'text file')
-      .sort({ createdAt: 1 });
+      .sort({ createdAt: 1 })
+      .skip(parseInt(skip))
+      .limit(parseInt(limit))
+      // Use lean() to reduce overhead and return plain objects
+      .lean();
     res.json({ messages });
   } catch (err) {
     next(err);

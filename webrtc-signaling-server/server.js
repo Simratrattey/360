@@ -665,12 +665,14 @@ io.on('connection', async socket => {
         file,
         replyTo,
       });
+      // Persist the new message and update the conversation concurrently to reduce latency.
       await message.save();
-      await Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id });
-      
-      const populated = await message.populate([
-        { path: 'sender', select: 'username fullName avatarUrl' },
-        { path: 'replyTo', select: 'text file' }
+      const [__, populated] = await Promise.all([
+        Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id }),
+        message.populate([
+          { path: 'sender', select: 'username fullName avatarUrl' },
+          { path: 'replyTo', select: 'text file' }
+        ])
       ]);
       
       // Transform the message object to match client expectations
