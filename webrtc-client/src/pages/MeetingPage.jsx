@@ -27,11 +27,15 @@ export default function MeetingPage() {
   const [recordingMethod, setRecordingMethod] = useState('canvas'); // 'canvas' or 'screen'
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
+  const [multilingualEnabled, setMultilingualEnabled] = useState(false);
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [subtitleHistory, setSubtitleHistory] = useState([]);
-  const [subtitleLanguage, setSubtitleLanguage] = useState('en'); // Source language
-  const [translationLanguage, setTranslationLanguage] = useState('en'); // Target language
-  const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
+  const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
+  
+  // Audio context and elements for multilingual audio output
+  const [audioContext, setAudioContext] = useState(null);
+  const [activeAudioSources, setActiveAudioSources] = useState(new Map());
   const audioContextRef = useRef(null);
   const speechRecognitionRef = useRef(null);
 
@@ -594,55 +598,6 @@ export default function MeetingPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Translation function using your existing bot service
-  const translateText = async (text, targetLanguage) => {
-    if (!text || !targetLanguage || targetLanguage === 'en') return text;
-    
-    try {
-      const translationPrompt = `Translate the following text to ${supportedLanguages.find(l => l.code === targetLanguage)?.name || targetLanguage}. Return only the translated text without any additional formatting or explanation:\n\n"${text}"`;
-      
-      const result = await BotService.getBotReply(translationPrompt);
-      if (result.success && result.data?.reply) {
-        return result.data.reply.trim().replace(/^["']|["']$/g, ''); // Remove quotes
-      }
-      return text; // Fallback to original text
-    } catch (error) {
-      console.warn('Translation failed:', error);
-      return text; // Fallback to original text
-    }
-  };
-
-  // Enhanced subtitle processing with translation
-  const processSubtitleText = async (text, speaker = 'You') => {
-    const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    
-    let displayText = text;
-    let translatedText = null;
-    
-    // Translate if enabled and target language is different
-    if (translationEnabled && translationLanguage !== 'en' && translationLanguage !== subtitleLanguage) {
-      try {
-        translatedText = await translateText(text, translationLanguage);
-      } catch (error) {
-        console.warn('Translation failed:', error);
-      }
-    }
-    
-    const subtitleEntry = {
-      original: text,
-      translated: translatedText,
-      text: translatedText || text, // Use translated text if available
-      timestamp,
-      speaker,
-      sourceLanguage: subtitleLanguage,
-      targetLanguage: translationEnabled ? translationLanguage : subtitleLanguage
-    };
-    
-    setSubtitleHistory(prev => [
-      ...prev.slice(-4), // Keep only last 5 entries
-      subtitleEntry
-    ]);
-  };
 
   // Check browser compatibility for speech recognition
   const getSpeechRecognitionSupport = () => {
@@ -806,77 +761,156 @@ export default function MeetingPage() {
     }
   };
 
-  // Process remote audio blob for speech recognition
-  const processRemoteAudioBlob = async (audioBlob, peerId, participantName) => {
+  // Multilingual processing pipeline: Audio → STT → Translation → TTS + Subtitles
+  const processMultilingualAudio = async (audioBlob, peerId, participantName) => {
     try {
-      // Convert audio blob to Web Speech API compatible format
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
+      console.log(`Processing multilingual audio from ${participantName}`);
       
-      // Use Web Speech API with the audio element as source
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
+      // Step 1: Speech-to-Text using BotService
+      const sttResult = await BotService.speechToText(audioBlob);
+      if (!sttResult.success || !sttResult.data?.reply) {
+        console.warn(`STT failed for ${participantName}:`, sttResult.error);
+        return;
+      }
       
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = subtitleLanguage === 'auto' ? 'en-US' : `${subtitleLanguage}-${subtitleLanguage === 'en' ? 'US' : subtitleLanguage === 'es' ? 'ES' : 'XX'}`;
-      recognition.maxAlternatives = 1;
+      const originalText = sttResult.data.reply.trim();
+      if (!originalText) return;
       
-      return new Promise((resolve) => {
-        recognition.onresult = (event) => {
-          if (event.results.length > 0) {
-            const transcript = event.results[0][0].transcript.trim();
-            if (transcript) {
-              console.log(`Transcript from ${participantName}: ${transcript}`);
-              processSubtitleText(transcript, participantName);
-            }
-          }
-          URL.revokeObjectURL(audioUrl);
-          resolve();
+      console.log(`Original text from ${participantName}: ${originalText}`);
+      
+      // Step 2: Translation (if multilingual is enabled and target language is different)
+      let translatedText = originalText;
+      let isTranslated = false;
+      
+      if (multilingualEnabled && targetLanguage !== 'en' && sourceLanguage !== targetLanguage) {
+        const translationPrompt = `Translate the following text to ${supportedLanguages.find(l => l.code === targetLanguage)?.name || targetLanguage}. Return only the translated text without any additional formatting or explanation:\n\n"${originalText}"`;
+        
+        const translationResult = await BotService.getBotReply(translationPrompt);
+        if (translationResult.success && translationResult.data?.reply) {
+          translatedText = translationResult.data.reply.trim().replace(/^["']|["']$/g, '');
+          isTranslated = true;
+          console.log(`Translated text: ${translatedText}`);
+        } else {
+          console.warn(`Translation failed for ${participantName}:`, translationResult.error);
+        }
+      }
+      
+      // Step 3: Display subtitles (if enabled)
+      if (subtitlesEnabled) {
+        const subtitleEntry = {
+          original: originalText,
+          translated: isTranslated ? translatedText : null,
+          text: translatedText, // Show translated version if available
+          timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          speaker: participantName,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+          isTranslated: isTranslated
         };
         
-        recognition.onerror = (error) => {
-          console.warn(`Speech recognition error for ${participantName}:`, error);
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        
-        recognition.onend = () => {
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        
-        // Play audio through recognition (this is a workaround for Web Speech API limitations)
-        audio.oncanplaythrough = () => {
-          recognition.start();
-        };
-        
-        audio.load();
-      });
+        setSubtitleHistory(prev => [
+          ...prev.slice(-4), // Keep only last 5 entries
+          subtitleEntry
+        ]);
+      }
+      
+      // Step 4: Audio output (if multilingual is enabled)
+      if (multilingualEnabled && translatedText !== originalText) {
+        await playTranslatedAudio(translatedText, peerId, participantName);
+      }
       
     } catch (error) {
-      console.error(`Failed to process audio blob for ${participantName}:`, error);
+      console.error(`Multilingual processing failed for ${participantName}:`, error);
+    }
+  };
+  
+  // Play translated audio using TTS
+  const playTranslatedAudio = async (translatedText, peerId, participantName) => {
+    try {
+      console.log(`Generating TTS for ${participantName}: ${translatedText}`);
+      
+      const ttsResult = await BotService.textToSpeech(translatedText);
+      if (!ttsResult.success) {
+        console.warn(`TTS failed for ${participantName}:`, ttsResult.error);
+        return;
+      }
+      
+      // Create audio element and play
+      const audioUrl = URL.createObjectURL(ttsResult.data);
+      const audio = new Audio(audioUrl);
+      
+      audio.onloadeddata = () => {
+        audio.play().catch(err => console.warn('Audio play failed:', err));
+      };
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        setActiveAudioSources(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(peerId);
+          return newMap;
+        });
+      };
+      
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        console.warn(`Audio playback failed for ${participantName}`);
+      };
+      
+      // Track active audio sources
+      setActiveAudioSources(prev => {
+        const newMap = new Map(prev);
+        newMap.set(peerId, { audio, participantName });
+        return newMap;
+      });
+      
+      audio.load();
+      
+    } catch (error) {
+      console.error(`TTS playback failed for ${participantName}:`, error);
     }
   };
 
-  // Process remote audio buffer for fallback recognition
+  // Process remote audio blob - now uses the multilingual pipeline
+  const processRemoteAudioBlob = async (audioBlob, peerId, participantName) => {
+    if (subtitlesEnabled || multilingualEnabled) {
+      await processMultilingualAudio(audioBlob, peerId, participantName);
+    }
+  };
+
+  // Process remote audio buffer for fallback recognition  
   const processRemoteAudioBuffer = async (audioBuffer, peerId, participantName) => {
     if (audioBuffer.length === 0) return;
     
     try {
-      // Create a simple transcript for now - can be enhanced with server-side STT
-      const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      // Convert audio buffer to blob for processing
+      const audioBlob = new Blob([new Uint8Array(audioBuffer.flat().buffer)], { 
+        type: 'audio/wav' 
+      });
       
-      // For now, show detected speech indicator
-      const detectedText = `[Speech detected from ${participantName}]`;
-      console.log(`Audio buffer processed for ${participantName}, length: ${audioBuffer.length}`);
-      
-      // In a real implementation, you could send this audio buffer to your server's STT service
-      // For now, we'll just indicate that speech was detected
-      processSubtitleText(detectedText, participantName);
+      // Use the same multilingual pipeline
+      if (subtitlesEnabled || multilingualEnabled) {
+        await processMultilingualAudio(audioBlob, peerId, participantName);
+      }
       
     } catch (error) {
       console.error(`Failed to process audio buffer for ${participantName}:`, error);
+      
+      // Fallback: show basic detection for Safari
+      if (subtitlesEnabled) {
+        const subtitleEntry = {
+          original: `[Speech detected from ${participantName}]`,
+          translated: null,
+          text: `[Speech detected from ${participantName}]`,
+          timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+          speaker: participantName,
+          sourceLanguage: sourceLanguage,
+          targetLanguage: targetLanguage,
+          isTranslated: false
+        };
+        
+        setSubtitleHistory(prev => [...prev.slice(-4), subtitleEntry]);
+      }
     }
   };
 
@@ -922,6 +956,16 @@ export default function MeetingPage() {
     if (subtitlesEnabled) {
       stopSubtitles();
     } else {
+      startSubtitles();
+    }
+  };
+
+  const toggleMultilingual = () => {
+    setMultilingualEnabled(!multilingualEnabled);
+    console.log('Multilingual translation:', !multilingualEnabled ? 'enabled' : 'disabled');
+    
+    // If we're enabling multilingual, also start subtitle processing if not already active
+    if (!multilingualEnabled && !subtitlesEnabled) {
       startSubtitles();
     }
   };
@@ -1041,16 +1085,26 @@ export default function MeetingPage() {
           <div className="bg-black bg-opacity-80 text-white rounded-lg p-4 backdrop-blur-sm">
             {/* Remote subtitles notice */}
             <div className="mb-3 p-2 bg-blue-900 bg-opacity-50 rounded text-xs text-blue-200 border border-blue-600">
-              👥 Listening to remote participants ({remoteStreams.size} connected)
-              {(() => {
-                const support = getSpeechRecognitionSupport();
-                if (support.isSafari || support.isIOS) {
-                  return " • Safari Mode: Enhanced processing";
-                } else if (support.canUseNative) {
-                  return " • Premium Mode: Real-time recognition";
-                }
-                return "";
-              })()}
+              <div className="flex items-center justify-between">
+                <span>👥 Remote Participants ({remoteStreams.size} connected)</span>
+                <div className="flex items-center space-x-2">
+                  {subtitlesEnabled && (
+                    <span className="bg-green-900 text-green-300 px-1 py-0.5 rounded text-xs">
+                      💬 Subtitles ON
+                    </span>
+                  )}
+                  {multilingualEnabled && (
+                    <span className="bg-purple-900 text-purple-300 px-1 py-0.5 rounded text-xs">
+                      🌐 Multilingual ON
+                    </span>
+                  )}
+                </div>
+              </div>
+              {multilingualEnabled && targetLanguage !== 'en' && (
+                <div className="mt-1 text-xs">
+                  Translating to {supportedLanguages.find(l => l.code === targetLanguage)?.flag} {supportedLanguages.find(l => l.code === targetLanguage)?.name}
+                </div>
+              )}
             </div>
             
             {/* Recent subtitles history */}
@@ -1059,15 +1113,20 @@ export default function MeetingPage() {
                 <div className="flex items-center space-x-2">
                   <span className="text-blue-300 font-medium">{subtitle.speaker}</span>
                   <span className="text-gray-400 text-xs">{subtitle.timestamp}</span>
-                  {subtitle.translated && (
-                    <span className="text-xs bg-green-900 text-green-300 px-1 py-0.5 rounded">
+                  {subtitle.isTranslated && (
+                    <span className="text-xs bg-purple-900 text-purple-300 px-1 py-0.5 rounded">
                       {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag} Translated
+                    </span>
+                  )}
+                  {multilingualEnabled && subtitle.isTranslated && (
+                    <span className="text-xs bg-green-900 text-green-300 px-1 py-0.5 rounded">
+                      🔊 Audio Played
                     </span>
                   )}
                 </div>
                 
                 {/* Show original text if translated */}
-                {subtitle.translated && (
+                {subtitle.isTranslated && (
                   <div className="mt-1 text-xs text-gray-400 italic">
                     Original: "{subtitle.original}"
                   </div>
@@ -1186,19 +1245,30 @@ export default function MeetingPage() {
                   >
                     💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
                   </button>
+                  <button
+                    onClick={() => {
+                      toggleMultilingual();
+                      setShowSettings(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
+                      multilingualEnabled ? 'bg-purple-600' : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    🌐 Multilingual Audio {multilingualEnabled ? '(Active)' : ''}
+                  </button>
                 </div>
               </div>
 
-              {/* Subtitle Language Settings */}
-              {subtitlesEnabled && (
+              {/* Language Settings */}
+              {(subtitlesEnabled || multilingualEnabled) && (
                 <div className="mb-4">
-                  <h4 className="text-xs font-medium text-gray-300 mb-2">Subtitle Languages</h4>
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">Language Settings</h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Speech Language</label>
+                      <label className="text-xs text-gray-400 mb-1 block">Source Language (Detection)</label>
                       <select
-                        value={subtitleLanguage}
-                        onChange={(e) => setSubtitleLanguage(e.target.value)}
+                        value={sourceLanguage}
+                        onChange={(e) => setSourceLanguage(e.target.value)}
                         className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
                       >
                         {supportedLanguages.map(lang => (
@@ -1209,35 +1279,40 @@ export default function MeetingPage() {
                       </select>
                     </div>
                     
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="translation-enabled"
-                        checked={translationEnabled}
-                        onChange={(e) => setTranslationEnabled(e.target.checked)}
-                        className="text-blue-600"
-                      />
-                      <label htmlFor="translation-enabled" className="text-xs text-gray-300">
-                        Enable Translation
-                      </label>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Target Language</label>
+                      <select
+                        value={targetLanguage}
+                        onChange={(e) => setTargetLanguage(e.target.value)}
+                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                      >
+                        {supportedLanguages.filter(lang => lang.code !== 'auto').map(lang => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.flag} {lang.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    
-                    {translationEnabled && (
-                      <div>
-                        <label className="text-xs text-gray-400 mb-1 block">Translate to</label>
-                        <select
-                          value={translationLanguage}
-                          onChange={(e) => setTranslationLanguage(e.target.value)}
-                          className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
-                        >
-                          {supportedLanguages.filter(lang => lang.code !== 'auto').map(lang => (
-                            <option key={lang.code} value={lang.code}>
-                              {lang.flag} {lang.name}
-                            </option>
-                          ))}
-                        </select>
+
+                    <div className="text-xs text-gray-400 bg-gray-700 p-2 rounded">
+                      <div className="flex items-center justify-between">
+                        <span>💬 Subtitles:</span>
+                        <span className={subtitlesEnabled ? 'text-green-400' : 'text-gray-500'}>
+                          {subtitlesEnabled ? 'ON' : 'OFF'}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex items-center justify-between">
+                        <span>🌐 Multilingual Audio:</span>
+                        <span className={multilingualEnabled ? 'text-purple-400' : 'text-gray-500'}>
+                          {multilingualEnabled ? 'ON' : 'OFF'}
+                        </span>
+                      </div>
+                      {multilingualEnabled && (
+                        <div className="mt-1 text-xs text-orange-300">
+                          ⚠️ Audio translation may have 2-3 second delay
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
