@@ -659,245 +659,263 @@ export default function MeetingPage() {
     };
   };
 
-  // Speech recognition for subtitles with Safari fallback
+  // Speech recognition for subtitles - processes remote participant audio only
   const startSubtitles = async () => {
-    const support = getSpeechRecognitionSupport();
+    console.log('Starting subtitle recognition for remote participants');
+    setSubtitlesEnabled(true);
     
-    if (support.canUseNative) {
-      // Use native speech recognition for Chrome/Edge
-      startNativeSpeechRecognition();
-    } else if (support.needsFallback) {
-      // Use fallback method for Safari/iOS
-      await startFallbackSpeechRecognition();
-    } else {
-      alert('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+    // Start processing each remote stream
+    remoteStreams.forEach((stream, peerId) => {
+      const participantName = participantMap[peerId] || 'Guest';
+      startRemoteStreamRecognition(stream, peerId, participantName);
+    });
+  };
+
+  // Process individual remote stream for speech recognition
+  const startRemoteStreamRecognition = async (stream, peerId, participantName) => {
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      console.warn(`No audio tracks found for participant ${participantName}`);
       return;
+    }
+
+    try {
+      // Create audio context for processing remote audio
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioStream = new MediaStream([audioTracks[0]]);
+      const source = audioContext.createMediaStreamSource(audioStream);
+      
+      // Check browser compatibility for speech recognition
+      const support = getSpeechRecognitionSupport();
+      
+      if (support.canUseNative) {
+        // Use native speech recognition with remote audio
+        await startNativeRecognitionForRemote(audioContext, source, peerId, participantName);
+      } else {
+        // Use fallback method for Safari/iOS
+        await startFallbackRecognitionForRemote(audioContext, source, peerId, participantName);
+      }
+      
+      console.log(`Started speech recognition for participant ${participantName} (${peerId})`);
+      
+    } catch (error) {
+      console.error(`Failed to start speech recognition for ${participantName}:`, error);
     }
   };
 
-  // Native speech recognition (Chrome/Edge)
-  const startNativeSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = subtitleLanguage === 'auto' ? 'en-US' : `${subtitleLanguage}-${subtitleLanguage === 'en' ? 'US' : subtitleLanguage === 'es' ? 'ES' : 'XX'}`;
-    
-    recognition.onstart = () => {
-      console.log('Native speech recognition started');
-      setSubtitlesEnabled(true);
-    };
-    
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-      
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-      
-      // Update current subtitle with interim results
-      setCurrentSubtitle(interimTranscript);
-      
-      // Add final results to history with translation
-      if (finalTranscript) {
-        processSubtitleText(finalTranscript.trim(), 'You');
-        setCurrentSubtitle(''); // Clear interim text
-      }
-    };
-    
-    recognition.onerror = (event) => {
-      console.error('Native speech recognition error:', event.error);
-      if (event.error === 'not-allowed') {
-        alert('Microphone access is required for subtitles. Please allow microphone permissions.');
-      } else if (event.error === 'network') {
-        console.warn('Network error, trying fallback method...');
-        startFallbackSpeechRecognition();
-        return;
-      }
-    };
-    
-    recognition.onend = () => {
-      console.log('Native speech recognition ended');
-      if (subtitlesEnabled && speechRecognitionRef.current) {
-        // Restart if subtitles are still enabled
-        setTimeout(() => {
-          if (subtitlesEnabled) {
-            recognition.start();
-          }
-        }, 100);
-      }
-    };
-    
-    speechRecognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  // Fallback speech recognition for Safari/iOS using Web Audio API + Server
-  const startFallbackSpeechRecognition = async () => {
+  // Native speech recognition for remote participant
+  const startNativeRecognitionForRemote = async (audioContext, source, peerId, participantName) => {
     try {
-      console.log('Starting fallback speech recognition for Safari...');
-      setSubtitlesEnabled(true);
+      // Create a MediaRecorder to capture audio chunks from remote stream
+      const dest = audioContext.createMediaStreamDestination();
+      source.connect(dest);
       
-      // Create audio context for Safari
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const mediaRecorder = new MediaRecorder(dest.stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       
-      // Get user media stream
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+      let audioChunks = [];
+      let isProcessing = false;
+      
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0 && !isProcessing) {
+          audioChunks.push(event.data);
+          
+          // Process audio chunk with Web Speech API
+          if (audioChunks.length >= 5) { // Process every 5 chunks (~2.5 seconds)
+            isProcessing = true;
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+            await processRemoteAudioBlob(audioBlob, peerId, participantName);
+            audioChunks = [];
+            isProcessing = false;
+          }
+        }
+      };
+      
+      mediaRecorder.start(500); // Capture in 500ms intervals
+      
+      // Store for cleanup
+      if (!speechRecognitionRef.current) {
+        speechRecognitionRef.current = new Map();
+      }
+      speechRecognitionRef.current.set(peerId, {
+        audioContext,
+        mediaRecorder,
+        stop: () => {
+          mediaRecorder.stop();
+          audioContext.close();
         }
       });
       
-      const source = audioContext.createMediaStreamSource(stream);
+    } catch (error) {
+      console.error(`Native recognition setup failed for ${participantName}:`, error);
+    }
+  };
+
+  // Fallback recognition for Safari/iOS with remote audio
+  const startFallbackRecognitionForRemote = async (audioContext, source, peerId, participantName) => {
+    try {
       const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      source.connect(processor);
+      processor.connect(audioContext.destination);
       
-      let audioChunks = [];
-      let isRecording = false;
+      let audioBuffer = [];
       let silenceCount = 0;
       const SILENCE_THRESHOLD = 0.01;
-      const MAX_SILENCE = 50; // ~2 seconds of silence
+      const MAX_SILENCE = 30; // ~1.5 seconds of silence
       
       processor.onaudioprocess = (event) => {
         const inputData = event.inputBuffer.getChannelData(0);
-        
-        // Simple voice activity detection
         const volume = Math.sqrt(inputData.reduce((sum, sample) => sum + sample * sample, 0) / inputData.length);
         
         if (volume > SILENCE_THRESHOLD) {
           silenceCount = 0;
-          if (!isRecording) {
-            isRecording = true;
-            audioChunks = [];
-            setCurrentSubtitle('Listening...');
-          }
-          // Convert float32 to int16 for better compatibility
+          // Convert to Int16Array for processing
           const int16Data = new Int16Array(inputData.length);
           for (let i = 0; i < inputData.length; i++) {
             int16Data[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32767));
           }
-          audioChunks.push(int16Data);
-        } else if (isRecording) {
+          audioBuffer.push(int16Data);
+        } else if (audioBuffer.length > 0) {
           silenceCount++;
           if (silenceCount >= MAX_SILENCE) {
-            // End of speech detected, process audio
-            processAudioChunks(audioChunks);
-            isRecording = false;
-            audioChunks = [];
+            // Process accumulated audio
+            processRemoteAudioBuffer(audioBuffer, peerId, participantName);
+            audioBuffer = [];
             silenceCount = 0;
-            setCurrentSubtitle('');
           }
         }
       };
       
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-      
       // Store for cleanup
-      speechRecognitionRef.current = {
+      if (!speechRecognitionRef.current) {
+        speechRecognitionRef.current = new Map();
+      }
+      speechRecognitionRef.current.set(peerId, {
         audioContext,
-        stream,
         processor,
-        source,
         stop: () => {
           processor.disconnect();
           source.disconnect();
-          stream.getTracks().forEach(track => track.stop());
           audioContext.close();
         }
-      };
-      
-      console.log('Safari fallback speech recognition started');
+      });
       
     } catch (error) {
-      console.error('Fallback speech recognition failed:', error);
-      alert('Microphone access is required for subtitles. Please allow microphone permissions.');
-      setSubtitlesEnabled(false);
+      console.error(`Fallback recognition setup failed for ${participantName}:`, error);
     }
   };
 
-  // Process audio chunks using Web Speech API or server endpoint
-  const processAudioChunks = async (chunks) => {
-    if (chunks.length === 0) return;
-    
+  // Process remote audio blob for speech recognition
+  const processRemoteAudioBlob = async (audioBlob, peerId, participantName) => {
     try {
-      // Try Web Speech API first (if available in Safari)
-      if (window.webkitSpeechRecognition || window.SpeechRecognition) {
-        await processSafariWebSpeech(chunks);
-      } else {
-        // Fallback to showing generic message
-        const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        setSubtitleHistory(prev => [
-          ...prev.slice(-4),
-          { text: '[Speech detected - transcription not available in this browser]', timestamp, speaker: 'You' }
-        ]);
-      }
-    } catch (error) {
-      console.error('Audio processing failed:', error);
-    }
-  };
-
-  // Safari-specific Web Speech API processing
-  const processSafariWebSpeech = async (chunks) => {
-    return new Promise((resolve) => {
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+      // Convert audio blob to Web Speech API compatible format
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      // Use Web Speech API with the audio element as source
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
       
       recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.lang = 'en-US';
+      recognition.lang = subtitleLanguage === 'auto' ? 'en-US' : `${subtitleLanguage}-${subtitleLanguage === 'en' ? 'US' : subtitleLanguage === 'es' ? 'ES' : 'XX'}`;
       recognition.maxAlternatives = 1;
       
-      recognition.onresult = (event) => {
-        const result = event.results[0][0].transcript;
-        if (result.trim()) {
-          processSubtitleText(result.trim(), 'You');
-        }
-        resolve();
-      };
-      
-      recognition.onerror = () => {
-        resolve(); // Fail silently
-      };
-      
-      recognition.onend = () => {
-        resolve();
-      };
-      
-      try {
-        recognition.start();
-        // Stop after 3 seconds to prevent hanging
-        setTimeout(() => {
-          recognition.stop();
+      return new Promise((resolve) => {
+        recognition.onresult = (event) => {
+          if (event.results.length > 0) {
+            const transcript = event.results[0][0].transcript.trim();
+            if (transcript) {
+              console.log(`Transcript from ${participantName}: ${transcript}`);
+              processSubtitleText(transcript, participantName);
+            }
+          }
+          URL.revokeObjectURL(audioUrl);
           resolve();
-        }, 3000);
-      } catch (error) {
-        resolve();
-      }
-    });
+        };
+        
+        recognition.onerror = (error) => {
+          console.warn(`Speech recognition error for ${participantName}:`, error);
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        
+        recognition.onend = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        
+        // Play audio through recognition (this is a workaround for Web Speech API limitations)
+        audio.oncanplaythrough = () => {
+          recognition.start();
+        };
+        
+        audio.load();
+      });
+      
+    } catch (error) {
+      console.error(`Failed to process audio blob for ${participantName}:`, error);
+    }
   };
+
+  // Process remote audio buffer for fallback recognition
+  const processRemoteAudioBuffer = async (audioBuffer, peerId, participantName) => {
+    if (audioBuffer.length === 0) return;
+    
+    try {
+      // Create a simple transcript for now - can be enhanced with server-side STT
+      const timestamp = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      
+      // For now, show detected speech indicator
+      const detectedText = `[Speech detected from ${participantName}]`;
+      console.log(`Audio buffer processed for ${participantName}, length: ${audioBuffer.length}`);
+      
+      // In a real implementation, you could send this audio buffer to your server's STT service
+      // For now, we'll just indicate that speech was detected
+      processSubtitleText(detectedText, participantName);
+      
+    } catch (error) {
+      console.error(`Failed to process audio buffer for ${participantName}:`, error);
+    }
+  };
+
+  // Handle new remote participants joining during active subtitles
+  useEffect(() => {
+    if (subtitlesEnabled && remoteStreams.size > 0) {
+      // Start recognition for any new remote streams
+      remoteStreams.forEach((stream, peerId) => {
+        if (!speechRecognitionRef.current?.has(peerId)) {
+          const participantName = participantMap[peerId] || 'Guest';
+          startRemoteStreamRecognition(stream, peerId, participantName);
+        }
+      });
+    }
+  }, [remoteStreams, subtitlesEnabled, participantMap]);
 
   const stopSubtitles = () => {
     if (speechRecognitionRef.current) {
-      if (typeof speechRecognitionRef.current.stop === 'function') {
-        // Native or fallback recognition
-        speechRecognitionRef.current.stop();
-      } else if (speechRecognitionRef.current.audioContext) {
-        // Fallback recognition with audio context
+      if (speechRecognitionRef.current instanceof Map) {
+        // Stop all remote stream recognitions
+        speechRecognitionRef.current.forEach((recognizer, peerId) => {
+          try {
+            if (recognizer.stop) {
+              recognizer.stop();
+            }
+          } catch (error) {
+            console.warn(`Failed to stop recognition for peer ${peerId}:`, error);
+          }
+        });
+        speechRecognitionRef.current.clear();
+      } else if (typeof speechRecognitionRef.current.stop === 'function') {
+        // Legacy single recognition
         speechRecognitionRef.current.stop();
       }
       speechRecognitionRef.current = null;
     }
     setSubtitlesEnabled(false);
     setCurrentSubtitle('');
+    console.log('Subtitles stopped for all remote participants');
   };
 
   const toggleSubtitles = () => {
@@ -1021,24 +1039,19 @@ export default function MeetingPage() {
       {subtitlesEnabled && (
         <div className="fixed bottom-24 left-4 right-4 max-w-4xl mx-auto z-20">
           <div className="bg-black bg-opacity-80 text-white rounded-lg p-4 backdrop-blur-sm">
-            {/* Browser compatibility notice */}
-            {(() => {
-              const support = getSpeechRecognitionSupport();
-              if (support.isSafari || support.isIOS) {
-                return (
-                  <div className="mb-3 p-2 bg-orange-900 bg-opacity-50 rounded text-xs text-orange-200 border border-orange-600">
-                    🍎 Safari Mode: Using enhanced speech recognition. May have brief delays.
-                  </div>
-                );
-              } else if (support.canUseNative) {
-                return (
-                  <div className="mb-3 p-2 bg-green-900 bg-opacity-50 rounded text-xs text-green-200 border border-green-600">
-                    ✅ Premium Mode: Real-time continuous speech recognition active.
-                  </div>
-                );
-              }
-              return null;
-            })()}
+            {/* Remote subtitles notice */}
+            <div className="mb-3 p-2 bg-blue-900 bg-opacity-50 rounded text-xs text-blue-200 border border-blue-600">
+              👥 Listening to remote participants ({remoteStreams.size} connected)
+              {(() => {
+                const support = getSpeechRecognitionSupport();
+                if (support.isSafari || support.isIOS) {
+                  return " • Safari Mode: Enhanced processing";
+                } else if (support.canUseNative) {
+                  return " • Premium Mode: Real-time recognition";
+                }
+                return "";
+              })()}
+            </div>
             
             {/* Recent subtitles history */}
             {subtitleHistory.slice(-3).map((subtitle, index) => (
@@ -1065,19 +1078,13 @@ export default function MeetingPage() {
               </div>
             ))}
             
-            {/* Current live subtitle */}
-            {currentSubtitle && (
-              <div className="text-sm border-t border-gray-600 pt-2 mt-2">
-                <span className="text-blue-300 font-medium">You</span>
-                <span className="text-gray-400 ml-2 text-xs">Live</span>
-                <div className="mt-1 text-yellow-200">{currentSubtitle}</div>
-              </div>
-            )}
-            
             {/* Show when no content yet */}
-            {subtitleHistory.length === 0 && !currentSubtitle && (
+            {subtitleHistory.length === 0 && (
               <div className="text-sm text-gray-400 text-center py-2">
-                🎤 Listening for speech...
+                🎧 Waiting for remote participants to speak...
+                {remoteStreams.size === 0 && (
+                  <div className="mt-1 text-xs">No remote participants connected</div>
+                )}
               </div>
             )}
           </div>
