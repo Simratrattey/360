@@ -254,21 +254,7 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [socket, user, handleNewNotification]);
 
-          // Auto-close after 5 seconds
-          setTimeout(() => {
-            browserNotification.close();
-          }, 5000);
-          
-          console.log('📢 Browser notification shown successfully');
-        } catch (error) {
-          console.error('❌ Error showing browser notification:', error);
-        }
-      } else {
-        console.log('📢 Browser notifications not available or permission not granted');
-      }
-    };
-
-    // Setup socket event listeners
+  // Setup socket event listeners
     const setupListeners = () => {
       if (!socket) return;
       
