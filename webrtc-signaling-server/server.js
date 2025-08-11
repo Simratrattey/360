@@ -674,62 +674,6 @@ io.on('connection', async socket => {
           { path: 'replyTo', select: 'text file' }
         ])
       ]);
-      
-      // Transform the message object to match client expectations
-      const messageForClient = {
-        _id: populated._id,
-        conversation: populated.conversation,
-        conversationId: conversationId,
-        sender: populated.sender,
-        senderId: populated.sender._id,
-        text: populated.text,
-        file: populated.file,
-        reactions: populated.reactions || [],
-        replyTo: populated.replyTo,
-        edited: populated.edited,
-        createdAt: populated.createdAt,
-        updatedAt: populated.updatedAt,
-        senderName: populated.sender.fullName || populated.sender.username
-      };
-      
-      // Track message status
-      const messageId = message._id.toString();
-      messageStatus.set(messageId, {
-        sent: true,
-        delivered: false,
-        read: false,
-        recipients: []
-      });
-      
-      io.to(conversationId).emit('chat:new', messageForClient);
-      
-        // ✅ ALWAYS CREATE NOTIFICATIONS (regardless of online status)
-        const conversation = await Conversation.findById(conversationId).populate('members');
-        if (conversation) {
-          const sender = populated.sender;
-          const messagePreview = text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) 
-                                      : file ? `📎 ${file.originalName}` : 'New message';
-          
-          // Create notifications for all members except the sender
-          const recipientIds = conversation.members
-            .filter(member => member._id.toString() !== userId)
-            .map(member => member._id.toString());
-          
-          console.log(`📢 Creating notifications for ${recipientIds.length} recipients:`, recipientIds);
-          
-          for (const recipientId of recipientIds) {
-            try {
-              // ✅ Always create notification in database
-              const notification = await createNotification(
-                recipientId,
-                userId,
-                'message',
-                `${sender.fullName || sender.username}`,
-                messagePreview,
-                { 
-                  conversationId: conversationId,
-                  messageId: messageId,
-                  senderAvatar: sender.avatarUrl 
                 }
               );
               
