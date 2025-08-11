@@ -741,8 +741,8 @@ export default function MeetingPage() {
             silenceTimer = null;
           }
           
-          // Process accumulated chunks
-          if (audioChunks.length > 0) {
+          // Process accumulated chunks only if subtitles are still enabled
+          if (audioChunks.length > 0 && subtitlesEnabled) {
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log(`🔊 Processing ${audioBlob.size} bytes of ${mimeType} audio from ${participantName}`);
             
@@ -751,6 +751,9 @@ export default function MeetingPage() {
             
             // Clear chunks after processing
             audioChunks = [];
+          } else if (!subtitlesEnabled) {
+            console.log(`⏹️ Skipping audio processing - subtitles disabled for ${participantName}`);
+            audioChunks = []; // Clear chunks when subtitles are disabled
           }
         }
       };
@@ -892,10 +895,16 @@ export default function MeetingPage() {
 
   // Multilingual processing pipeline: Audio → STT → Translation → TTS + Subtitles
   const processMultilingualAudio = async (audioBlob, peerId, participantName) => {
+    // Early exit if subtitles are disabled
+    if (!subtitlesEnabled && !multilingualEnabled) {
+      console.log(`⏹️ Skipping processing - subtitles and multilingual both disabled for ${participantName}`);
+      return;
+    }
+
     try {
       console.log(`Processing multilingual audio from ${participantName}`);
       
-      // Step 1: Speech-to-Text using BotService
+      // Step 1: Speech-to-Text using SubtitleService
       console.log(`📤 Sending ${audioBlob.size} bytes to STT for ${participantName}`);
       
       const sttResult = await SubtitleService.speechToText(audioBlob);

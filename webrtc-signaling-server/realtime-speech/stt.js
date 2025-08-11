@@ -134,9 +134,9 @@ export async function transcribeAudio(audioBuffer, options = {}) {
     if (error.response?.status === 400) {
       console.error('❌ Groq returned 400 - likely audio format issue');
       console.error('❌ Audio details:', {
-        filename,
-        contentType,
-        audioSize: processedAudioBuffer.length,
+        filename: filename || 'unknown',
+        contentType: contentType || 'unknown', 
+        audioSize: processedAudioBuffer?.length || 0,
         model: translate ? 'whisper-large-v3' : 'whisper-large-v3-turbo'
       });
     }
