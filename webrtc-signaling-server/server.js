@@ -656,63 +656,133 @@ io.on('connection', async socket => {
 
   // Send a new message
   socket.on('chat:send', async ({ conversationId, text, file, replyTo }) => {
+    const userId = socket.userId;
+    const session = await mongoose.startSession();
+    let populatedMessage;
+    
     try {
-      const userId = socket.userId;
-      const message = new Message({
-        conversation: conversationId,
-        sender: userId,
-        text,
-        file,
-        replyTo,
-      });
-      // Persist the new message and update the conversation concurrently to reduce latency.
-      await message.save();
-      const [__, populated] = await Promise.all([
-        Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id }),
-        message.populate([
+      await session.withTransaction(async () => {
+        // Create and save the message
+        const message = new Message({
+          conversation: conversationId,
+          sender: userId,
+          text,
+          file,
+          replyTo,
+        });
+        
+        await message.save({ session });
+        
+        // Update conversation's last message
+        await Conversation.findByIdAndUpdate(
+          conversationId,
+          { lastMessage: message._id },
+          { session }
+        );
+        
+        // Populate sender and replyTo references
+        populatedMessage = await Message.populate(message, [
           { path: 'sender', select: 'username fullName avatarUrl' },
           { path: 'replyTo', select: 'text file' }
-        ])
-      ]);
-                }
-              );
-              
-              console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
-              
-              // ✅ Send real-time notification via socket
-              sendNotificationToUser(recipientId, notification);
-              
-              // ✅ Also send browser notification event for immediate display
-              const recipientSocket = onlineUsers.get(recipientId);
-              if (recipientSocket) {
-                console.log(`📢 Sending notify-message event to user ${recipientId}`);
-                io.to(recipientSocket.socketId).emit('notify-message', {
-                  title: `${sender.fullName || sender.username}`,
-                  body: messagePreview,
-                  conversationId: conversationId,
-                  messageId: messageId,
-                  type: 'message'
-                });
-              }
-              
-            } catch (error) {
-              console.error('Error creating notification for user:', recipientId, error);
+        ]);
+      });
+      
+      // Get the conversation with members
+      const conversation = await Conversation.findById(conversationId).populate('members');
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
+      
+      // Get all member IDs except the sender
+      const recipientIds = conversation.members
+        .filter(member => member._id.toString() !== userId)
+        .map(member => member._id.toString());
+      
+      // Track online recipients for delivery status
+      const onlineRecipients = recipientIds.filter(id => onlineUsers.has(id));
+      
+      // Update delivery status for online recipients
+      if (onlineRecipients.length > 0) {
+        await Message.findByIdAndUpdate(
+          populatedMessage._id,
+          { $addToSet: { deliveredTo: { $each: onlineRecipients } } }
+        );
+        
+        // Emit delivery status to sender
+        socket.emit('chat:delivered', {
+          messageId: populatedMessage._id.toString(),
+          recipients: onlineRecipients
+        });
+      }
+      
+      // Send the message to all conversation members
+      const messageForClient = {
+        ...populatedMessage.toObject(),
+        conversationId: conversationId,
+        senderId: userId,
+        senderName: populatedMessage.sender.fullName || populatedMessage.sender.username
+      };
+      
+      // Send to all online members except sender
+      recipientIds.forEach(recipientId => {
+        const recipient = onlineUsers.get(recipientId);
+        if (recipient) {
+          io.to(recipient.socketId).emit('chat:new', messageForClient);
+        }
+      });
+      
+      // Also send to the conversation room for anyone currently viewing it
+      io.to(conversationId).emit('chat:new', messageForClient);
+      
+      // Create and send notifications
+      const messagePreview = text 
+        ? (text.length > 50 ? text.substring(0, 50) + '...' : text)
+        : file ? `📎 ${file.originalName || 'Attachment'}` : 'New message';
+      
+      for (const recipientId of recipientIds) {
+        try {
+          // Skip notification for sender
+          if (recipientId === userId) continue;
+          
+          // Create notification
+          const notification = await createNotification(
+            recipientId,
+            userId,
+            'message',
+            `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+            messagePreview,
+            {
+              conversationId: conversationId,
+              messageId: populatedMessage._id.toString(),
+              senderAvatar: populatedMessage.sender.avatarUrl
             }
+          );
+          
+          console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
+          
+          // Send real-time notification if user is online
+          const recipientSocket = onlineUsers.get(recipientId);
+          if (recipientSocket) {
+            io.to(recipientSocket.socketId).emit('notification:new', notification);
+            
+            // Also send browser notification
+            io.to(recipientSocket.socketId).emit('notify-message', {
+              title: `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+              body: messagePreview,
+              conversationId: conversationId,
+              messageId: populatedMessage._id.toString(),
+              type: 'message'
+            });
           }
-        
-        // Mark as delivered for online users in the conversation
-        const onlineRecipients = recipientIds.filter(id => onlineUsers.has(id));
-        
-        if (onlineRecipients.length > 0) {
-          const status = messageStatus.get(messageId);
-          status.delivered = true;
-          status.recipients = onlineRecipients;
-          io.to(conversationId).emit('chat:delivered', { messageId, recipients: onlineRecipients });
+        } catch (error) {
+          console.error(`Error creating notification for user ${recipientId}:`, error);
         }
       }
     } catch (error) {
-      console.error('Error in chat:send:', error);
+      console.error('Error sending message:', error);
       socket.emit('chat:error', { message: 'Failed to send message' });
+    } finally {
+      await session.endSession();
     }
   });
 
@@ -720,14 +790,53 @@ io.on('connection', async socket => {
   // Mark message as read
   socket.on('chat:read', async ({ messageId }) => {
     const userId = socket.userId;
-    const status = messageStatus.get(messageId);
-    if (status && !status.read) {
-      status.read = true;
-      // Get the conversation ID for this message
-      const message = await Message.findById(messageId);
-      if (message) {
-        io.to(message.conversation.toString()).emit('chat:read', { messageId, userId });
-      }
+    const session = await mongoose.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // Update the message to mark it as read by this user
+        const message = await Message.findOneAndUpdate(
+          { _id: messageId, readBy: { $ne: userId } }, // Only update if not already read by this user
+          { $addToSet: { readBy: userId } },
+          { new: true, session }
+        );
+        
+        if (message) {
+          // Get the conversation to find other members
+          const conversation = await Conversation.findById(message.conversation).populate('members');
+          if (conversation) {
+            // Emit read receipt to all conversation members
+            const readData = {
+              messageId: message._id.toString(),
+              userId: userId,
+              readAt: new Date()
+            };
+            
+            // Send to all online members of the conversation
+            conversation.members.forEach(member => {
+              const memberId = member._id.toString();
+              const memberSocket = onlineUsers.get(memberId);
+              if (memberSocket) {
+                io.to(memberSocket.socketId).emit('chat:read', readData);
+              }
+            });
+            
+            // Also send to the conversation room for anyone currently viewing it
+            io.to(conversation._id.toString()).emit('chat:read', readData);
+            
+            // Update in-memory status if it exists
+            const status = messageStatus.get(messageId);
+            if (status) {
+              status.read = true;
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      socket.emit('chat:error', { message: 'Failed to mark message as read' });
+    } finally {
+      await session.endSession();
     }
   });
 
