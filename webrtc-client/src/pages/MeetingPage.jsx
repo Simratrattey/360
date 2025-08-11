@@ -124,7 +124,7 @@ export default function MeetingPage() {
     }
   }, [localStream]);
 
-  // Attach remote streams to their video elements
+  // Attach remote streams to their video elements and handle multilingual audio
   useEffect(() => {
     console.log('[MeetingPage] 🔄 Remote streams updated:', Array.from(remoteStreams.entries()).map(([id, stream]) => ({
       id,
@@ -135,9 +135,28 @@ export default function MeetingPage() {
     remoteStreams.forEach((stream, id) => {
       const videoElement = document.getElementById(`remote-video-${id}`);
       if (videoElement && stream) {
+        // Create a new stream for display
+        let displayStream = stream;
+        
+        // If multilingual is enabled, mute the original audio
+        if (multilingualEnabled && stream.getAudioTracks().length > 0) {
+          console.log(`[Multilingual] Muting original audio from participant ${id}`);
+          
+          // Create a new stream with video but muted audio
+          const videoTracks = stream.getVideoTracks();
+          const audioTracks = stream.getAudioTracks();
+          
+          // Mute the original audio track
+          audioTracks.forEach(track => {
+            track.enabled = false; // Mute original audio
+          });
+          
+          displayStream = new MediaStream([...videoTracks, ...audioTracks]);
+        }
+        
         // Only set srcObject if it's different to avoid unnecessary updates
-        if (videoElement.srcObject !== stream) {
-          videoElement.srcObject = stream;
+        if (videoElement.srcObject !== displayStream) {
+          videoElement.srcObject = displayStream;
           videoElement.onloadedmetadata = () => {
             videoElement.play().catch(err => {
               if (err.name !== 'AbortError') console.warn('Video play failed:', err);
@@ -145,8 +164,15 @@ export default function MeetingPage() {
           };
         }
       }
+      
+      // Start processing this stream if subtitles or multilingual is enabled
+      if ((subtitlesEnabled || multilingualEnabled) && stream.getAudioTracks().length > 0) {
+        const participantName = participantMap[id] || 'Guest';
+        console.log(`Starting audio processing for ${participantName} (${id})`);
+        startRemoteStreamRecognition(stream, id, participantName);
+      }
     });
-  }, [remoteStreams]);
+  }, [remoteStreams, subtitlesEnabled, multilingualEnabled, participantMap]);
 
   // parse incoming avatar output
   useEffect(() => {
@@ -635,26 +661,89 @@ export default function MeetingPage() {
     }
 
     try {
+      console.log(`🎤 Setting up audio processing for ${participantName}`);
+      
       // Create audio context for processing remote audio
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const audioStream = new MediaStream([audioTracks[0]]);
       const source = audioContext.createMediaStreamSource(audioStream);
       
-      // Check browser compatibility for speech recognition
-      const support = getSpeechRecognitionSupport();
+      // Use MediaRecorder for more reliable audio capture
+      await startMediaRecorderProcessing(audioStream, audioContext, peerId, participantName);
       
-      if (support.canUseNative) {
-        // Use native speech recognition with remote audio
-        await startNativeRecognitionForRemote(audioContext, source, peerId, participantName);
-      } else {
-        // Use fallback method for Safari/iOS
-        await startFallbackRecognitionForRemote(audioContext, source, peerId, participantName);
-      }
-      
-      console.log(`Started speech recognition for participant ${participantName} (${peerId})`);
+      console.log(`✅ Started audio processing for ${participantName} (${peerId})`);
       
     } catch (error) {
-      console.error(`Failed to start speech recognition for ${participantName}:`, error);
+      console.error(`❌ Failed to start audio processing for ${participantName}:`, error);
+    }
+  };
+
+  // Use MediaRecorder to capture audio chunks and process them
+  const startMediaRecorderProcessing = async (audioStream, audioContext, peerId, participantName) => {
+    try {
+      // Create MediaRecorder to capture audio in chunks
+      const mediaRecorder = new MediaRecorder(audioStream, {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 16000
+      });
+      
+      let audioChunks = [];
+      let silenceTimer = null;
+      const CHUNK_DURATION = 2000; // Process every 2 seconds
+      
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+          
+          // Clear silence timer since we got audio
+          if (silenceTimer) {
+            clearTimeout(silenceTimer);
+            silenceTimer = null;
+          }
+          
+          // Process accumulated chunks
+          if (audioChunks.length > 0) {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+            console.log(`🔊 Processing ${audioBlob.size} bytes of audio from ${participantName}`);
+            
+            // Process the audio blob
+            await processMultilingualAudio(audioBlob, peerId, participantName);
+            
+            // Clear chunks after processing
+            audioChunks = [];
+          }
+        }
+      };
+      
+      mediaRecorder.onerror = (error) => {
+        console.error(`MediaRecorder error for ${participantName}:`, error);
+      };
+      
+      mediaRecorder.onstart = () => {
+        console.log(`🎙️ MediaRecorder started for ${participantName}`);
+      };
+      
+      // Start recording in chunks
+      mediaRecorder.start(CHUNK_DURATION);
+      
+      // Store for cleanup
+      if (!speechRecognitionRef.current) {
+        speechRecognitionRef.current = new Map();
+      }
+      
+      speechRecognitionRef.current.set(peerId, {
+        mediaRecorder,
+        audioContext,
+        stop: () => {
+          if (mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+          audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+        }
+      });
+      
+    } catch (error) {
+      console.error(`MediaRecorder setup failed for ${participantName}:`, error);
     }
   };
 
@@ -767,14 +856,36 @@ export default function MeetingPage() {
       console.log(`Processing multilingual audio from ${participantName}`);
       
       // Step 1: Speech-to-Text using BotService
+      console.log(`📤 Sending ${audioBlob.size} bytes to STT for ${participantName}`);
+      
       const sttResult = await BotService.speechToText(audioBlob);
-      if (!sttResult.success || !sttResult.data?.reply) {
-        console.warn(`STT failed for ${participantName}:`, sttResult.error);
+      console.log(`📥 STT Result for ${participantName}:`, sttResult);
+      
+      if (!sttResult.success) {
+        console.warn(`❌ STT failed for ${participantName}:`, sttResult.error);
+        
+        // Show debug info in subtitles
+        if (subtitlesEnabled) {
+          const debugEntry = {
+            original: `[STT Error: ${sttResult.error}]`,
+            translated: null,
+            text: `[STT Error: ${sttResult.error}]`,
+            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            speaker: participantName,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            isTranslated: false
+          };
+          setSubtitleHistory(prev => [...prev.slice(-4), debugEntry]);
+        }
         return;
       }
       
-      const originalText = sttResult.data.reply.trim();
-      if (!originalText) return;
+      const originalText = sttResult.data?.reply?.trim();
+      if (!originalText) {
+        console.warn(`❌ No text received from STT for ${participantName}`);
+        return;
+      }
       
       console.log(`Original text from ${participantName}: ${originalText}`);
       
@@ -822,27 +933,39 @@ export default function MeetingPage() {
     }
   };
   
-  // Play translated audio using TTS
+  // Play translated audio using TTS with proper volume control
   const playTranslatedAudio = async (translatedText, peerId, participantName) => {
     try {
-      console.log(`Generating TTS for ${participantName}: ${translatedText}`);
+      console.log(`🗣️ Generating TTS for ${participantName}: "${translatedText}"`);
       
       const ttsResult = await BotService.textToSpeech(translatedText);
       if (!ttsResult.success) {
-        console.warn(`TTS failed for ${participantName}:`, ttsResult.error);
+        console.warn(`❌ TTS failed for ${participantName}:`, ttsResult.error);
         return;
       }
       
-      // Create audio element and play
-      const audioUrl = URL.createObjectURL(ttsResult.data);
-      const audio = new Audio(audioUrl);
+      // Create Web Audio API context for better audio control
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       
-      audio.onloadeddata = () => {
-        audio.play().catch(err => console.warn('Audio play failed:', err));
-      };
+      // Convert blob to array buffer
+      const arrayBuffer = await ttsResult.data.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
+      // Create buffer source and gain node for volume control
+      const source = audioCtx.createBufferSource();
+      const gainNode = audioCtx.createGain();
+      
+      source.buffer = audioBuffer;
+      source.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      // Set appropriate volume (louder to replace original audio)
+      gainNode.gain.value = 1.0;
+      
+      // Handle completion
+      source.onended = () => {
+        console.log(`✅ Finished playing translated audio for ${participantName}`);
+        audioCtx.close().catch(err => console.warn('AudioContext close error:', err));
         setActiveAudioSources(prev => {
           const newMap = new Map(prev);
           newMap.delete(peerId);
@@ -850,22 +973,19 @@ export default function MeetingPage() {
         });
       };
       
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        console.warn(`Audio playback failed for ${participantName}`);
-      };
-      
       // Track active audio sources
       setActiveAudioSources(prev => {
         const newMap = new Map(prev);
-        newMap.set(peerId, { audio, participantName });
+        newMap.set(peerId, { source, participantName, audioCtx });
         return newMap;
       });
       
-      audio.load();
+      // Play the translated audio
+      source.start(0);
+      console.log(`🔊 Playing translated audio for ${participantName}`);
       
     } catch (error) {
-      console.error(`TTS playback failed for ${participantName}:`, error);
+      console.error(`❌ TTS playback failed for ${participantName}:`, error);
     }
   };
 
@@ -1141,6 +1261,14 @@ export default function MeetingPage() {
                 🎧 Waiting for remote participants to speak...
                 {remoteStreams.size === 0 && (
                   <div className="mt-1 text-xs">No remote participants connected</div>
+                )}
+                {remoteStreams.size > 0 && (
+                  <div className="mt-1 text-xs">
+                    {speechRecognitionRef.current && speechRecognitionRef.current.size > 0 
+                      ? `🎙️ Processing audio from ${speechRecognitionRef.current.size} participant(s)`
+                      : '⚠️ Audio processing not started - check console for errors'
+                    }
+                  </div>
                 )}
               </div>
             )}
