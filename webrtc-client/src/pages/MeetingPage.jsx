@@ -8,6 +8,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
+import SubtitleService from '../api/subtitleService';
 import AvatarSidebar from '../components/AvatarSidebar';
 
 export default function MeetingPage() {
@@ -643,6 +644,10 @@ export default function MeetingPage() {
   // Speech recognition for subtitles - processes remote participant audio only
   const startSubtitles = async () => {
     console.log('Starting subtitle recognition for remote participants');
+    
+    // Enable debug mode for testing (set to false for production)
+    // SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
+    
     setSubtitlesEnabled(true);
     
     // Start processing each remote stream
@@ -889,7 +894,7 @@ export default function MeetingPage() {
       // Step 1: Speech-to-Text using BotService
       console.log(`📤 Sending ${audioBlob.size} bytes to STT for ${participantName}`);
       
-      const sttResult = await BotService.speechToText(audioBlob);
+      const sttResult = await SubtitleService.speechToText(audioBlob);
       console.log(`📥 STT Result for ${participantName}:`, sttResult);
       
       if (!sttResult.success) {
@@ -925,7 +930,7 @@ export default function MeetingPage() {
       let isTranslated = false;
       
       if (multilingualEnabled && targetLanguage !== sourceLanguage) {
-        const translationResult = await BotService.translateText(originalText, sourceLanguage, targetLanguage);
+        const translationResult = await SubtitleService.translateText(originalText, sourceLanguage, targetLanguage);
         if (translationResult.success && translationResult.data?.translatedText) {
           translatedText = translationResult.data.translatedText;
           isTranslated = true;

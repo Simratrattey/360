@@ -389,6 +389,45 @@ app.get('/api/test-ffmpeg', async (req, res) => {
     res.json({ ffmpegAvailable: false, error: err.message });
   }
 });
+
+// Debug STT endpoint (for testing without real API keys)
+app.post('/api/stt-debug', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    const audioBuffer = await fs.promises.readFile(req.file.path);
+    const { language = 'auto', translate = false } = req.body;
+    
+    console.log(`[STT-DEBUG] Processing ${audioBuffer.length} bytes of audio`);
+    console.log(`[STT-DEBUG] Language: ${language}, Translate: ${translate}`);
+    console.log(`[STT-DEBUG] GROQ_API_KEY set: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
+    console.log(`[STT-DEBUG] GROQ_API_KEY value: ${process.env.GROQ_API_KEY?.substring(0, 10)}...`);
+    
+    // Return mock transcription for testing
+    const mockTranscription = `Mock transcription for ${audioBuffer.length} bytes of audio data`;
+    
+    return res.json({ 
+      transcription: mockTranscription,
+      language,
+      translate,
+      debug: true
+    });
+
+  } catch (err) {
+    console.error('❌ /api/stt-debug error:', err.message);
+    return res.status(500).json({
+      error: 'STT debug failed',
+      details: err.message
+    });
+  } finally {
+    // Clean up uploaded file
+    if (req.file) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+    }
+  }
+});
 // ─────────────────────────────────────────────────────────────────────
 
 // Health check for Render
