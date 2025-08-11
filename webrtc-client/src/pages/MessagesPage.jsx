@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Users, Hash, Plus, Search, MoreVertical, Settings, Star, Trash2, Send, Paperclip, Smile, MessageCircle, X, Check } from 'lucide-react';
 import SidebarConversation from '../components/messages/SidebarConversation';
 import ChatWindow from '../components/messages/ChatWindow';
@@ -328,37 +328,41 @@ export default function MessagesPage() {
     }
   }, [selected, messages, user.id, chatSocket, refreshUnreadCount]);
 
-  // Filter conversations by search
-  const filteredConversations = allConversations.map(section => {
-    const filteredItems = section.items.filter(conv => {
-      try {
-        const displayName = getConversationDisplayName(conv, user?.id);
-        
-        const memberNames = Array.isArray(conv.members)
-          ? conv.members.map(m => {
-              if (typeof m === 'object' && m !== null) {
-                const name = m.fullName || m.username || m.email || '';
-                return String(name);
-              }
-              return '';
-            }).join(' ')
-          : '';
-        
-        const result = displayName.toLowerCase().includes(search.toLowerCase()) || 
-               memberNames.toLowerCase().includes(search.toLowerCase());
-        
-        return result;
-      } catch (error) {
-        console.error('Error in conversation filter:', error);
-        return false;
-      }
+  // Memoize conversation filtering to avoid expensive recalculations on each render.
+  const filteredConversations = useMemo(() => {
+    return allConversations.map(section => {
+      const filteredItems = section.items.filter(conv => {
+        try {
+          const displayName = getConversationDisplayName(conv, user?.id);
+          
+          const memberNames = Array.isArray(conv.members)
+            ? conv.members.map(m => {
+                if (typeof m === 'object' && m !== null) {
+                  const name = m.fullName || m.username || m.email || '';
+                  return String(name);
+                }
+                return '';
+              }).join(' ')
+            : '';
+          
+          const result = search
+            ? displayName.toLowerCase().includes(search.toLowerCase()) || 
+              memberNames.toLowerCase().includes(search.toLowerCase())
+            : true;
+          
+          return result;
+        } catch (error) {
+          console.error('Error in conversation filter:', error);
+          return false;
+        }
+      });
+      
+      return {
+        ...section,
+        items: filteredItems,
+      };
     });
-    
-    return {
-      ...section,
-      items: filteredItems,
-    };
-  });
+  }, [allConversations, search, user?.id]);
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {

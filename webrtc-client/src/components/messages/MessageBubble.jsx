@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl } from '../../api/messageService';
 
-export default function MessageBubble({
+// Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
+function MessageBubble({
   msg,
   isOwn,
   onEdit,
@@ -483,4 +484,7 @@ export default function MessageBubble({
       )}
     </div>
   );
-} 
+}
+
+// Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
+export default React.memo(MessageBubble);
