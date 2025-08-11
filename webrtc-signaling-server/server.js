@@ -337,6 +337,58 @@ app.post(
     }
   }
 );
+
+// STT endpoint with fallback for non-FFmpeg environments
+app.post(
+  '/api/stt',
+  upload.single('audio'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
+
+      const audioBuffer = await fs.promises.readFile(req.file.path);
+      const { language = 'auto', translate = false } = req.body;
+      
+      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, translate=${translate}`);
+      
+      const transcription = await transcribeAudio(audioBuffer, {
+        language,
+        translate: translate === 'true'
+      });
+      
+      return res.json({ 
+        transcription,
+        language,
+        translate
+      });
+
+    } catch (err) {
+      console.error('❌ /api/stt error:', err.message);
+      return res.status(500).json({
+        error: 'Speech-to-text failed',
+        details: err.message
+      });
+    } finally {
+      // Clean up uploaded file
+      if (req.file) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  }
+);
+
+// Test FFmpeg availability endpoint
+app.get('/api/test-ffmpeg', async (req, res) => {
+  try {
+    const { checkFFmpegAvailable } = await import('./realtime-speech/audioConverter.js');
+    const available = await checkFFmpegAvailable();
+    res.json({ ffmpegAvailable: available });
+  } catch (err) {
+    res.json({ ffmpegAvailable: false, error: err.message });
+  }
+});
 // ─────────────────────────────────────────────────────────────────────
 
 // Health check for Render

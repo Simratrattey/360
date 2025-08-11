@@ -682,9 +682,40 @@ export default function MeetingPage() {
   const startMediaRecorderProcessing = async (audioStream, audioContext, peerId, participantName) => {
     try {
       // Create MediaRecorder to capture audio in chunks
+      // Try formats in order of Groq compatibility
+      let mimeType = 'audio/webm;codecs=opus';
+      let options = { 
+        audioBitsPerSecond: 16000,  // 16kHz for better STT
+        bitsPerSecond: 16000        // Overall bitrate
+      };
+      
+      // Try formats in order of Groq API compatibility
+      const supportedFormats = [
+        'audio/wav',                    // Best for Groq
+        'audio/mp4',                    // Good fallback
+        'audio/mpeg',                   // MP3 format
+        'audio/webm;codecs=pcm',        // PCM WebM
+        'audio/webm;codecs=opus',       // Opus WebM (most browsers)
+        'audio/webm'                    // Generic WebM
+      ];
+      
+      for (const format of supportedFormats) {
+        if (MediaRecorder.isTypeSupported(format)) {
+          mimeType = format;
+          console.log(`✅ Selected audio format: ${mimeType} for ${participantName}`);
+          break;
+        }
+      }
+      
+      // Log what formats are supported for debugging
+      const supportLog = supportedFormats.map(format => 
+        `${format}: ${MediaRecorder.isTypeSupported(format)}`
+      ).join(', ');
+      console.log(`📹 Browser format support: ${supportLog}`);
+      
       const mediaRecorder = new MediaRecorder(audioStream, {
-        mimeType: 'audio/webm;codecs=opus',
-        audioBitsPerSecond: 16000
+        mimeType,
+        ...options
       });
       
       let audioChunks = [];
@@ -703,8 +734,8 @@ export default function MeetingPage() {
           
           // Process accumulated chunks
           if (audioChunks.length > 0) {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-            console.log(`🔊 Processing ${audioBlob.size} bytes of audio from ${participantName}`);
+            const audioBlob = new Blob(audioChunks, { type: mimeType });
+            console.log(`🔊 Processing ${audioBlob.size} bytes of ${mimeType} audio from ${participantName}`);
             
             // Process the audio blob
             await processMultilingualAudio(audioBlob, peerId, participantName);

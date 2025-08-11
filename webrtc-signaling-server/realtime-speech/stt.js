@@ -1,6 +1,7 @@
 // Speech-to-Text using Groq API (converted from Python)
 import axios from 'axios';
 import FormData from 'form-data';
+import { convertWebMToWAV, checkFFmpegAvailable } from './audioConverter.js';
 
 export async function transcribeAudio(audioBuffer, options = {}) {
   const {
@@ -10,10 +11,68 @@ export async function transcribeAudio(audioBuffer, options = {}) {
   } = options;
 
   try {
+    let processedAudioBuffer = audioBuffer;
+    let filename = 'audio.webm';
+    let contentType = 'audio/webm';
+
+    // Try multiple approaches for audio format compatibility
+    try {
+      // First, try FFmpeg conversion if available
+      const ffmpegAvailable = await checkFFmpegAvailable();
+      if (ffmpegAvailable) {
+        console.log('Converting WebM to WAV using FFmpeg...');
+        processedAudioBuffer = await convertWebMToWAV(audioBuffer);
+        filename = 'audio.wav';
+        contentType = 'audio/wav';
+        console.log(`FFmpeg converted audio: ${audioBuffer.length} bytes → ${processedAudioBuffer.length} bytes`);
+      } else {
+        console.log('FFmpeg not available, trying alternative formats...');
+        
+        // Try sending as different formats based on audio signature
+        const signature = audioBuffer.toString('hex', 0, 8);
+        console.log('Audio signature:', signature);
+        
+        // WebM signature: 1a45dfa3
+        if (signature.includes('1a45dfa3')) {
+          // Try sending as audio/webm
+          filename = 'audio.webm';
+          contentType = 'audio/webm';
+          console.log('Detected WebM format, sending as-is');
+        }
+        // WAV signature: 52494646...57415645
+        else if (signature.includes('52494646')) {
+          filename = 'audio.wav';
+          contentType = 'audio/wav';
+          console.log('Detected WAV format');
+        }
+        // MP3 signature: 494433 or fffb
+        else if (signature.includes('494433') || signature.includes('fffb')) {
+          filename = 'audio.mp3';
+          contentType = 'audio/mpeg';
+          console.log('Detected MP3 format');
+        }
+        // OGG signature: 4f676753
+        else if (signature.includes('4f676753')) {
+          filename = 'audio.ogg';
+          contentType = 'audio/ogg';
+          console.log('Detected OGG format');
+        }
+        else {
+          // Default fallback - try as MP3 since Groq supports it
+          filename = 'audio.mp3';
+          contentType = 'audio/mpeg';
+          console.log('Unknown format, trying as MP3');
+        }
+      }
+    } catch (conversionError) {
+      console.warn('Audio processing failed, using original format:', conversionError.message);
+      // Continue with original audio
+    }
+
     const formData = new FormData();
-    formData.append('file', audioBuffer, {
-      filename: 'audio.wav',
-      contentType: 'audio/wav'
+    formData.append('file', processedAudioBuffer, {
+      filename,
+      contentType
     });
     
     // Select model based on translate flag (matching Python logic)

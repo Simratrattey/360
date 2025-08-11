@@ -7,8 +7,8 @@ networks:
 services:
   client:
     build:
-      context: ./webrtc-client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: webrtc-client/Dockerfile
       ssh:
         - default
       args:
