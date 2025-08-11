@@ -87,6 +87,22 @@
   .glass-effect {
     @apply bg-white/80 backdrop-blur-sm border border-white/20;
   }
+  
+  /* Subtitle animations */
+  .animate-fade-in {
+    animation: fadeInUp 0.4s ease-out forwards;
+  }
+  
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 

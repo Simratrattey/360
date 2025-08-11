@@ -29,6 +29,7 @@ export default function MeetingPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
+  const subtitlesEnabledRef = useRef(false);
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [subtitleHistory, setSubtitleHistory] = useState([]);
   const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
@@ -650,9 +651,10 @@ export default function MeetingPage() {
     console.log('STT Service Health:', healthCheck);
     
     // Enable debug mode for testing (set to false for production)
-    // SubtitleService.setDebugMode(true); // Uncomment for testing without API keys
+    SubtitleService.setDebugMode(true); // Temporarily enabled while server updates
     
     setSubtitlesEnabled(true);
+    subtitlesEnabledRef.current = true;
     
     // Start processing each remote stream
     remoteStreams.forEach((stream, peerId) => {
@@ -742,7 +744,7 @@ export default function MeetingPage() {
           }
           
           // Process accumulated chunks only if subtitles are still enabled
-          if (audioChunks.length > 0 && subtitlesEnabled) {
+          if (audioChunks.length > 0 && subtitlesEnabledRef.current) {
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log(`🔊 Processing ${audioBlob.size} bytes of ${mimeType} audio from ${participantName}`);
             
@@ -751,7 +753,7 @@ export default function MeetingPage() {
             
             // Clear chunks after processing
             audioChunks = [];
-          } else if (!subtitlesEnabled) {
+          } else if (!subtitlesEnabledRef.current) {
             console.log(`⏹️ Skipping audio processing - subtitles disabled for ${participantName}`);
             audioChunks = []; // Clear chunks when subtitles are disabled
           }
@@ -896,7 +898,7 @@ export default function MeetingPage() {
   // Multilingual processing pipeline: Audio → STT → Translation → TTS + Subtitles
   const processMultilingualAudio = async (audioBlob, peerId, participantName) => {
     // Early exit if subtitles are disabled
-    if (!subtitlesEnabled && !multilingualEnabled) {
+    if (!subtitlesEnabledRef.current && !multilingualEnabled) {
       console.log(`⏹️ Skipping processing - subtitles and multilingual both disabled for ${participantName}`);
       return;
     }
@@ -956,6 +958,7 @@ export default function MeetingPage() {
       // Step 3: Display subtitles (if enabled)
       if (subtitlesEnabled) {
         const subtitleEntry = {
+          id: `${peerId}-${Date.now()}`, // Unique ID for each subtitle
           original: originalText,
           translated: isTranslated ? translatedText : null,
           text: translatedText, // Show translated version if available
@@ -963,13 +966,22 @@ export default function MeetingPage() {
           speaker: participantName,
           sourceLanguage: sourceLanguage,
           targetLanguage: targetLanguage,
-          isTranslated: isTranslated
+          isTranslated: isTranslated,
+          createdAt: Date.now() // For auto-cleanup
         };
         
-        setSubtitleHistory(prev => [
-          ...prev.slice(-4), // Keep only last 5 entries
-          subtitleEntry
-        ]);
+        setSubtitleHistory(prev => {
+          const updated = [...prev.slice(-4), subtitleEntry]; // Keep only last 5 entries
+          
+          // Auto-cleanup old subtitles after 8 seconds to keep UI clean
+          setTimeout(() => {
+            setSubtitleHistory(current => 
+              current.filter(sub => sub.id !== subtitleEntry.id)
+            );
+          }, 8000);
+          
+          return updated;
+        });
       }
       
       // Step 4: Audio output (if multilingual is enabled)
@@ -1115,6 +1127,7 @@ export default function MeetingPage() {
       speechRecognitionRef.current = null;
     }
     setSubtitlesEnabled(false);
+    subtitlesEnabledRef.current = false;
     setCurrentSubtitle('');
     console.log('Subtitles stopped for all remote participants');
   };
@@ -1246,83 +1259,80 @@ export default function MeetingPage() {
           </div>
         ))}
       </div>
-      {/* Subtitles Display */}
+      {/* Clean Subtitle Overlay */}
       {subtitlesEnabled && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-4xl mx-auto z-20">
-          <div className="bg-black bg-opacity-80 text-white rounded-lg p-4 backdrop-blur-sm">
-            {/* Remote subtitles notice */}
-            <div className="mb-3 p-2 bg-blue-900 bg-opacity-50 rounded text-xs text-blue-200 border border-blue-600">
-              <div className="flex items-center justify-between">
-                <span>👥 Remote Participants ({remoteStreams.size} connected)</span>
-                <div className="flex items-center space-x-2">
-                  {subtitlesEnabled && (
-                    <span className="bg-green-900 text-green-300 px-1 py-0.5 rounded text-xs">
-                      💬 Subtitles ON
-                    </span>
-                  )}
-                  {multilingualEnabled && (
-                    <span className="bg-purple-900 text-purple-300 px-1 py-0.5 rounded text-xs">
-                      🌐 Multilingual ON
-                    </span>
-                  )}
+        <>
+          {/* Status indicator - minimal top-right corner */}
+          <div className="fixed top-4 right-4 z-30 flex items-center space-x-2">
+            <div className="bg-black bg-opacity-60 text-white px-3 py-1 rounded-full text-xs flex items-center space-x-2 backdrop-blur-sm">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span>💬 Subtitles</span>
+              {multilingualEnabled && (
+                <>
+                  <div className="w-1 h-1 bg-white rounded-full opacity-50"></div>
+                  <span>🌐 {supportedLanguages.find(l => l.code === targetLanguage)?.flag}</span>
+                </>
+              )}
+              <span className="text-gray-300">({remoteStreams.size})</span>
+            </div>
+          </div>
+
+          {/* Floating subtitle bubbles - positioned above controls */}
+          <div className="fixed bottom-32 left-0 right-0 z-25 pointer-events-none">
+            <div className="max-w-4xl mx-auto px-4">
+              {/* Only show last 2 subtitles to avoid clutter */}
+              {subtitleHistory.slice(-2).map((subtitle, index) => (
+                <div 
+                  key={subtitle.id || `${subtitle.speaker}-${subtitle.timestamp}-${index}`} 
+                  className={`mb-2 animate-fade-in ${index === subtitleHistory.slice(-2).length - 1 ? 'opacity-100' : 'opacity-70'}`}
+                >
+                  <div className="bg-black bg-opacity-75 text-white rounded-2xl px-4 py-2 backdrop-blur-sm border border-white border-opacity-20 shadow-lg inline-block max-w-md">
+                    {/* Speaker name and timestamp */}
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                      <span className="text-blue-300 font-medium text-sm">{subtitle.speaker}</span>
+                      {subtitle.isTranslated && (
+                        <span className="text-xs bg-purple-500 bg-opacity-30 text-purple-200 px-2 py-0.5 rounded-full">
+                          {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Main subtitle text - larger and readable */}
+                    <div className="text-white font-medium text-base leading-relaxed">
+                      {subtitle.text}
+                    </div>
+                    
+                    {/* Original text if translated - smaller and muted */}
+                    {subtitle.isTranslated && subtitle.original && (
+                      <div className="text-gray-400 text-sm italic mt-1 opacity-70">
+                        "{subtitle.original}"
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {multilingualEnabled && targetLanguage !== 'en' && (
-                <div className="mt-1 text-xs">
-                  Translating to {supportedLanguages.find(l => l.code === targetLanguage)?.flag} {supportedLanguages.find(l => l.code === targetLanguage)?.name}
+              ))}
+              
+              {/* Minimal waiting message */}
+              {subtitleHistory.length === 0 && remoteStreams.size > 0 && (
+                <div className="text-center">
+                  <div className="bg-black bg-opacity-50 text-gray-300 rounded-full px-4 py-2 backdrop-blur-sm text-sm inline-block">
+                    🎧 Listening for speech...
+                  </div>
+                </div>
+              )}
+              
+              {/* No participants message */}
+              {remoteStreams.size === 0 && (
+                <div className="text-center">
+                  <div className="bg-black bg-opacity-50 text-gray-400 rounded-full px-4 py-2 backdrop-blur-sm text-sm inline-block">
+                    👥 Waiting for participants
+                  </div>
                 </div>
               )}
             </div>
-            
-            {/* Recent subtitles history */}
-            {subtitleHistory.slice(-3).map((subtitle, index) => (
-              <div key={index} className="mb-3 text-sm opacity-70 border-l-2 border-blue-500 pl-3">
-                <div className="flex items-center space-x-2">
-                  <span className="text-blue-300 font-medium">{subtitle.speaker}</span>
-                  <span className="text-gray-400 text-xs">{subtitle.timestamp}</span>
-                  {subtitle.isTranslated && (
-                    <span className="text-xs bg-purple-900 text-purple-300 px-1 py-0.5 rounded">
-                      {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag} Translated
-                    </span>
-                  )}
-                  {multilingualEnabled && subtitle.isTranslated && (
-                    <span className="text-xs bg-green-900 text-green-300 px-1 py-0.5 rounded">
-                      🔊 Audio Played
-                    </span>
-                  )}
-                </div>
-                
-                {/* Show original text if translated */}
-                {subtitle.isTranslated && (
-                  <div className="mt-1 text-xs text-gray-400 italic">
-                    Original: "{subtitle.original}"
-                  </div>
-                )}
-                
-                {/* Main subtitle text */}
-                <div className="mt-1 text-white">{subtitle.text}</div>
-              </div>
-            ))}
-            
-            {/* Show when no content yet */}
-            {subtitleHistory.length === 0 && (
-              <div className="text-sm text-gray-400 text-center py-2">
-                🎧 Waiting for remote participants to speak...
-                {remoteStreams.size === 0 && (
-                  <div className="mt-1 text-xs">No remote participants connected</div>
-                )}
-                {remoteStreams.size > 0 && (
-                  <div className="mt-1 text-xs">
-                    {speechRecognitionRef.current && speechRecognitionRef.current.size > 0 
-                      ? `🎙️ Processing audio from ${speechRecognitionRef.current.size} participant(s)`
-                      : '⚠️ Audio processing not started - check console for errors'
-                    }
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* Controls */}
