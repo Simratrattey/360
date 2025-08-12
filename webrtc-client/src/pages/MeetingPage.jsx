@@ -734,6 +734,12 @@ export default function MeetingPage() {
       const CHUNK_DURATION = 2000; // Process every 2 seconds
       
       mediaRecorder.ondataavailable = async (event) => {
+        // Check if MediaRecorder is still active and subtitles are enabled
+        if (mediaRecorder.state === 'inactive' || !subtitlesEnabledRef.current) {
+          // Silently ignore data when stopped - no more logs
+          return;
+        }
+        
         if (event.data.size > 0) {
           audioChunks.push(event.data);
           
@@ -743,8 +749,8 @@ export default function MeetingPage() {
             silenceTimer = null;
           }
           
-          // Process accumulated chunks only if subtitles are still enabled
-          if (audioChunks.length > 0 && subtitlesEnabledRef.current) {
+          // Process accumulated chunks
+          if (audioChunks.length > 0) {
             const audioBlob = new Blob(audioChunks, { type: mimeType });
             console.log(`🔊 Processing ${audioBlob.size} bytes of ${mimeType} audio from ${participantName}`);
             
@@ -753,9 +759,6 @@ export default function MeetingPage() {
             
             // Clear chunks after processing
             audioChunks = [];
-          } else if (!subtitlesEnabledRef.current) {
-            console.log(`⏹️ Skipping audio processing - subtitles disabled for ${participantName}`);
-            audioChunks = []; // Clear chunks when subtitles are disabled
           }
         }
       };
@@ -1107,13 +1110,22 @@ export default function MeetingPage() {
   }, [remoteStreams, subtitlesEnabled, participantMap]);
 
   const stopSubtitles = () => {
+    console.log('🛑 Stopping subtitles for all participants...');
+    
     if (speechRecognitionRef.current) {
       if (speechRecognitionRef.current instanceof Map) {
         // Stop all remote stream recognitions
+        console.log(`🛑 Stopping ${speechRecognitionRef.current.size} MediaRecorder instances`);
         speechRecognitionRef.current.forEach((recognizer, peerId) => {
           try {
+            console.log(`🛑 Stopping MediaRecorder for participant ${peerId}`);
             if (recognizer.stop) {
               recognizer.stop();
+            }
+            // Also directly stop MediaRecorder if available
+            if (recognizer.mediaRecorder && recognizer.mediaRecorder.state !== 'inactive') {
+              console.log(`🛑 Force stopping MediaRecorder for ${peerId}`);
+              recognizer.mediaRecorder.stop();
             }
           } catch (error) {
             console.warn(`Failed to stop recognition for peer ${peerId}:`, error);
@@ -1126,10 +1138,14 @@ export default function MeetingPage() {
       }
       speechRecognitionRef.current = null;
     }
+    
+    // Update state
     setSubtitlesEnabled(false);
     subtitlesEnabledRef.current = false;
     setCurrentSubtitle('');
-    console.log('Subtitles stopped for all remote participants');
+    setSubtitleHistory([]); // Clear subtitle history when stopping
+    
+    console.log('✅ Subtitles stopped for all remote participants');
   };
 
   const toggleSubtitles = () => {
