@@ -587,6 +587,8 @@ export default function MessagesPage() {
     }
   };
 
+  // Send a new message. This version implements an "optimistic" update so the message
+  // appears in the UI immediately, without waiting for the server to emit a chat:new event.
   const handleSend = async () => {
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
