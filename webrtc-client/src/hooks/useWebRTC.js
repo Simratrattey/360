@@ -279,6 +279,12 @@ export function useWebRTC() {
   useEffect(() => {
     console.log('[WebRTC] 🔧 Setting up newProducer event listener, sfuSocket:', !!sfuSocket, 'connected:', sfuSocket?.connected);
     
+    // Early return if no socket available
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping newProducer setup');
+      return;
+    }
+    
     const handleNewProducer = async ({ producerId, peerId: incomingPeerId }) => {
       const myPeerId = sfuSocket?.id;
       console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId, 'myPeerId:', myPeerId);
@@ -357,6 +363,11 @@ export function useWebRTC() {
 
   // — listen for peers hanging up and remove their stream —
   useEffect(() => {
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping hangup setup');
+      return;
+    }
+    
     const handleHangup = (peerId) => {
       console.log('[useWebRTC] 🔔 received hangup for', peerId, 'typeof:', typeof peerId);
       console.log('[useWebRTC] 📊 Current state before hangup:');
@@ -476,6 +487,11 @@ export function useWebRTC() {
   }, [localStream, leaveRoom]);
 
   useEffect(() => {
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping roomClosed setup');
+      return;
+    }
+    
     const handleClosed = (rid) => {
       if (rid === currentRoom) {
         leaveMeeting();

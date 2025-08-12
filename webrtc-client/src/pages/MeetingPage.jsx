@@ -14,8 +14,6 @@ import AvatarSidebar from '../components/AvatarSidebar';
 export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  
-  console.log('🎥 MeetingPage component loaded for roomId:', roomId);
   const { user } = useContext(AuthContext);
   const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
   const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate } = useContext(SocketContext);
@@ -1401,11 +1399,8 @@ export default function MeetingPage() {
   const columns = tileCount === 2 ? 2 : Math.ceil(Math.sqrt(tileCount));
 
   if (!user) {
-    console.log('🚫 No user found, showing login message');
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
   }
-  
-  console.log('✅ User found, rendering meeting interface for room:', roomId);
 
   console.log('[MeetingPage] 🎥 Video tiles:', videoTiles.map(tile => ({
     id: tile.id,
@@ -1417,10 +1412,6 @@ export default function MeetingPage() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
-      {/* Debug indicator */}
-      <div className="absolute top-4 left-4 z-50 bg-green-500 text-white px-2 py-1 rounded text-xs">
-        Meeting Room: {roomId} | User: {user?.username}
-      </div>
       {/* Recording notification banner */}
       {recordingStatus.isRecording && (
         <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
