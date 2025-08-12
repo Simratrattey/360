@@ -877,32 +877,16 @@ export default function MeetingPage() {
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     
-    // Check if conversion should be attempted (only small files for reasonable conversion time)
-    const shouldConvert = webmBlob.size < 25 * 1024 * 1024; // Only convert files smaller than 25MB
+    // Check if the WebM file is already H.264 encoded (based on MediaRecorder)
+    // If so, we can safely rename it to MP4 without conversion
+    const mimeType = recordedChunks[0]?.type || 'video/webm';
+    const isH264 = mimeType.includes('h264') || mimeType.includes('avc1');
     
-    if (!shouldConvert) {
-      console.log('File too large for conversion, downloading as WebM');
-      const url = URL.createObjectURL(webmBlob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `meeting-recording-${timestamp}.webm`;
-      
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      alert('Large file downloaded as WebM format. For MP4 conversion, please use a desktop video converter.');
-      return;
-    }
+    console.log('Recording MIME type:', mimeType, 'H.264 encoded:', isH264);
     
-    try {
-      // Convert WebM to MP4 using FFmpeg
-      console.log('Converting WebM to MP4...');
-      const mp4Blob = await convertWebMToMP4(webmBlob);
-      
-      // Download the MP4 file
+    if (isH264) {
+      // File is already H.264 encoded, safe to rename to MP4
+      const mp4Blob = new Blob(recordedChunks, { type: 'video/mp4' });
       const url = URL.createObjectURL(mp4Blob);
       const a = document.createElement('a');
       a.style.display = 'none';
@@ -914,13 +898,11 @@ export default function MeetingPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      console.log(`MP4 recording downloaded: meeting-recording-${timestamp}.mp4`);
+      console.log(`H.264 recording downloaded as MP4: meeting-recording-${timestamp}.mp4`);
       alert('High-quality MP4 recording downloaded successfully!');
       
-    } catch (error) {
-      console.error('Conversion failed, falling back to WebM:', error);
-      
-      // Fallback to WebM download if conversion fails
+    } else {
+      // File needs conversion or is not H.264, download as WebM
       const url = URL.createObjectURL(webmBlob);
       const a = document.createElement('a');
       a.style.display = 'none';
@@ -932,13 +914,8 @@ export default function MeetingPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      if (error.message.includes('FFmpeg failed to initialize')) {
-        alert('MP4 conversion unavailable due to network restrictions. WebM file downloaded instead.\n\nTo convert to MP4:\n1. Use an online converter like CloudConvert\n2. Or install a desktop video converter like VLC');
-      } else if (error.message.includes('timeout')) {
-        alert('MP4 conversion took too long and was cancelled. WebM file downloaded instead.\n\nFor large files, please use a desktop video converter like VLC or FFmpeg.');
-      } else {
-        alert('Conversion to MP4 failed. WebM file downloaded instead. You can use an online converter to convert it to MP4.');
-      }
+      console.log(`Non-H.264 recording downloaded as WebM: meeting-recording-${timestamp}.webm`);
+      alert('Recording downloaded as WebM format. To convert to MP4:\n1. Use an online converter like CloudConvert\n2. Or install a desktop video converter like VLC');
     }
   };
 
@@ -1957,17 +1934,10 @@ export default function MeetingPage() {
         {recordedChunks.length > 0 && (
           <button 
             onClick={downloadRecording} 
-            disabled={isConverting}
-            className={`p-3 rounded-full text-white ${
-              isConverting ? 'bg-yellow-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
-            }`}
-            title={isConverting ? "Converting to MP4..." : "Download recording"}
+            className="p-3 rounded-full text-white bg-green-600 hover:bg-green-700"
+            title="Download recording"
           >
-            {isConverting ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-            ) : (
-              <Download size={20}/>
-            )}
+            <Download size={20}/>
           </button>
         )}
         
