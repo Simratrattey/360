@@ -499,9 +499,18 @@ export function useWebRTC() {
     }
     
     const handleClosed = (rid) => {
+      console.log('[WebRTC] 🚪 Room closed event:', rid, 'currentRoom:', currentRoom);
       if (rid === currentRoom) {
         leaveMeeting();
-        navigate('/meetings');
+        
+        // For standalone meeting windows, close the window instead of navigating
+        if (window.opener) {
+          console.log('[WebRTC] 🪟 Room closed - closing meeting window');
+          window.close();
+        } else {
+          console.log('[WebRTC] 📤 Room closed - navigating to /meetings');
+          navigate('/meetings');
+        }
       }
     };
 

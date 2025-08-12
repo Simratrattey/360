@@ -1376,6 +1376,7 @@ export default function MeetingPage() {
   };
 
   const handleLeave = () => {
+    console.log('[MeetingPage] 👋 User clicked leave meeting button');
     // Stop recording if active before leaving
     if (isRecording) {
       stopRecording();
@@ -1385,7 +1386,15 @@ export default function MeetingPage() {
       stopSubtitles();
     }
     leaveMeeting();
-    navigate('/meetings');
+    
+    // For standalone meeting windows, close the window instead of navigating
+    if (window.opener) {
+      console.log('[MeetingPage] 🪟 Closing meeting window');
+      window.close();
+    } else {
+      console.log('[MeetingPage] 📤 Navigating to /meetings');
+      navigate('/meetings');
+    }
   };
 
   // Combine local and remote streams for a unified grid
