@@ -298,43 +298,73 @@ export default function MessagesPage() {
     const handleChatNew = msg => {
       console.log('Received new message:', msg); // Debug log
       
-      setMessages(prev => {
-        // Check if message already exists to prevent duplicates
-        const exists = prev.some(m => m._id === msg._id);
-        if (exists) return prev;
-        
-        const updated = [...prev, msg];
-        
-        // Update cache using the conversationId
-        if (msg.conversationId) {
-          setMessagesCache(cache => ({ 
-            ...cache, 
-            [msg.conversationId]: updated 
-          }));
+      // Always update the cache for the conversation the message belongs to.
+      setMessagesCache(cache => {
+        const prevMsgs = cache[msg.conversationId] || [];
+        // Remove pending optimistic messages for the same sender in this conversation.
+        let filteredCache = prevMsgs.filter(m => {
+          if (!m.pending) return true;
+          return !(
+            m.conversationId === msg.conversationId &&
+            m.senderId === msg.senderId
+          );
+        });
+        // Avoid duplicates in cache
+        const existsInCache = filteredCache.some(m => m._id === msg._id);
+        if (!existsInCache) {
+          filteredCache = [...filteredCache, msg];
+        }
+        return { ...cache, [msg.conversationId]: filteredCache };
+      });
+
+      // If the message belongs to the currently selected conversation, update the UI state.
+      if (selected && msg.conversationId === selected._id) {
+        setMessages(prev => {
+          // Remove pending optimistic messages from UI list for this conversation/sender.
+          let filtered = prev.filter(m => {
+            if (!m.pending) return true;
+            return !(
+              m.conversationId === msg.conversationId &&
+              m.senderId === msg.senderId
+            );
+          });
+          // Avoid duplicates in UI
+          const existsUI = filtered.some(m => m._id === msg._id);
+          if (!existsUI) {
+            filtered = [...filtered, msg];
+          }
+          return filtered;
+        });
+
+        // Show notification if message is from other user
+        if (
+          window.Notification &&
+          Notification.permission === 'granted' &&
+          msg.senderId !== user.id
+        ) {
+          const title = msg.senderName || 'New Message';
+          const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
+          new Notification(title, { body });
         }
         
-        return updated;
-      });
-      
-      // Show browser notification if message is not from current user
-      if (
-        window.Notification &&
-        Notification.permission === 'granted' &&
-        msg.senderId !== user.id
-      ) {
-        const title = msg.senderName || 'New Message';
-        const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
-        new Notification(title, { body });
-      }
-      
-      // Debounced mark as read to avoid rate limit
-      if (selected && selected._id === msg.conversationId) {
+        // Debounced mark as read
         debouncedMarkRead(msg.conversationId);
-      }
-      
-      // Auto-scroll only if user near bottom or message is from self
-      if (msg.senderId === user.id || shouldAutoScroll()) {
-        scrollToBottom();
+        
+        // Auto scroll if near bottom or message from current user
+        if (msg.senderId === user.id || shouldAutoScroll()) {
+          scrollToBottom();
+        }
+      } else {
+        // For other conversations, optionally notify the user
+        if (
+          window.Notification &&
+          Notification.permission === 'granted' &&
+          msg.senderId !== user.id
+        ) {
+          const title = msg.senderName || 'New Message';
+          const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
+          new Notification(title, { body });
+        }
       }
     };
 
