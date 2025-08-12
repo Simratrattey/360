@@ -718,15 +718,55 @@ export default function MeetingPage() {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
+      // Set up MediaRecorder to capture actual audio chunks
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let isRecording = false;
       let isProcessing = false;
-      let speechBuffer = [];
       let silenceCount = 0;
-      const SILENCE_THRESHOLD = 30; // Adjust based on testing
+      const SILENCE_THRESHOLD = 30; // Frames of silence before stopping recording
       const SPEECH_THRESHOLD = 50;  // Minimum volume to consider speech
+      
+      try {
+        mediaRecorder = new MediaRecorder(audioStream, {
+          mimeType: 'audio/webm;codecs=opus'
+        });
+        
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+        
+        mediaRecorder.onstop = async () => {
+          if (audioChunks.length > 0 && !isProcessing) {
+            isProcessing = true;
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            audioChunks = [];
+            
+            // Process the captured audio
+            await processDetectedSpeech(participantName, peerId, audioBlob);
+            
+            // Reset processing flag
+            setTimeout(() => {
+              isProcessing = false;
+            }, 1000);
+          }
+        };
+      } catch (error) {
+        console.warn(`MediaRecorder not supported for ${participantName}:`, error);
+      }
       
       // Check for speech activity periodically
       const checkAudioActivity = () => {
-        if (!subtitlesEnabledRef.current) return;
+        if (!subtitlesEnabledRef.current) {
+          // Stop recording if subtitles are disabled
+          if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            isRecording = false;
+          }
+          return;
+        }
         
         analyser.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
@@ -734,24 +774,22 @@ export default function MeetingPage() {
         if (average > SPEECH_THRESHOLD) {
           // Speech detected
           silenceCount = 0;
-          speechBuffer.push(average);
           
-          // If we have enough speech data and not currently processing
-          if (speechBuffer.length > 10 && !isProcessing) {
-            isProcessing = true;
-            processDetectedSpeech(participantName, peerId);
-            speechBuffer = [];
-            
-            // Reset processing flag after delay
-            setTimeout(() => {
-              isProcessing = false;
-            }, 2000);
+          // Start recording if not already recording
+          if (!isRecording && mediaRecorder && mediaRecorder.state === 'inactive') {
+            audioChunks = [];
+            mediaRecorder.start(100); // Collect data every 100ms
+            isRecording = true;
           }
         } else {
           // Silence detected
           silenceCount++;
-          if (silenceCount > SILENCE_THRESHOLD) {
-            speechBuffer = []; // Clear buffer after silence
+          
+          // Stop recording after silence threshold is reached
+          if (silenceCount > SILENCE_THRESHOLD && isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            isRecording = false;
+            silenceCount = 0;
           }
         }
         
@@ -766,8 +804,16 @@ export default function MeetingPage() {
       
       return {
         audioContext,
+        mediaRecorder,
         stop: () => {
           console.log(`🛑 Stopping audio processing for ${participantName}`);
+          
+          // Stop MediaRecorder if active
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+          
+          // Close AudioContext
           audioContext.close().catch(err => console.warn('AudioContext close error:', err));
         }
       };
@@ -779,19 +825,15 @@ export default function MeetingPage() {
   };
   
   // Process detected speech and create subtitles
-  const processDetectedSpeech = async (participantName, peerId) => {
+  const processDetectedSpeech = async (participantName, peerId, audioChunk) => {
     try {
-      // Enable debug mode for testing real STT
-      SubtitleService.setDebugMode(true);
-      
-      // Create a mock audio blob for STT processing
-      const mockAudioData = new Uint8Array(1024);
-      const mockBlob = new Blob([mockAudioData], { type: 'audio/mp4' });
+      // Disable debug mode for real speech processing
+      SubtitleService.setDebugMode(false);
       
       console.log(`🗣️ Processing speech from ${participantName}`);
       
-      // Try to get real transcription from SubtitleService
-      const sttResult = await SubtitleService.speechToText(mockBlob);
+      // Use the actual audio chunk for transcription
+      const sttResult = await SubtitleService.speechToText(audioChunk);
       
       let transcript = "Speech detected"; // Default fallback
       
