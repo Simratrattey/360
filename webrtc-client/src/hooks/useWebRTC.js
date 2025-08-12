@@ -447,9 +447,11 @@ export function useWebRTC() {
       await createRecvTransport();
       
       // Join the room first to establish participant presence
+      console.log('[WebRTC] 🚪 Joining room:', roomId);
       joinRoom(roomId);
       
       // Small delay to ensure room join is processed
+      console.log('[WebRTC] ⏳ Waiting for room join to process...');
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Produce local tracks after room join
@@ -499,18 +501,23 @@ export function useWebRTC() {
     }
     
     const handleClosed = (rid) => {
-      console.log('[WebRTC] 🚪 Room closed event:', rid, 'currentRoom:', currentRoom);
+      console.log('[WebRTC] 🚪 Room closed event received:', rid, 'currentRoom:', currentRoom, 'match:', rid === currentRoom);
       if (rid === currentRoom) {
-        leaveMeeting();
+        console.log('[WebRTC] ⚠️ ROOM CLOSED - This indicates a server-side issue');
+        console.log('[WebRTC] 💡 Possible causes: room doesn\'t exist, invalid room ID, or server error');
         
-        // For standalone meeting windows, close the window instead of navigating
-        if (window.opener) {
-          console.log('[WebRTC] 🪟 Room closed - closing meeting window');
-          window.close();
-        } else {
-          console.log('[WebRTC] 📤 Room closed - navigating to /meetings');
-          navigate('/meetings');
-        }
+        // Temporarily disable automatic closing to debug the issue
+        console.log('[WebRTC] 🔍 DEBUG MODE: Not closing window automatically - check server logs');
+        
+        // Uncomment these lines after debugging:
+        // leaveMeeting();
+        // if (window.opener) {
+        //   console.log('[WebRTC] 🪟 Room closed - closing meeting window');
+        //   window.close();
+        // } else {
+        //   console.log('[WebRTC] 📤 Room closed - navigating to /meetings');
+        //   navigate('/meetings');
+        // }
       }
     };
 
