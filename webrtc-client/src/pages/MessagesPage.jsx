@@ -398,7 +398,6 @@ export default function MessagesPage() {
         }
         return prev;
       });
-      }
     };
 
     // Edit message handler
