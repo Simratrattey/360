@@ -1473,7 +1473,7 @@ export default function MeetingPage() {
                 autoPlay
                 muted={isLocal}
                 playsInline
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 style={{ 
                   background: '#222',
                   transform: isLocal ? 'scaleX(-1)' : 'none' // Mirror local video
