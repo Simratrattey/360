@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useState } from 'react';
 import API from '../api/client.js';
 import { SocketContext } from '../context/SocketContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 
 export default function LandingPage() {
   const socket = useContext(SocketContext);
@@ -18,12 +19,12 @@ export default function LandingPage() {
 
   const createRoom = async () => {
     // your backend may return a roomId
-    const roomId = Date.now().toString();
-    navigate(`/meeting/${roomId}`);
+    const roomId = generateRoomId();
+    openMeetingWindow(roomId);
   };
 
   const joinRoom = id => {
-    navigate(`/meeting/${id}`);
+    openMeetingWindow(id);
   };
 
   return (

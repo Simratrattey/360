@@ -15,6 +15,7 @@ import {
   Hash
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import API from '../api/client.js';
@@ -134,12 +135,12 @@ export default function DashboardPage() {
   }, [chatSocket, user.id]);
 
   const createNewMeeting = () => {
-    const roomId = Date.now().toString();
-    navigate(`/meeting/${roomId}`);
+    const roomId = generateRoomId();
+    openMeetingWindow(roomId);
   };
 
   const joinMeeting = (roomId) => {
-    navigate(`/meeting/${roomId}`);
+    openMeetingWindow(roomId);
   };
 
   return (
