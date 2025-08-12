@@ -1,11 +1,11 @@
 // src/pages/MeetingPage.jsx
-import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
@@ -66,12 +66,6 @@ export default function MeetingPage() {
   const [avatarTranscript, setAvatarTranscript] = useState('');
   const [isAvatarRecording, setIsAvatarRecording] = useState(false);
 
-  // Screen sharing state
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [screenStream, setScreenStream] = useState(null);
-  const [screenSharingUserId, setScreenSharingUserId] = useState(null);
-  const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
-
   const handleAvatarQuery = async () => {
     if (!avatarQuery) return;
     setAvatarTranscript('Thinking…');
@@ -108,71 +102,6 @@ export default function MeetingPage() {
 
   const handleStartAudio = () => setIsAvatarRecording(true);
   const handleStopAudio  = () => setIsAvatarRecording(false);
-
-  // Screen sharing functions - memoized to prevent re-creation
-  const startScreenShare = useCallback(async () => {
-    try {
-      console.log('🖥️ Starting screen share...');
-      
-      // Get screen share stream with optimized settings
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 10 } // Lower frame rate to reduce lag
-        },
-        audio: false // Disable audio to reduce complexity and lag
-      });
-
-      setScreenStream(stream);
-      setIsScreenSharing(true);
-      setScreenSharingUserId('local');
-      setViewMode('speaker');
-
-      // Handle user stopping screen share via browser controls
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
-        console.log('🛑 Screen share ended by user');
-        stopScreenShare();
-      });
-
-      // Broadcast to participants without stream manipulation
-      if (sfuSocket) {
-        sfuSocket.emit('screenShareStarted', {
-          userId: user.id,
-          userName: user.name,
-          roomId: roomId
-        });
-      }
-
-      console.log('✅ Screen share started successfully');
-    } catch (error) {
-      console.error('❌ Failed to start screen share:', error);
-      alert('Failed to start screen sharing. Please make sure you grant permission.');
-    }
-  }, [sfuSocket, user, roomId]);
-
-  const stopScreenShare = useCallback(() => {
-    console.log('🛑 Stopping screen share...');
-    
-    if (screenStream) {
-      screenStream.getTracks().forEach(track => track.stop());
-      setScreenStream(null);
-    }
-    
-    setIsScreenSharing(false);
-    setScreenSharingUserId(null);
-    setViewMode('gallery');
-
-    // Notify participants
-    if (sfuSocket) {
-      sfuSocket.emit('screenShareStopped', {
-        userId: user.id,
-        roomId: roomId
-      });
-    }
-
-    console.log('✅ Screen share stopped');
-  }, [screenStream, sfuSocket, user, roomId]);
 
   // 1) Join SFU room and set up transports, produce/consume
   useEffect(() => {
@@ -297,35 +226,6 @@ export default function MeetingPage() {
     setAvatarIndex(avatarNavigate);
     setAvatarTranscript(avatarClips[avatarNavigate]?.snippet || '');
   }, [avatarNavigate, avatarClips]);
-
-  // Screen sharing event listeners - simplified to avoid lag
-  useEffect(() => {
-    if (!sfuSocket) return;
-
-    const handleRemoteScreenShareStarted = (data) => {
-      console.log('📺 Remote user started screen sharing:', data);
-      if (data.userId !== user?.id) {
-        setScreenSharingUserId(data.userId);
-        setViewMode('speaker');
-      }
-    };
-
-    const handleRemoteScreenShareStopped = (data) => {
-      console.log('📺 Remote user stopped screen sharing:', data);
-      if (data.userId === screenSharingUserId) {
-        setScreenSharingUserId(null);
-        setViewMode('gallery');
-      }
-    };
-
-    sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
-    sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
-
-    return () => {
-      sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
-      sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
-    };
-  }, [sfuSocket, user?.id, screenSharingUserId]);
 
   // Close settings on click outside
   useEffect(() => {
@@ -1500,10 +1400,6 @@ export default function MeetingPage() {
     if (subtitlesEnabled) {
       stopSubtitles();
     }
-    // Stop screen sharing if active
-    if (isScreenSharing) {
-      stopScreenShare();
-    }
     leaveMeeting();
     
     // For standalone meeting windows, close the window instead of navigating
@@ -1516,8 +1412,8 @@ export default function MeetingPage() {
     }
   };
 
-  // Memoized video tiles to prevent unnecessary recalculations
-  const videoTiles = useMemo(() => [
+  // Combine local and remote streams for a unified grid
+  const videoTiles = [
     { id: 'local', stream: localStream, isLocal: true, label: 'You' },
     ...Array.from(remoteStreams.entries()).map(([id, stream]) => ({
       id,
@@ -1525,21 +1421,42 @@ export default function MeetingPage() {
       isLocal: false,
       label: participantMap[id] || 'Guest',
     }))
-  ], [localStream, remoteStreams, participantMap]);
+  ];
 
-  // Memoized grid calculation
-  const { gridColumns, gridRows, isScreenShareMode } = useMemo(() => {
-    const participantCount = videoTiles.length;
-    const columns = participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount));
+  // Enhanced grid layout calculation - Zoom-style adaptive layout
+  const getOptimalLayout = (participantCount) => {
+    if (participantCount === 1) {
+      return { columns: 1, rows: 1, maxTileSize: 'large' };
+    }
+    if (participantCount === 2) {
+      return { columns: 2, rows: 1, maxTileSize: 'medium' };
+    }
+    if (participantCount <= 4) {
+      return { columns: 2, rows: 2, maxTileSize: 'medium' };
+    }
+    if (participantCount <= 6) {
+      return { columns: 3, rows: 2, maxTileSize: 'small' };
+    }
+    if (participantCount <= 9) {
+      return { columns: 3, rows: 3, maxTileSize: 'small' };
+    }
+    if (participantCount <= 12) {
+      return { columns: 4, rows: 3, maxTileSize: 'tiny' };
+    }
+    if (participantCount <= 16) {
+      return { columns: 4, rows: 4, maxTileSize: 'tiny' };
+    }
+    if (participantCount <= 25) {
+      return { columns: 5, rows: 5, maxTileSize: 'micro' };
+    }
+    // For very large meetings, use a more dense grid
+    const columns = Math.ceil(Math.sqrt(participantCount));
     const rows = Math.ceil(participantCount / columns);
-    const screenShareMode = screenSharingUserId !== null && viewMode === 'speaker';
-    
-    return {
-      gridColumns: columns,
-      gridRows: rows,
-      isScreenShareMode: screenShareMode
-    };
-  }, [videoTiles.length, screenSharingUserId, viewMode]);
+    return { columns, rows, maxTileSize: 'micro' };
+  };
+
+  const tileCount = videoTiles.length;
+  const layout = getOptimalLayout(tileCount);
 
   if (!user) {
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
@@ -1554,7 +1471,43 @@ export default function MeetingPage() {
   })));
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
+      {/* Meeting Header with Participant Count */}
+      <div className="flex items-center justify-between px-4 py-2 bg-black/20 backdrop-blur-sm border-b border-gray-700/50">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-white">
+            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium">Meeting Active</span>
+          </div>
+          <div className="text-gray-300 text-sm">
+            Room: <span className="text-blue-300 font-mono">{roomId}</span>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-gray-300">
+            <div className="flex -space-x-1">
+              {Array.from({ length: Math.min(tileCount, 4) }, (_, i) => (
+                <div
+                  key={i}
+                  className="w-6 h-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full border-2 border-gray-900 flex items-center justify-center text-xs text-white font-bold"
+                >
+                  {i + 1}
+                </div>
+              ))}
+              {tileCount > 4 && (
+                <div className="w-6 h-6 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full border-2 border-gray-900 flex items-center justify-center text-xs text-white">
+                  +{tileCount - 4}
+                </div>
+              )}
+            </div>
+            <span className="text-sm">
+              {tileCount} participant{tileCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Recording notification banner */}
       {recordingStatus.isRecording && (
         <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
@@ -1565,221 +1518,313 @@ export default function MeetingPage() {
         </div>
       )}
       
-      {/* Screen Sharing Toggle Ribbon */}
-      {screenSharingUserId && (
-        <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <MonitorSpeaker size={16} />
-            <span className="text-sm font-medium">
-              {screenSharingUserId === 'local' ? 'You are sharing your screen' : `${participantMap[screenSharingUserId] || 'Someone'} is sharing screen`}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setViewMode('speaker')}
-              className={`px-3 py-1 rounded text-xs ${viewMode === 'speaker' ? 'bg-white/20' : 'bg-transparent'}`}
-            >
-              Screen View
-            </button>
-            <button
-              onClick={() => setViewMode('gallery')}
-              className={`px-3 py-1 rounded text-xs ${viewMode === 'gallery' ? 'bg-white/20' : 'bg-transparent'}`}
-            >
-              Gallery View
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Enhanced Video Grid with Dynamic Layout */}
+      <div
+        className="meeting-grid layout-transition grid gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 flex-1 overflow-hidden"
+        style={{
+          gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
+          height: '100%'
+        }}
+      >
+        {videoTiles.map(({ id, stream, isLocal, label }, index) => {
+          // Dynamic tile sizing based on participant count
+          const getTileClasses = () => {
+            const baseClasses = "group relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transform transition-all duration-300 ease-out hover:scale-[1.02] hover:z-10";
+            
+            switch (layout.maxTileSize) {
+              case 'large':
+                return `${baseClasses} min-h-[300px] sm:min-h-[400px] md:min-h-[500px]`;
+              case 'medium':
+                return `${baseClasses} min-h-[200px] sm:min-h-[250px] md:min-h-[300px]`;
+              case 'small':
+                return `${baseClasses} min-h-[150px] sm:min-h-[180px] md:min-h-[220px]`;
+              case 'tiny':
+                return `${baseClasses} min-h-[120px] sm:min-h-[140px] md:min-h-[160px]`;
+              case 'micro':
+                return `${baseClasses} min-h-[100px] sm:min-h-[120px] md:min-h-[140px]`;
+              default:
+                return baseClasses;
+            }
+          };
 
-      {/* Main Content Area - Simplified */}
-      <div className="flex-1 overflow-hidden">
-        {isScreenShareMode ? (
-          /* Screen Sharing Layout - Simplified */
-          <div className="flex h-full">
-            {/* Main Screen Area */}
-            <div className="flex-1 bg-black flex items-center justify-center p-4">
-              {screenStream && screenSharingUserId === 'local' ? (
-                <video
-                  autoPlay
-                  playsInline
-                  muted
-                  className="max-w-full max-h-full object-contain"
-                  srcObject={screenStream}
-                />
-              ) : (
-                <div className="text-white text-center">
-                  <MonitorSpeaker size={64} className="mx-auto mb-4 text-gray-400" />
-                  <div className="text-gray-400">Screen being shared...</div>
-                </div>
-              )}
-            </div>
+          return (
+            <div
+              key={id}
+              className={getTileClasses()}
+              style={{ 
+                aspectRatio: layout.maxTileSize === 'large' ? '16/9' : '4/3',
+                position: 'relative'
+              }}
+            >
+              {stream && stream.getVideoTracks().length > 0 ? (
+                <>
+                  <video
+                    ref={isLocal ? localVideoRef : undefined}
+                    id={isLocal ? undefined : `remote-video-${id}`}
+                    autoPlay
+                    muted={isLocal}
+                    playsInline
+                    className="w-full h-full object-cover transition-all duration-300"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+                      transform: isLocal ? 'scaleX(-1)' : 'none'
+                    }}
+                    srcObject={isLocal ? undefined : stream}
+                    onLoadedMetadata={isLocal ? undefined : () => {
+                      const video = document.getElementById(`remote-video-${id}`);
+                      if (video) {
+                        video.play().catch(err => {
+                          if (err.name !== 'AbortError') console.warn('Video play failed:', err);
+                        });
+                      }
+                    }}
+                  />
+                  
+                  {/* Video status indicators */}
+                  <div className="absolute top-3 right-3 flex space-x-1">
+                    {stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled && (
+                      <div className="bg-green-500/20 border border-green-400/50 rounded-full p-1.5">
+                        <Mic size={12} className="text-green-400" />
+                      </div>
+                    )}
+                    {(!stream.getAudioTracks().length || !stream.getAudioTracks()[0].enabled) && (
+                      <div className="bg-red-500/20 border border-red-400/50 rounded-full p-1.5">
+                        <MicOff size={12} className="text-red-400" />
+                      </div>
+                    )}
+                  </div>
 
-            {/* Participant Sidebar */}
-            <div className="w-64 bg-gray-800 p-2 flex flex-col space-y-2 overflow-y-auto">
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-700 rounded aspect-video overflow-hidden">
-                  {stream && stream.getVideoTracks().length > 0 ? (
-                    <video
-                      ref={isLocal && id === 'local' ? localVideoRef : undefined}
-                      id={isLocal ? undefined : `remote-video-${id}`}
-                      autoPlay
-                      muted={isLocal}
-                      playsInline
-                      className="w-full h-full object-cover"
-                      style={{ 
-                        background: '#1f2937',
-                        transform: isLocal ? 'scaleX(-1)' : 'none'
-                      }}
-                      srcObject={isLocal ? undefined : stream}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  {/* Connection quality indicator */}
+                  <div className="absolute top-3 left-3">
+                    <div className="flex space-x-0.5 connection-quality">
+                      <div className="w-1 h-2 bg-green-400 rounded-full"></div>
+                      <div className="w-1 h-3 bg-green-400 rounded-full"></div>
+                      <div className="w-1 h-4 bg-green-400 rounded-full"></div>
+                    </div>
+                  </div>
+                </>
+              ) : stream && stream.getAudioTracks().length > 0 ? (
+                <>
+                  <audio
+                    id={isLocal ? undefined : `remote-audio-${id}`}
+                    autoPlay
+                    className="hidden"
+                    srcObject={isLocal ? undefined : stream}
+                  />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-gradient-to-br from-gray-700 to-gray-800">
+                    <div className="bg-gray-600/50 rounded-full p-6 mb-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
                         {label.charAt(0).toUpperCase()}
                       </div>
                     </div>
-                  )}
-                  <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1 py-0.5 rounded">
-                    {label} {isLocal && '(You)'}
+                    <div className="text-sm font-medium">{label}</div>
+                    <div className="text-xs text-gray-400 mt-1">Audio only</div>
+                    {stream.getAudioTracks()[0]?.enabled && (
+                      <div className="mt-3 flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <Mic size={14} className="text-green-400" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          /* Gallery Layout - Simplified */
-          <div className="p-4 h-full">
-            <div 
-              className="grid gap-2 h-full"
-              style={{
-                gridTemplateColumns: `repeat(${gridColumns}, 1fr)`,
-                gridTemplateRows: `repeat(${gridRows}, 1fr)`,
-              }}
-            >
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-800 rounded-lg overflow-hidden">
-                  {stream && stream.getVideoTracks().length > 0 ? (
-                    <video
-                      ref={isLocal && id === 'local' ? localVideoRef : undefined}
-                      id={isLocal ? undefined : `remote-video-${id}`}
-                      autoPlay
-                      muted={isLocal}
-                      playsInline
-                      className="w-full h-full object-cover"
-                      style={{ 
-                        background: '#1f2937',
-                        transform: isLocal ? 'scaleX(-1)' : 'none'
-                      }}
-                      srcObject={isLocal ? undefined : stream}
-                    />
-                  ) : stream && stream.getAudioTracks().length > 0 ? (
-                    <>
-                      <audio
-                        id={isLocal ? undefined : `remote-audio-${id}`}
-                        autoPlay
-                        className="hidden"
-                        srcObject={isLocal ? undefined : stream}
-                      />
-                      <div className="w-full h-full flex items-center justify-center bg-gray-700">
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-xl mb-2">
-                            {label.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="text-white text-sm">{label}</div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-700">
-                      <div className="text-center">
-                        <VideoOff size={48} className="text-gray-400 mb-2 mx-auto" />
-                        <div className="text-white text-sm">{label}</div>
-                      </div>
+                </>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-br from-gray-700 to-gray-800">
+                  <div className="bg-gray-600/50 rounded-full p-6 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                      {label.charAt(0).toUpperCase()}
                     </div>
-                  )}
-                  
-                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                    {label} {isLocal && '(You)'}
+                  </div>
+                  <VideoOff size={32} className="mb-2" />
+                  <div className="text-sm font-medium text-gray-300">{label}</div>
+                  <div className="text-xs text-gray-500 mt-1">Camera off</div>
+                </div>
+              )}
+              
+              {/* Enhanced name label with better styling */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium text-sm drop-shadow-lg">
+                      {label} {isLocal && '(You)'}
+                    </span>
+                    {isLocal && (
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    )}
                   </div>
                   
-                  {stream && stream.getAudioTracks().length > 0 && !stream.getAudioTracks()[0].enabled && (
-                    <div className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
-                      <MicOff size={12} className="text-white" />
-                    </div>
-                  )}
+                  {/* Audio/Video status in label */}
+                  <div className="flex items-center space-x-1 opacity-75">
+                    {!isLocal && stream && (
+                      <>
+                        {stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled ? (
+                          <Mic size={12} className="text-green-400" />
+                        ) : (
+                          <MicOff size={12} className="text-red-400" />
+                        )}
+                        {stream.getVideoTracks().length > 0 ? (
+                          <Video size={12} className="text-green-400" />
+                        ) : (
+                          <VideoOff size={12} className="text-gray-400" />
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Speaking indicator */}
+              {!isLocal && stream && stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled && (
+                <div className="absolute inset-0 border-2 border-green-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse pointer-events-none"></div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })}
       </div>
-      {/* Simplified Subtitles */}
-      {subtitlesEnabled && subtitleHistory.length > 0 && (
-        <div className="absolute bottom-20 left-4 right-4 pointer-events-none z-10">
-          {subtitleHistory.slice(-1).map((subtitle) => (
-            <div key={subtitle.id} className="bg-black/80 text-white rounded px-3 py-2 text-sm max-w-md">
-              <span className="font-medium">{subtitle.speaker}:</span> {subtitle.text}
+      {/* Clean Subtitle Overlay */}
+      {subtitlesEnabled && (
+        <>
+          {/* Status indicator - minimal top-right corner */}
+          <div className="fixed top-4 right-4 z-30 flex items-center space-x-2">
+            <div className="bg-black bg-opacity-60 text-white px-3 py-1 rounded-full text-xs flex items-center space-x-2 backdrop-blur-sm">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span>💬 Subtitles</span>
+              {multilingualEnabled && (
+                <>
+                  <div className="w-1 h-1 bg-white rounded-full opacity-50"></div>
+                  <span>🌐 {supportedLanguages.find(l => l.code === targetLanguage)?.flag}</span>
+                </>
+              )}
+              <span className="text-gray-300">({remoteStreams.size})</span>
             </div>
-          ))}
-        </div>
+          </div>
+
+          {/* Floating subtitle bubbles - positioned above controls */}
+          <div className="fixed bottom-32 left-0 right-0 z-25 pointer-events-none">
+            <div className="flex flex-col items-center max-w-6xl mx-auto px-6">
+              {/* Only show last 2 subtitles to avoid clutter */}
+              {subtitleHistory.slice(-2).map((subtitle, index) => (
+                <div 
+                  key={subtitle.id || `${subtitle.speaker}-${subtitle.timestamp}-${index}`} 
+                  className={`mb-3 animate-fade-in transition-all duration-300 ${
+                    index === subtitleHistory.slice(-2).length - 1 
+                      ? 'opacity-100 scale-100' 
+                      : 'opacity-60 scale-95'
+                  }`}
+                >
+                  <div className="subtitle-bubble bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border border-gray-600/30 text-white rounded-2xl px-6 py-3 shadow-2xl max-w-3xl">
+                    {/* Speaker header with enhanced styling */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-pulse"></div>
+                        <span className="text-blue-300 font-semibold text-sm tracking-wide">{subtitle.speaker}</span>
+                        {subtitle.isTranslated && (
+                          <span className="text-xs bg-gradient-to-r from-purple-500/40 to-pink-500/40 text-purple-200 px-3 py-1 rounded-full border border-purple-400/30">
+                            {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag} Translated
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 font-mono">{subtitle.timestamp}</span>
+                    </div>
+                    
+                    {/* Main subtitle text - enhanced typography */}
+                    <div className="text-white font-medium text-lg leading-relaxed tracking-wide">
+                      {subtitle.text}
+                    </div>
+                    
+                    {/* Original text if translated - improved styling */}
+                    {subtitle.isTranslated && subtitle.original && (
+                      <div className="text-gray-300 text-sm italic mt-2 pl-4 border-l-2 border-gray-600/50 opacity-80">
+                        Original: "{subtitle.original}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Minimal waiting message */}
+              {subtitleHistory.length === 0 && remoteStreams.size > 0 && (
+                <div className="text-center">
+                  <div className="bg-black bg-opacity-50 text-gray-300 rounded-full px-4 py-2 backdrop-blur-sm text-sm inline-block">
+                    🎧 Listening for speech...
+                  </div>
+                </div>
+              )}
+              
+              {/* No participants message */}
+              {remoteStreams.size === 0 && (
+                <div className="text-center">
+                  <div className="bg-black bg-opacity-50 text-gray-400 rounded-full px-4 py-2 backdrop-blur-sm text-sm inline-block">
+                    👥 Waiting for participants
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Simple Controls Bar */}
-      <div className="bg-gray-800 p-3 flex justify-center space-x-4">
-        <button 
-          onClick={toggleAudio} 
-          className={`p-3 rounded-full ${isAudioEnabled ? 'bg-gray-600' : 'bg-red-600'} text-white`}
-          title={isAudioEnabled ? "Mute audio" : "Unmute audio"}
-        >
-          {isAudioEnabled ? <Mic size={20}/> : <MicOff size={20}/>} 
-        </button>
-        
-        <button 
-          onClick={toggleVideo} 
-          className={`p-3 rounded-full ${isVideoEnabled ? 'bg-gray-600' : 'bg-red-600'} text-white`}
-          title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
-        >
-          {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
-        </button>
-        
-        <button 
-          onClick={isRecording ? stopRecording : startRecording} 
-          className={`p-3 rounded-full ${isRecording ? 'bg-red-600' : 'bg-gray-600'} text-white`}
-          title={isRecording ? "Stop recording" : "Start recording"}
-        >
-          {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
-        </button>
-        
-        <button 
-          onClick={isScreenSharing ? stopScreenShare : startScreenShare} 
-          className={`p-3 rounded-full ${isScreenSharing ? 'bg-green-600' : 'bg-gray-600'} text-white`}
-          title={isScreenSharing ? "Stop sharing screen" : "Share screen"}
-        >
-          {isScreenSharing ? <MonitorSpeaker size={20}/> : <Monitor size={20}/>} 
-        </button>
-        
-        {recordedChunks.length > 0 && (
+      {/* Enhanced Controls Bar */}
+      <div className="sticky bottom-0 w-full bg-black/40 backdrop-blur-xl border-t border-gray-700/50 p-4 flex justify-center items-center space-x-4 z-10">
+        <div className="flex items-center space-x-3 bg-gray-800/60 rounded-2xl px-6 py-3 backdrop-blur-sm">
           <button 
-            onClick={downloadRecording} 
-            className="p-3 rounded-full bg-green-600 text-white" 
-            title="Download recording"
+            onClick={toggleAudio} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isAudioEnabled 
+                ? 'bg-gray-600 hover:bg-gray-500 text-white' 
+                : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+            title={isAudioEnabled ? "Mute audio" : "Unmute audio"}
           >
-            <Download size={20}/>
+            {isAudioEnabled ? <Mic size={20}/> : <MicOff size={20}/>} 
           </button>
-        )}
-        
-        <button 
-          onClick={handleLeave} 
-          className="p-3 rounded-full bg-red-600 text-white" 
-          title="Leave meeting"
-        >
-          <PhoneOff size={20}/>
-        </button>
-        
+          
+          <button 
+            onClick={toggleVideo} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isVideoEnabled 
+                ? 'bg-gray-600 hover:bg-gray-500 text-white' 
+                : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+            title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+          >
+            {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
+          </button>
+          
+          <button 
+            onClick={isRecording ? stopRecording : startRecording} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isRecording 
+                ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' 
+                : 'bg-gray-600 hover:bg-gray-500 text-white'
+            }`}
+            title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
+          >
+            {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
+          </button>
+          
+          {recordedChunks.length > 0 && (
+            <button 
+              onClick={downloadRecording} 
+              className="p-3 rounded-full bg-green-600 hover:bg-green-500 text-white transition-all duration-200 animate-bounce" 
+              title="Download recording"
+            >
+              <Download size={20}/>
+            </button>
+          )}
+          
+          <button 
+            onClick={handleLeave} 
+            className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all duration-200" 
+            title="Leave meeting"
+          >
+            <PhoneOff size={20}/>
+          </button>
+        </div>
         <div className="relative" data-settings-panel>
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className="p-3 rounded-full bg-gray-600 text-white" 
+            className="p-3 rounded-full bg-gray-700/60 hover:bg-gray-600/80 text-white backdrop-blur-sm transition-all duration-200" 
             title="Meeting settings"
           >
             <Settings size={20}/>
