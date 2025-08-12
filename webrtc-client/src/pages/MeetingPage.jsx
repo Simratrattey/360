@@ -1423,9 +1423,40 @@ export default function MeetingPage() {
     }))
   ];
 
-  // Calculate grid columns: try to make the grid as square as possible
+  // Enhanced grid layout calculation - Zoom-style adaptive layout
+  const getOptimalLayout = (participantCount) => {
+    if (participantCount === 1) {
+      return { columns: 1, rows: 1, maxTileSize: 'large' };
+    }
+    if (participantCount === 2) {
+      return { columns: 2, rows: 1, maxTileSize: 'medium' };
+    }
+    if (participantCount <= 4) {
+      return { columns: 2, rows: 2, maxTileSize: 'medium' };
+    }
+    if (participantCount <= 6) {
+      return { columns: 3, rows: 2, maxTileSize: 'small' };
+    }
+    if (participantCount <= 9) {
+      return { columns: 3, rows: 3, maxTileSize: 'small' };
+    }
+    if (participantCount <= 12) {
+      return { columns: 4, rows: 3, maxTileSize: 'tiny' };
+    }
+    if (participantCount <= 16) {
+      return { columns: 4, rows: 4, maxTileSize: 'tiny' };
+    }
+    if (participantCount <= 25) {
+      return { columns: 5, rows: 5, maxTileSize: 'micro' };
+    }
+    // For very large meetings, use a more dense grid
+    const columns = Math.ceil(Math.sqrt(participantCount));
+    const rows = Math.ceil(participantCount / columns);
+    return { columns, rows, maxTileSize: 'micro' };
+  };
+
   const tileCount = videoTiles.length;
-  const columns = tileCount === 2 ? 2 : Math.ceil(Math.sqrt(tileCount));
+  const layout = getOptimalLayout(tileCount);
 
   if (!user) {
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
@@ -1440,7 +1471,43 @@ export default function MeetingPage() {
   })));
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-gray-900 to-black">
+      {/* Meeting Header with Participant Count */}
+      <div className="flex items-center justify-between px-4 py-2 bg-black/20 backdrop-blur-sm border-b border-gray-700/50">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-white">
+            <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium">Meeting Active</span>
+          </div>
+          <div className="text-gray-300 text-sm">
+            Room: <span className="text-blue-300 font-mono">{roomId}</span>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 text-gray-300">
+            <div className="flex -space-x-1">
+              {Array.from({ length: Math.min(tileCount, 4) }, (_, i) => (
+                <div
+                  key={i}
+                  className="w-6 h-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full border-2 border-gray-900 flex items-center justify-center text-xs text-white font-bold"
+                >
+                  {i + 1}
+                </div>
+              ))}
+              {tileCount > 4 && (
+                <div className="w-6 h-6 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full border-2 border-gray-900 flex items-center justify-center text-xs text-white">
+                  +{tileCount - 4}
+                </div>
+              )}
+            </div>
+            <span className="text-sm">
+              {tileCount} participant{tileCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Recording notification banner */}
       {recordingStatus.isRecording && (
         <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
@@ -1451,62 +1518,168 @@ export default function MeetingPage() {
         </div>
       )}
       
-      {/* Video Grid */}
+      {/* Enhanced Video Grid with Dynamic Layout */}
       <div
-        className="meeting-grid grid auto-rows-fr gap-4 p-4 flex-1 overflow-auto"
+        className="meeting-grid layout-transition grid gap-2 sm:gap-3 md:gap-4 p-2 sm:p-3 md:p-4 flex-1 overflow-hidden"
         style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(240px, 1fr))`,
-          alignItems: 'start',
-          justifyItems: 'stretch'
+          gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${layout.rows}, minmax(0, 1fr))`,
+          height: '100%'
         }}
       >
-        {videoTiles.map(({ id, stream, isLocal, label }) => (
-          <div
-            key={id}
-            className="group relative bg-gray-800 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl"
-            style={{ aspectRatio: '16/9' }}
-          >
-            {stream && stream.getVideoTracks().length > 0 ? (
-              <video
-                ref={isLocal ? localVideoRef : undefined}
-                id={isLocal ? undefined : `remote-video-${id}`}
-                autoPlay
-                muted={isLocal}
-                playsInline
-                className="w-full h-full object-contain"
-                style={{ 
-                  background: '#222',
-                  transform: isLocal ? 'scaleX(-1)' : 'none' // Mirror local video
-                }}
-                srcObject={isLocal ? undefined : stream}
-                onLoadedMetadata={isLocal ? undefined : () => {
-                  const video = document.getElementById(`remote-video-${id}`);
-                  if (video) {
-                    video.play().catch(err => {
-                      if (err.name !== 'AbortError') console.warn('Video play failed:', err);
-                    });
-                  }
-                }}
-              />
-            ) : stream && stream.getAudioTracks().length > 0 ? (
-              <audio
-                id={isLocal ? undefined : `remote-audio-${id}`}
-                controls
-                autoPlay
-                className="w-full"
-                srcObject={isLocal ? undefined : stream}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                <VideoOff size={48} />
+        {videoTiles.map(({ id, stream, isLocal, label }, index) => {
+          // Dynamic tile sizing based on participant count
+          const getTileClasses = () => {
+            const baseClasses = "group relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transform transition-all duration-300 ease-out hover:scale-[1.02] hover:z-10";
+            
+            switch (layout.maxTileSize) {
+              case 'large':
+                return `${baseClasses} min-h-[300px] sm:min-h-[400px] md:min-h-[500px]`;
+              case 'medium':
+                return `${baseClasses} min-h-[200px] sm:min-h-[250px] md:min-h-[300px]`;
+              case 'small':
+                return `${baseClasses} min-h-[150px] sm:min-h-[180px] md:min-h-[220px]`;
+              case 'tiny':
+                return `${baseClasses} min-h-[120px] sm:min-h-[140px] md:min-h-[160px]`;
+              case 'micro':
+                return `${baseClasses} min-h-[100px] sm:min-h-[120px] md:min-h-[140px]`;
+              default:
+                return baseClasses;
+            }
+          };
+
+          return (
+            <div
+              key={id}
+              className={getTileClasses()}
+              style={{ 
+                aspectRatio: layout.maxTileSize === 'large' ? '16/9' : '4/3',
+                position: 'relative'
+              }}
+            >
+              {stream && stream.getVideoTracks().length > 0 ? (
+                <>
+                  <video
+                    ref={isLocal ? localVideoRef : undefined}
+                    id={isLocal ? undefined : `remote-video-${id}`}
+                    autoPlay
+                    muted={isLocal}
+                    playsInline
+                    className="w-full h-full object-cover transition-all duration-300"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+                      transform: isLocal ? 'scaleX(-1)' : 'none'
+                    }}
+                    srcObject={isLocal ? undefined : stream}
+                    onLoadedMetadata={isLocal ? undefined : () => {
+                      const video = document.getElementById(`remote-video-${id}`);
+                      if (video) {
+                        video.play().catch(err => {
+                          if (err.name !== 'AbortError') console.warn('Video play failed:', err);
+                        });
+                      }
+                    }}
+                  />
+                  
+                  {/* Video status indicators */}
+                  <div className="absolute top-3 right-3 flex space-x-1">
+                    {stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled && (
+                      <div className="bg-green-500/20 border border-green-400/50 rounded-full p-1.5">
+                        <Mic size={12} className="text-green-400" />
+                      </div>
+                    )}
+                    {(!stream.getAudioTracks().length || !stream.getAudioTracks()[0].enabled) && (
+                      <div className="bg-red-500/20 border border-red-400/50 rounded-full p-1.5">
+                        <MicOff size={12} className="text-red-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Connection quality indicator */}
+                  <div className="absolute top-3 left-3">
+                    <div className="flex space-x-0.5 connection-quality">
+                      <div className="w-1 h-2 bg-green-400 rounded-full"></div>
+                      <div className="w-1 h-3 bg-green-400 rounded-full"></div>
+                      <div className="w-1 h-4 bg-green-400 rounded-full"></div>
+                    </div>
+                  </div>
+                </>
+              ) : stream && stream.getAudioTracks().length > 0 ? (
+                <>
+                  <audio
+                    id={isLocal ? undefined : `remote-audio-${id}`}
+                    autoPlay
+                    className="hidden"
+                    srcObject={isLocal ? undefined : stream}
+                  />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 bg-gradient-to-br from-gray-700 to-gray-800">
+                    <div className="bg-gray-600/50 rounded-full p-6 mb-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                        {label.charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium">{label}</div>
+                    <div className="text-xs text-gray-400 mt-1">Audio only</div>
+                    {stream.getAudioTracks()[0]?.enabled && (
+                      <div className="mt-3 flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <Mic size={14} className="text-green-400" />
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gradient-to-br from-gray-700 to-gray-800">
+                  <div className="bg-gray-600/50 rounded-full p-6 mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                      {label.charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+                  <VideoOff size={32} className="mb-2" />
+                  <div className="text-sm font-medium text-gray-300">{label}</div>
+                  <div className="text-xs text-gray-500 mt-1">Camera off</div>
+                </div>
+              )}
+              
+              {/* Enhanced name label with better styling */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white font-medium text-sm drop-shadow-lg">
+                      {label} {isLocal && '(You)'}
+                    </span>
+                    {isLocal && (
+                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    )}
+                  </div>
+                  
+                  {/* Audio/Video status in label */}
+                  <div className="flex items-center space-x-1 opacity-75">
+                    {!isLocal && stream && (
+                      <>
+                        {stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled ? (
+                          <Mic size={12} className="text-green-400" />
+                        ) : (
+                          <MicOff size={12} className="text-red-400" />
+                        )}
+                        {stream.getVideoTracks().length > 0 ? (
+                          <Video size={12} className="text-green-400" />
+                        ) : (
+                          <VideoOff size={12} className="text-gray-400" />
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-            {/* Name label */}
-            <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-3 py-1 rounded shadow">
-              {label}
+
+              {/* Speaking indicator */}
+              {!isLocal && stream && stream.getAudioTracks().length > 0 && stream.getAudioTracks()[0].enabled && (
+                <div className="absolute inset-0 border-2 border-green-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse pointer-events-none"></div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {/* Clean Subtitle Overlay */}
       {subtitlesEnabled && (
@@ -1591,33 +1764,67 @@ export default function MeetingPage() {
         </>
       )}
 
-      {/* Controls */}
-      <div className="sticky bottom-0 w-full bg-gray-900 bg-opacity-75 backdrop-blur-md p-4 flex justify-center space-x-6 z-10">
-        <button onClick={toggleAudio} className="p-3 rounded-full bg-gray-600 text-white" title={isAudioEnabled ? "Mute audio" : "Unmute audio"}>
-          {isAudioEnabled ? <Mic size={20}/> : <MicOff size={20}/>} 
-        </button>
-        <button onClick={toggleVideo} className="p-3 rounded-full bg-gray-600 text-white" title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}>
-          {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
-        </button>
-        <button 
-          onClick={isRecording ? stopRecording : startRecording} 
-          className="p-3 rounded-full bg-gray-600 text-white" 
-          title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
-        >
-          {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
-        </button>
-        {recordedChunks.length > 0 && (
-          <button onClick={downloadRecording} className="p-3 rounded-full bg-green-600 text-white" title="Download recording">
-            <Download size={20}/>
+      {/* Enhanced Controls Bar */}
+      <div className="sticky bottom-0 w-full bg-black/40 backdrop-blur-xl border-t border-gray-700/50 p-4 flex justify-center items-center space-x-4 z-10">
+        <div className="flex items-center space-x-3 bg-gray-800/60 rounded-2xl px-6 py-3 backdrop-blur-sm">
+          <button 
+            onClick={toggleAudio} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isAudioEnabled 
+                ? 'bg-gray-600 hover:bg-gray-500 text-white' 
+                : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+            title={isAudioEnabled ? "Mute audio" : "Unmute audio"}
+          >
+            {isAudioEnabled ? <Mic size={20}/> : <MicOff size={20}/>} 
           </button>
-        )}
-        <button onClick={handleLeave} className="p-3 rounded-full bg-red-600 text-white" title="Leave meeting">
-          <PhoneOff size={20}/>
-        </button>
+          
+          <button 
+            onClick={toggleVideo} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isVideoEnabled 
+                ? 'bg-gray-600 hover:bg-gray-500 text-white' 
+                : 'bg-red-600 hover:bg-red-500 text-white'
+            }`}
+            title={isVideoEnabled ? "Turn off camera" : "Turn on camera"}
+          >
+            {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
+          </button>
+          
+          <button 
+            onClick={isRecording ? stopRecording : startRecording} 
+            className={`p-3 rounded-full transition-all duration-200 ${
+              isRecording 
+                ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' 
+                : 'bg-gray-600 hover:bg-gray-500 text-white'
+            }`}
+            title={isRecording ? "Stop recording" : `Record meeting (${recordingMethod === 'canvas' ? 'direct capture' : 'screen share'})`}
+          >
+            {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
+          </button>
+          
+          {recordedChunks.length > 0 && (
+            <button 
+              onClick={downloadRecording} 
+              className="p-3 rounded-full bg-green-600 hover:bg-green-500 text-white transition-all duration-200 animate-bounce" 
+              title="Download recording"
+            >
+              <Download size={20}/>
+            </button>
+          )}
+          
+          <button 
+            onClick={handleLeave} 
+            className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all duration-200" 
+            title="Leave meeting"
+          >
+            <PhoneOff size={20}/>
+          </button>
+        </div>
         <div className="relative" data-settings-panel>
           <button 
             onClick={() => setShowSettings(!showSettings)}
-            className="p-3 rounded-full bg-gray-600 text-white" 
+            className="p-3 rounded-full bg-gray-700/60 hover:bg-gray-600/80 text-white backdrop-blur-sm transition-all duration-200" 
             title="Meeting settings"
           >
             <Settings size={20}/>
