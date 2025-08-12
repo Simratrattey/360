@@ -49,12 +49,22 @@ export default function App() {
 
   // Handle meeting pages without layout (standalone)
   if (isMeetingPage) {
+    console.log('🎥 Rendering standalone meeting page for path:', location.pathname);
     return (
       <>
-        <Routes>
-          <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
-          <Route path="*" element={ <Navigate to="/login" replace /> } />
-        </Routes>
+        <div className="min-h-screen bg-gray-900">
+          <Routes>
+            <Route path="/meeting/:roomId" element={ 
+              <PrivateRoute> 
+                <div className="p-4 text-white">
+                  <h1>Testing Meeting Page Load</h1>
+                  <MeetingPage />
+                </div>
+              </PrivateRoute> 
+            } />
+            <Route path="*" element={ <Navigate to="/login" replace /> } />
+          </Routes>
+        </div>
         <Toaster position="top-right" />
       </>
     );
