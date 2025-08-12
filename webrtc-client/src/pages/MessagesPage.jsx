@@ -347,6 +347,22 @@ export default function MessagesPage() {
           new Notification(title, { body });
         }
         
+        // After processing a new message in the current conversation, bump this conversation
+        // to the top of the list to reflect recent activity. We update lastMessage and
+        // lastMessageAt to ensure sorting on the server/client side.
+        setConversations(prev => {
+          const idx = prev.findIndex(c => c._id === msg.conversationId);
+          if (idx !== -1) {
+            const updatedConv = {
+              ...prev[idx],
+              lastMessageAt: msg.createdAt || new Date().toISOString(),
+              lastMessage: msg,
+            };
+            return [updatedConv, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+          }
+          return prev;
+        });
+        
         // Debounced mark as read
         debouncedMarkRead(msg.conversationId);
         
@@ -365,6 +381,23 @@ export default function MessagesPage() {
           const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
           new Notification(title, { body });
         }
+      }
+
+      // Regardless of whether this conversation is selected, bump the conversation to the top
+      // of the sidebar list when a message is received. This keeps the sidebar sorted by
+      // most recent activity across all conversations.
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c._id === msg.conversationId);
+        if (idx !== -1) {
+          const updatedConv = {
+            ...prev[idx],
+            lastMessageAt: msg.createdAt || new Date().toISOString(),
+            lastMessage: msg,
+          };
+          return [updatedConv, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        }
+        return prev;
+      });
       }
     };
 
@@ -589,6 +622,21 @@ export default function MessagesPage() {
       setUploadFile(null);
       setReplyTo(null);
       setTyping(false);
+
+      // When sending a message, update the conversation's last activity and move it to the top
+      // of the sidebar. This keeps the most recently active conversations visible at the top.
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c._id === selected._id);
+        if (idx !== -1) {
+          const updatedConv = {
+            ...prev[idx],
+            lastMessageAt: new Date().toISOString(),
+            lastMessage: { text: input.trim() },
+          };
+          return [updatedConv, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        }
+        return prev;
+      });
       
     } catch (error) {
       console.error('Failed to send message', error);
