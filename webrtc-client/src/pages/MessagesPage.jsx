@@ -703,54 +703,54 @@ export default function MessagesPage() {
   };
 
   return (
-    <div className="flex h-[80vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
+    <div className="flex h-[85vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
       {/* Sidebar - Full width on mobile when open */}
       {(!isMobile || sidebarOpen) && (
-        <div className={`${isMobile ? 'w-full' : 'w-80'} bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col`}>
-          {/* Header */}
-          <div className="p-4 md:p-6 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className={`${isMobile ? 'w-full' : 'w-80 lg:w-96'} bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col`}>
+          {/* Header - More compact */}
+          <div className="p-3 md:p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-                  <MessageCircle className="h-5 w-5 md:h-6 md:w-6" />
+              <div className="flex items-center space-x-2 md:space-x-3">
+                <div className="p-1.5 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md">
+                  <MessageCircle className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
                 <div>
-                  <h1 className="text-lg md:text-xl font-bold text-gray-900">Messages</h1>
-                  <p className="text-xs md:text-sm text-gray-600">Connect with your team</p>
+                  <h1 className="text-base md:text-lg font-bold text-gray-900">Messages</h1>
+                  <p className="text-xs text-gray-600">Connect with your team</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowCreateModal(true)} 
-                className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                className="p-1.5 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
                 title="New Conversation"
               >
-                <Plus className="h-4 w-4 md:h-5 md:w-5" />
+                <Plus className="h-3.5 w-3.5 md:h-4 md:w-4" />
               </button>
             </div>
           </div>
 
-          {/* Search */}
-          <div className="p-3 md:p-4 border-b border-gray-100">
+          {/* Search - More compact */}
+          <div className="p-2 md:p-3 border-b border-gray-100">
             <div className="relative">
-              <Search className="absolute left-3 md:left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search conversations..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 md:pl-12 pr-4 py-2 md:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-sm md:text-base"
+                className="w-full pl-9 pr-3 py-1.5 md:py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-sm"
               />
             </div>
           </div>
 
-          {/* Conversations List */}
-          <div className="flex-1 overflow-y-auto py-2">
+          {/* Conversations List - More compact spacing */}
+          <div className="flex-1 overflow-y-auto py-1">
             {(() => {
               return filteredConversations.map(section => {
                 return (
-                  <div key={section.section} className="mb-4 md:mb-6">
-                    <div className="flex items-center px-4 md:px-6 py-2 md:py-3 text-gray-500 uppercase text-xs font-bold tracking-wider">
-                      <section.icon className="h-3 w-3 md:h-4 md:w-4 mr-2 md:mr-3" />
+                  <div key={section.section} className="mb-2 md:mb-3">
+                    <div className="flex items-center px-3 md:px-4 py-1.5 md:py-2 text-gray-500 uppercase text-xs font-bold tracking-wider">
+                      <section.icon className="h-3 w-3 mr-2" />
                       {section.section}
                     </div>
                     {section.items.map(conv => {

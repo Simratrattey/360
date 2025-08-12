@@ -97,79 +97,79 @@ export default function SidebarConversation({
   
   return (
     <div
-      className={`group relative mx-2 md:mx-3 mb-2 p-3 md:p-4 rounded-xl cursor-pointer transition-all duration-300 ${
+      className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 ${
         isActive 
-          ? `bg-gradient-to-r ${typeConfig.bgGradient} border-2 ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
-          : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200 hover:shadow-md'
+          ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-md transform scale-[1.01]` 
+          : 'hover:bg-gray-50 border border-transparent hover:border-gray-200 hover:shadow-sm'
       }`}
       onClick={onSelect}
     >
-      <div className="flex items-center space-x-2 md:space-x-3">
-        {/* Avatar/Icon */}
+      <div className="flex items-center space-x-2">
+        {/* Avatar/Icon - Smaller size for better space utilization */}
         <div className="relative flex-shrink-0">
           {conv?.avatar ? (
-            <img src={conv.avatar} alt={displayName} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-md" />
+            <img src={conv.avatar} alt={displayName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-sm" />
           ) : (
-            <div className={`h-10 w-10 md:h-12 md:w-12 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-4 w-4 md:h-6 md:w-6" />}
+            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-sm`}>
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-3 w-3 md:h-4 md:w-4" />}
             </div>
           )}
           
-          {/* Type indicator for groups/communities */}
+          {/* Type indicator for groups/communities - Smaller */}
           {conv.type !== 'dm' && (
-            <div className={`absolute -top-1 -right-1 h-4 w-4 md:h-5 md:w-5 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
-              <typeConfig.icon className="h-2 w-2 md:h-3 md:w-3 text-white" />
+            <div className={`absolute -top-0.5 -right-0.5 h-3 w-3 md:h-4 md:w-4 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border border-white shadow-sm`}>
+              <typeConfig.icon className="h-1.5 w-1.5 md:h-2 md:w-2 text-white" />
             </div>
           )}
 
-          {/* Blue dot for unread messages */}
+          {/* Blue dot for unread messages - Smaller */}
           {conv?.unread > 0 && (
-            <span className="absolute -top-1 -left-1 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full bg-blue-500 border-2 border-white shadow-md z-10"></span>
+            <span className="absolute -top-0.5 -left-0.5 h-2 w-2 md:h-2.5 md:w-2.5 rounded-full bg-blue-500 border border-white shadow-sm z-10"></span>
           )}
         </div>
 
-        {/* Content */}
+        {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
-          <div>
-            <h3 className={`font-semibold truncate text-sm md:text-base ${isActive ? 'text-gray-900' : 'text-gray-800'} flex items-center`}>
+          <div className="flex-1 min-w-0">
+            <h3 className={`font-medium truncate text-sm ${isActive ? 'text-gray-900' : 'text-gray-800'} flex items-center`}>
               {displayName}
-              {/* Notification badge right next to name */}
+              {/* Notification badge - Smaller and more compact */}
               {conv?.unread > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 shadow-md border-2 border-white">
+                <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 md:w-5 md:h-5 shadow-sm border border-white">
                   {conv.unread > 99 ? '99+' : conv.unread}
                 </span>
               )}
             </h3>
           </div>
-          <div className="flex items-center space-x-1">
-            {/* Star button */}
+          <div className="flex items-center space-x-0.5 ml-1">
+            {/* Star button - Smaller */}
             <button 
               onClick={e => { e.stopPropagation(); onStar(); }} 
-              className={`p-1 md:p-1.5 rounded-full transition-all duration-200 ${
+              className={`p-0.5 md:p-1 rounded-full transition-all duration-200 ${
                 starred 
                   ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' 
                   : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'
               }`}
             >
-              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-4 md:w-4" />
+              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-3.5 md:w-3.5" />
             </button>
-            {/* Delete button */}
+            {/* Delete button - Smaller */}
             {canDelete && (
               <button 
                 onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
-                className="p-1 md:p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
+                className="p-0.5 md:p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
                 title="Delete conversation"
               >
-                <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
+                <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Active indicator */}
+      {/* Active indicator - Thinner */}
       {isActive && (
-        <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
+        <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
       {/* Delete confirmation dialog */}
