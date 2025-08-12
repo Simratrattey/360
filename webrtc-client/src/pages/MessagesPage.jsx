@@ -81,6 +81,8 @@ export default function MessagesPage() {
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
+  // Track any error that occurs during sending; this can be displayed to the user.
+  const [sendError, setSendError] = useState(null);
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
@@ -114,6 +116,58 @@ export default function MessagesPage() {
     // Track window focus
     const onFocus = () => (windowFocused.current = true);
     const onBlur = () => (windowFocused.current = false);
+    const scrollToBottom = () => {
+      if (!messageContainerRef.current) return;
+      messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
+    };
+
+    /**
+     * Determine whether the user is sufficiently close to the bottom of the
+     * message container.  Without this check, adding a new message will always
+     * force the view to the bottom, making it impossible for the user to read
+     * earlier messages when new ones arrive.
+     */
+    const shouldAutoScroll = () => {
+      const container = messageContainerRef.current;
+      if (!container) return true;
+      const distanceFromBottom =
+        container.scrollHeight - (container.scrollTop + container.clientHeight);
+      // Auto-scroll only when the user is within 50px of the bottom.
+      return distanceFromBottom < 50;
+    };
+
+    /**
+     * Generic debounce hook.  Returns a debounced version of a callback that will
+     * delay execution until `delay` milliseconds have passed since the last call.
+     * This is used to batch calls to markConversationAsRead and avoid hitting
+     * server rate limits.
+     */
+    const useDebouncedCallback = (callback, delay) => {
+      const timeoutRef = useRef(null);
+      const callbackRef = useRef(callback);
+      useEffect(() => {
+        callbackRef.current = callback;
+      }, [callback]);
+      return (...args) => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          callbackRef.current(...args);
+        }, delay);
+      };
+    };
+
+    // Create a debounced function that will mark a conversation as read.  The delay
+    // is set to two seconds; multiple rapid calls will result in only one server
+    // request, helping prevent "Too Many Requests" errors.
+    const debouncedMarkRead = useDebouncedCallback(
+      convId => {
+        if (convId) {
+          markConversationAsRead(convId);
+        }
+      },
+      2000
+    );
+
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
     return () => {
@@ -239,8 +293,9 @@ export default function MessagesPage() {
   // Real-time event listeners
   useEffect(() => {
     if (!chatSocket.socket) return;
-    // New message
-    chatSocket.on('chat:new', msg => {
+    
+    // Handler for incoming messages; defined outside to allow removal.
+    const handleChatNew = msg => {
       console.log('Received new message:', msg); // Debug log
       
       setMessages(prev => {
@@ -271,34 +326,63 @@ export default function MessagesPage() {
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         new Notification(title, { body });
       }
-    });
+      
+      // Debounced mark as read to avoid rate limit
+      if (selected && selected._id === msg.conversationId) {
+        debouncedMarkRead(msg.conversationId);
+      }
+      
+      // Auto-scroll only if user near bottom or message is from self
+      if (msg.senderId === user.id || shouldAutoScroll()) {
+        scrollToBottom();
+      }
+    };
 
-    // Edit message
-    chatSocket.on('chat:edit', ({ messageId, text }) => {
+    // Edit message handler
+    const handleChatEdit = ({ messageId, text }) => {
       setMessages(prev => prev.map(m => m._id === messageId ? { ...m, text, edited: true } : m));
-    });
-    // Delete message
-    chatSocket.on('chat:delete', ({ messageId }) => {
+    };
+
+    // Delete message handler
+    const handleChatDelete = ({ messageId }) => {
       setMessages(prev => prev.filter(m => m._id !== messageId));
-    });
-    // React to message
-    chatSocket.on('chat:react', ({ messageId, emoji, userId }) => {
-      setMessages(prev => prev.map(m => m._id === messageId ? { ...m, reactions: [...(m.reactions || []), { user: userId, emoji }] } : m));
+    };
+
+    // React to message handler
+    const handleChatReact = ({ messageId, emoji, userId }) => {
+      setMessages(prev => 
+        prev.map(m => 
+          m._id === messageId 
+            ? { ...m, reactions: [...(m.reactions || []), { user: userId, emoji }] } 
+            : m
+        )
+      );
       setReactions(prev => ({
         ...prev,
         [messageId]: [...(prev[messageId] || []), { user: userId, emoji }]
       }));
-    });
-    // Unreact
-    chatSocket.on('chat:unreact', ({ messageId, emoji, userId }) => {
-      setMessages(prev => prev.map(m => m._id === messageId ? { ...m, reactions: (m.reactions || []).filter(r => !(r.user === userId && r.emoji === emoji)) } : m));
+    };
+
+    // Unreact handler
+    const handleChatUnreact = ({ messageId, emoji, userId }) => {
+      setMessages(prev => 
+        prev.map(m => 
+          m._id === messageId 
+            ? { 
+                ...m, 
+                reactions: (m.reactions || []).filter(r => !(r.user === userId && r.emoji === emoji)) 
+              } 
+            : m
+        )
+      );
       setReactions(prev => ({
         ...prev,
         [messageId]: (prev[messageId] || []).filter(r => !(r.user === userId && r.emoji === emoji))
       }));
-    });
-    // Typing
-    chatSocket.on('chat:typing', ({ userId: typingUserId, conversationId, typing }) => {
+    };
+
+    // Typing indicator handler
+    const handleChatTyping = ({ userId: typingUserId, conversationId, typing }) => {
       if (typingUserId !== user.id && conversationId) {
         setTyping(prev => ({
           ...prev,
@@ -308,16 +392,37 @@ export default function MessagesPage() {
           }
         }));
       }
-    });
-    return () => {
-      chatSocket.off('chat:new');
-      chatSocket.off('chat:edit');
-      chatSocket.off('chat:delete');
-      chatSocket.off('chat:react');
-      chatSocket.off('chat:unreact');
-      chatSocket.off('chat:typing');
     };
-  }, [chatSocket.socket, selected, user.id]);
+
+    // Set up all event listeners
+    chatSocket.off('chat:new', handleChatNew);
+    chatSocket.on('chat:new', handleChatNew);
+    
+    chatSocket.off('chat:edit', handleChatEdit);
+    chatSocket.on('chat:edit', handleChatEdit);
+    
+    chatSocket.off('chat:delete', handleChatDelete);
+    chatSocket.on('chat:delete', handleChatDelete);
+    
+    chatSocket.off('chat:react', handleChatReact);
+    chatSocket.on('chat:react', handleChatReact);
+    
+    chatSocket.off('chat:unreact', handleChatUnreact);
+    chatSocket.on('chat:unreact', handleChatUnreact);
+    
+    chatSocket.off('chat:typing', handleChatTyping);
+    chatSocket.on('chat:typing', handleChatTyping);
+
+    // Cleanup function to remove all event listeners
+    return () => {
+      chatSocket.off('chat:new', handleChatNew);
+      chatSocket.off('chat:edit', handleChatEdit);
+      chatSocket.off('chat:delete', handleChatDelete);
+      chatSocket.off('chat:react', handleChatReact);
+      chatSocket.off('chat:unreact', handleChatUnreact);
+      chatSocket.off('chat:typing', handleChatTyping);
+    };
+  }, [chatSocket, user.id, selected, debouncedMarkRead]);
 
   // Mark messages as read when conversation is selected
   useEffect(() => {
@@ -437,20 +542,28 @@ export default function MessagesPage() {
         fileMeta = res.data;
       }
       
-      chatSocket.sendMessage({
+      // Clear any previous send errors
+      setSendError(null);
+      
+      // Emit the actual message to the server. Await in case sendMessage
+      // returns a promise; any errors will be caught below.
+      await chatSocket.sendMessage({
         conversationId: selected._id,
         text: input.trim(),
         file: fileMeta,
         replyTo: replyTo ? replyTo._id : undefined,
       });
       
+      // Reset input fields only after successful send
       setInput('');
       setUploadFile(null);
       setReplyTo(null);
       setTyping(false);
+      
     } catch (error) {
-      console.error('Error sending message:', error);
-      // You could add a notification here to show the error to the user
+      console.error('Failed to send message', error);
+      setSendError(error?.message || 'Failed to send message');
+      // Keep the message in the input so the user can try again
     }
   };
 
