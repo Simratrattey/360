@@ -22,11 +22,23 @@ export const openMeetingWindow = (roomId, options = {}) => {
     .map(([key, value]) => `${key}=${value}`)
     .join(',');
 
-  const meetingWindow = window.open(`/meeting/${roomId}`, '_blank', optionsString);
+  // Get current origin to ensure same domain
+  const currentOrigin = window.location.origin;
+  const meetingUrl = `${currentOrigin}/meeting/${roomId}`;
+  
+  console.log(`🪟 Opening meeting window: ${meetingUrl}`);
+  
+  const meetingWindow = window.open(meetingUrl, `meeting_${roomId}`, optionsString);
   
   // Focus the new window if it opened successfully
   if (meetingWindow) {
     meetingWindow.focus();
+    console.log(`✅ Meeting window opened successfully for room: ${roomId}`);
+  } else {
+    console.error(`❌ Failed to open meeting window for room: ${roomId} - popup may be blocked`);
+    // Fallback: navigate in current tab if popup is blocked
+    alert('Popup blocked! Please allow popups for this site or click OK to open in current tab.');
+    window.location.href = meetingUrl;
   }
   
   return meetingWindow;

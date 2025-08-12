@@ -18,11 +18,23 @@ import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 
 
 export default function App() {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
   const location = useLocation();
 
-  // If not logged in, show login page
-  if (!user) {
+  // Show loading state while authentication is being checked
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  // Check if this is a meeting page (standalone)
+  const isMeetingPage = location.pathname.startsWith('/meeting/');
+
+  // If not logged in, show login page (except for meeting pages which need special handling)
+  if (!user && !isMeetingPage) {
     return (
       <>
         <Routes>
@@ -35,14 +47,26 @@ export default function App() {
     );
   }
 
-  // If logged in, show the main app with layout
+  // Handle meeting pages without layout (standalone)
+  if (isMeetingPage) {
+    return (
+      <>
+        <Routes>
+          <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
+          <Route path="*" element={ <Navigate to="/login" replace /> } />
+        </Routes>
+        <Toaster position="top-right" />
+      </>
+    );
+  }
+
+  // If logged in and not a meeting page, show the main app with layout
   return (
     <>
       <Layout>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/meetings" element={<MeetingsPage />} />
-          <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
           <Route path="/meetings/:id" element={<MeetingDetailsPage />} />
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
