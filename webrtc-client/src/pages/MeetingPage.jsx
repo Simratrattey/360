@@ -22,6 +22,7 @@ export default function MeetingPage() {
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isRecording, setIsRecording]       = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
@@ -104,14 +105,28 @@ export default function MeetingPage() {
 
   // 1) Join SFU room and set up transports, produce/consume
   useEffect(() => {
-    if (roomId && user && sfuSocket && isSFUConnected) {
-      console.log('🎯 [MeetingPage] All conditions met, joining meeting:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected });
-      joinMeeting(roomId);
+    if (roomId && user && sfuSocket && isSFUConnected && !isJoining) {
+      console.log('🎯 [MeetingPage] All conditions met, joining meeting:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected, isJoining });
+      setIsJoining(true);
+      
+      joinMeeting(roomId)
+        .then(() => {
+          console.log('✅ [MeetingPage] Join meeting completed successfully');
+          setIsJoining(false);
+        })
+        .catch((error) => {
+          console.error('❌ [MeetingPage] Join meeting failed:', error);
+          setIsJoining(false);
+        });
     } else {
-      console.log('⏳ [MeetingPage] Waiting for conditions:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected });
+      console.log('⏳ [MeetingPage] Waiting for conditions:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected, isJoining });
     }
-    return () => leaveMeeting();
-  }, [roomId, user, sfuSocket, isSFUConnected, joinMeeting]);
+    
+    return () => {
+      console.log('🧹 [MeetingPage] Cleanup - leaving meeting');
+      leaveMeeting();
+    };
+  }, [roomId, user, sfuSocket, isSFUConnected]);
 
   useEffect(() => {
     if (!localStream) {
