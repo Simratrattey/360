@@ -244,11 +244,22 @@ export default function MessagesPage() {
       console.log('Received new message:', msg); // Debug log
       
       setMessages(prev => {
-        // Check if message already exists to prevent duplicates
-        const exists = prev.some(m => m._id === msg._id);
-        if (exists) return prev;
+        // Remove any pending optimistic messages from the same sender for this conversation.
+        // We consider a message "pending" if it has the pending flag and matches the current user.
+        let filtered = prev.filter(m => {
+          if (!m.pending) return true;
+          // Remove pending optimistic messages from the same conversation and sender
+          return !(
+            m.conversationId === msg.conversationId &&
+            m.senderId === msg.senderId
+          );
+        });
         
-        const updated = [...prev, msg];
+        // Check if message already exists to prevent duplicates
+        const exists = filtered.some(m => m._id === msg._id);
+        if (exists) return filtered;
+        
+        const updated = [...filtered, msg];
         
         // Update cache using the conversationId
         if (msg.conversationId) {
@@ -419,6 +430,8 @@ export default function MessagesPage() {
     }
   };
 
+  // Send a new message. This version implements an "optimistic" update so the message
+  // appears in the UI immediately, without waiting for the server to emit a chat:new event.
   const handleSend = async () => {
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
@@ -437,6 +450,34 @@ export default function MessagesPage() {
         fileMeta = res.data;
       }
       
+      // Build an optimistic message object. We include a temporary ID and mark it as pending
+      // so it can be removed or replaced when the real message arrives from the server.
+      const tempId = `temp-${Date.now()}`;
+      const tempMsg = {
+        _id: tempId,
+        conversationId: selected._id,
+        senderId: user?.id,
+        senderName: user?.fullName || user?.username || '',
+        text: input.trim(),
+        file: fileMeta,
+        replyTo: replyTo ? replyTo._id : undefined,
+        createdAt: new Date().toISOString(),
+        pending: true,
+      };
+      
+      // Add optimistic message to UI immediately
+      setMessages(prev => [...prev, tempMsg]);
+      
+      // Update message cache for this conversation
+      setMessagesCache(cache => {
+        const convMsgs = cache[selected._id] || [];
+        return {
+          ...cache,
+          [selected._id]: [...convMsgs, tempMsg],
+        };
+      });
+      
+      // Emit the actual message to the server
       chatSocket.sendMessage({
         conversationId: selected._id,
         text: input.trim(),
@@ -444,6 +485,7 @@ export default function MessagesPage() {
         replyTo: replyTo ? replyTo._id : undefined,
       });
       
+      // Reset input fields
       setInput('');
       setUploadFile(null);
       setReplyTo(null);
