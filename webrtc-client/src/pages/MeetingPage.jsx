@@ -1,5 +1,7 @@
 // src/pages/MeetingPage.jsx
 import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
@@ -72,6 +74,10 @@ export default function MeetingPage() {
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
 
+  // FFmpeg state for video conversion
+  const [ffmpeg, setFfmpeg] = useState(null);
+  const [isConverting, setIsConverting] = useState(false);
+
   const handleAvatarQuery = async () => {
     if (!avatarQuery) return;
     setAvatarTranscript('Thinking…');
@@ -108,6 +114,86 @@ export default function MeetingPage() {
 
   const handleStartAudio = () => setIsAvatarRecording(true);
   const handleStopAudio  = () => setIsAvatarRecording(false);
+
+  // Initialize FFmpeg for video conversion
+  const initializeFFmpeg = async () => {
+    if (ffmpeg) return ffmpeg; // Already initialized
+    
+    console.log('Initializing FFmpeg...');
+    const ffmpegInstance = new FFmpeg();
+    
+    ffmpegInstance.on('log', ({ message }) => {
+      console.log('FFmpeg:', message);
+    });
+    
+    ffmpegInstance.on('progress', ({ progress }) => {
+      console.log('Conversion progress:', Math.round(progress * 100) + '%');
+    });
+    
+    try {
+      // Load FFmpeg core
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+      await ffmpegInstance.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+      });
+      
+      setFfmpeg(ffmpegInstance);
+      console.log('FFmpeg initialized successfully');
+      return ffmpegInstance;
+    } catch (error) {
+      console.error('Failed to initialize FFmpeg:', error);
+      return null;
+    }
+  };
+
+  // Convert WebM to MP4 using FFmpeg
+  const convertWebMToMP4 = async (webmBlob) => {
+    try {
+      setIsConverting(true);
+      console.log('Starting WebM to MP4 conversion...');
+      
+      // Initialize FFmpeg if not already done
+      const ffmpegInstance = await initializeFFmpeg();
+      if (!ffmpegInstance) {
+        throw new Error('FFmpeg failed to initialize');
+      }
+      
+      // Write input file
+      await ffmpegInstance.writeFile('input.webm', await fetchFile(webmBlob));
+      
+      // Convert WebM to MP4 with high quality settings
+      await ffmpegInstance.exec([
+        '-i', 'input.webm',
+        '-c:v', 'libx264',        // H.264 video codec
+        '-preset', 'medium',       // Balance between speed and compression
+        '-crf', '23',             // High quality (lower = better quality)
+        '-c:a', 'aac',            // AAC audio codec
+        '-b:a', '128k',           // Audio bitrate
+        '-movflags', '+faststart', // Enable web streaming
+        'output.mp4'
+      ]);
+      
+      // Read the output file
+      const mp4Data = await ffmpegInstance.readFile('output.mp4');
+      
+      // Clean up temporary files
+      await ffmpegInstance.deleteFile('input.webm');
+      await ffmpegInstance.deleteFile('output.mp4');
+      
+      // Create MP4 blob
+      const mp4Blob = new Blob([mp4Data], { type: 'video/mp4' });
+      
+      setIsConverting(false);
+      console.log('Conversion completed successfully');
+      return mp4Blob;
+      
+    } catch (error) {
+      setIsConverting(false);
+      console.error('Conversion failed:', error);
+      throw error;
+    }
+  };
 
   // Screen sharing functions - memoized to prevent re-creation
   const startScreenShare = useCallback(async () => {
@@ -751,43 +837,49 @@ export default function MeetingPage() {
     
     console.log('Preparing recording download...');
     
-    // Determine the MIME type used for recording
-    const mimeType = recordedChunks[0].type || 'video/webm';
-    console.log('Recording MIME type:', mimeType);
-    
     // Create blob from recorded chunks
-    const blob = new Blob(recordedChunks, { type: mimeType });
-    console.log('Recording size:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
-    
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
+    const webmBlob = new Blob(recordedChunks, { type: 'video/webm' });
+    console.log('Recording size:', (webmBlob.size / 1024 / 1024).toFixed(2), 'MB');
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     
-    // Use appropriate file extension based on codec
-    let extension = 'webm';
-    if (mimeType.includes('h264')) {
-      // H.264 encoded WebM can be renamed to MP4 for better compatibility
-      extension = 'mp4';
-    }
-    
-    a.download = `meeting-recording-${timestamp}.${extension}`;
-    
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    console.log(`Recording downloaded as: meeting-recording-${timestamp}.${extension}`);
-    
-    // Show success message
-    if (extension === 'mp4') {
+    try {
+      // Convert WebM to MP4 using FFmpeg
+      console.log('Converting WebM to MP4...');
+      const mp4Blob = await convertWebMToMP4(webmBlob);
+      
+      // Download the MP4 file
+      const url = URL.createObjectURL(mp4Blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `meeting-recording-${timestamp}.mp4`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log(`MP4 recording downloaded: meeting-recording-${timestamp}.mp4`);
       alert('High-quality MP4 recording downloaded successfully!');
-    } else {
-      alert('Recording downloaded successfully! If you need MP4 format, please use a video converter.');
+      
+    } catch (error) {
+      console.error('Conversion failed, falling back to WebM:', error);
+      
+      // Fallback to WebM download if conversion fails
+      const url = URL.createObjectURL(webmBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `meeting-recording-${timestamp}.webm`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert('Conversion to MP4 failed. WebM file downloaded instead. You can use an online converter to convert it to MP4.');
     }
   };
 
@@ -1806,10 +1898,17 @@ export default function MeetingPage() {
         {recordedChunks.length > 0 && (
           <button 
             onClick={downloadRecording} 
-            className="p-3 rounded-full bg-green-600 text-white" 
-            title="Download recording"
+            disabled={isConverting}
+            className={`p-3 rounded-full text-white ${
+              isConverting ? 'bg-yellow-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+            }`}
+            title={isConverting ? "Converting to MP4..." : "Download recording"}
           >
-            <Download size={20}/>
+            {isConverting ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+            ) : (
+              <Download size={20}/>
+            )}
           </button>
         )}
         
