@@ -870,52 +870,46 @@ export default function MeetingPage() {
     
     console.log('Preparing recording download...');
     
-    // Create blob from recorded chunks
-    const webmBlob = new Blob(recordedChunks, { type: 'video/webm' });
-    console.log('Recording size:', (webmBlob.size / 1024 / 1024).toFixed(2), 'MB');
+    // Create blob from recorded chunks with original MIME type
+    const mimeType = recordedChunks[0]?.type || 'video/webm';
+    const recordingBlob = new Blob(recordedChunks, { type: mimeType });
+    console.log('Recording size:', (recordingBlob.size / 1024 / 1024).toFixed(2), 'MB');
+    console.log('Recording MIME type:', mimeType);
     
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     
-    // Check if the WebM file is already H.264 encoded (based on MediaRecorder)
-    // If so, we can safely rename it to MP4 without conversion
-    const mimeType = recordedChunks[0]?.type || 'video/webm';
-    const isH264 = mimeType.includes('h264') || mimeType.includes('avc1');
+    // Download the recording as WebM (its native format)
+    const url = URL.createObjectURL(recordingBlob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `meeting-recording-${timestamp}.webm`;
     
-    console.log('Recording MIME type:', mimeType, 'H.264 encoded:', isH264);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     
-    if (isH264) {
-      // File is already H.264 encoded, safe to rename to MP4
-      const mp4Blob = new Blob(recordedChunks, { type: 'video/mp4' });
-      const url = URL.createObjectURL(mp4Blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `meeting-recording-${timestamp}.mp4`;
-      
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      console.log(`H.264 recording downloaded as MP4: meeting-recording-${timestamp}.mp4`);
-      alert('High-quality MP4 recording downloaded successfully!');
-      
+    console.log(`Recording downloaded: meeting-recording-${timestamp}.webm`);
+    
+    // Provide helpful conversion guidance
+    if (mimeType.includes('h264')) {
+      alert(`High-quality H.264 WebM recording downloaded successfully!
+
+To convert to MP4:
+• Online: Use CloudConvert.com (fast & free)
+• Desktop: Use VLC Player (File → Convert/Save)
+• Command line: ffmpeg -i recording.webm -c copy recording.mp4
+
+The file contains H.264 video, so conversion will be fast with no quality loss.`);
     } else {
-      // File needs conversion or is not H.264, download as WebM
-      const url = URL.createObjectURL(webmBlob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `meeting-recording-${timestamp}.webm`;
-      
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      console.log(`Non-H.264 recording downloaded as WebM: meeting-recording-${timestamp}.webm`);
-      alert('Recording downloaded as WebM format. To convert to MP4:\n1. Use an online converter like CloudConvert\n2. Or install a desktop video converter like VLC');
+      alert(`Recording downloaded as WebM format.
+
+To convert to MP4:
+• Online: Use CloudConvert.com
+• Desktop: Use VLC Player or Handbrake
+• The recording uses ${mimeType.includes('vp9') ? 'VP9' : mimeType.includes('vp8') ? 'VP8' : 'unknown'} codec`);
     }
   };
 
