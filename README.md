@@ -10,5 +10,3 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 
 For technical support or questions, please contact the development team.
 
-## ejecnjkdfncghghghcrcnr
-cfrcmff
