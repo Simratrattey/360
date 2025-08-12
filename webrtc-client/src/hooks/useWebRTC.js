@@ -25,7 +25,9 @@ export function useWebRTC() {
   // === Get User Media ===
   const getUserMedia = useCallback(async () => {
     try {
+      console.log('[WebRTC] 📹 Requesting camera/microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log('[WebRTC] ✅ Got media stream:', stream.getTracks().map(t => t.kind));
       setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       return stream;
@@ -435,9 +437,13 @@ export function useWebRTC() {
     console.log('[WebRTC] 🚀 Starting join meeting process with socket ID:', sfuSocket.id);
     
     try {
+      console.log('[WebRTC] 📹 Step 1: Getting user media...');
       const stream = await getUserMedia();
+      console.log('[WebRTC] 🔧 Step 2: Loading device...');
       await loadDevice();
+      console.log('[WebRTC] 📤 Step 3: Creating send transport...');
       await createSendTransport(roomId);
+      console.log('[WebRTC] 📥 Step 4: Creating receive transport...');
       await createRecvTransport();
       
       // Join the room first to establish participant presence
