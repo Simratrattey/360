@@ -26,7 +26,7 @@ export default function MeetingPage() {
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
-  const [recordingMethod, setRecordingMethod] = useState('canvas'); // 'canvas' or 'screen'
+  const [recordingMethod, setRecordingMethod] = useState('screen'); // 'screen' or 'canvas'
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
@@ -398,13 +398,17 @@ export default function MeetingPage() {
         try {
           captureStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-              frameRate: { ideal: 30 }
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 },
+              frameRate: { ideal: 30, max: 60 }
             },
-            audio: false, // We'll add our mixed audio instead
-            selfBrowserSurface: 'include',
-            systemAudio: 'exclude'
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              sampleRate: 48000
+            },
+            preferCurrentTab: true
           });
           
           console.log('Screen capture successful');
@@ -436,12 +440,22 @@ export default function MeetingPage() {
         });
       }
       
-      // Check codec support
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') 
-        ? 'video/webm;codecs=vp8,opus'
-        : MediaRecorder.isTypeSupported('video/webm') 
-        ? 'video/webm'
-        : '';
+      // Check codec support - prioritize H.264 for better MP4 compatibility
+      let mimeType = '';
+      const codecs = [
+        'video/webm;codecs=h264,opus',  // Best for MP4 conversion
+        'video/webm;codecs=vp9,opus',   // Good quality
+        'video/webm;codecs=vp8,opus',   // Fallback
+        'video/webm'                    // Last resort
+      ];
+      
+      for (const codec of codecs) {
+        if (MediaRecorder.isTypeSupported(codec)) {
+          mimeType = codec;
+          console.log('Selected codec:', codec);
+          break;
+        }
+      }
       
       if (!mimeType) {
         console.error('Browser does not support required video codec for recording');
@@ -451,7 +465,8 @@ export default function MeetingPage() {
       
       const recorder = new MediaRecorder(captureStream, { 
         mimeType,
-        videoBitsPerSecond: 2500000 // 2.5 Mbps for good quality
+        videoBitsPerSecond: 8000000,  // 8 Mbps for high quality
+        audioBitsPerSecond: 256000    // 256 kbps for clear audio
       });
       const chunks = [];
       
@@ -731,19 +746,49 @@ export default function MeetingPage() {
     }
   };
 
-  const downloadRecording = () => {
+  const downloadRecording = async () => {
     if (recordedChunks.length === 0) return;
     
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    console.log('Preparing recording download...');
+    
+    // Determine the MIME type used for recording
+    const mimeType = recordedChunks[0].type || 'video/webm';
+    console.log('Recording MIME type:', mimeType);
+    
+    // Create blob from recorded chunks
+    const blob = new Blob(recordedChunks, { type: mimeType });
+    console.log('Recording size:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
+    
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
     a.href = url;
-    a.download = `meeting-recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    
+    // Use appropriate file extension based on codec
+    let extension = 'webm';
+    if (mimeType.includes('h264')) {
+      // H.264 encoded WebM can be renamed to MP4 for better compatibility
+      extension = 'mp4';
+    }
+    
+    a.download = `meeting-recording-${timestamp}.${extension}`;
+    
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    
+    console.log(`Recording downloaded as: meeting-recording-${timestamp}.${extension}`);
+    
+    // Show success message
+    if (extension === 'mp4') {
+      alert('High-quality MP4 recording downloaded successfully!');
+    } else {
+      alert('Recording downloaded successfully! If you need MP4 format, please use a video converter.');
+    }
   };
 
 
