@@ -651,12 +651,21 @@ export default function MeetingPage() {
     console.log('STT Service Health:', healthCheck);
     
     // Enable debug mode for testing (set to false for production)
-    SubtitleService.setDebugMode(true); // Temporarily enabled while server updates
+    // SubtitleService.setDebugMode(true); // Disabled - using real speech recognition
     
     setSubtitlesEnabled(true);
     subtitlesEnabledRef.current = true;
     
-    // Start processing each remote stream
+    // Start global speech recognition (captures all audio in room)
+    const globalRecognizer = startSpeechRecognitionForRemote('global', 'Room Audio');
+    if (globalRecognizer) {
+      if (!speechRecognitionRef.current) {
+        speechRecognitionRef.current = new Map();
+      }
+      speechRecognitionRef.current.set('global-speech', globalRecognizer);
+    }
+    
+    // Still track remote streams for proper cleanup
     remoteStreams.forEach((stream, peerId) => {
       const participantName = participantMap[peerId] || 'Guest';
       startRemoteStreamRecognition(stream, peerId, participantName);
@@ -679,8 +688,17 @@ export default function MeetingPage() {
       const audioStream = new MediaStream([audioTracks[0]]);
       const source = audioContext.createMediaStreamSource(audioStream);
       
-      // Use MediaRecorder for more reliable audio capture
-      await startMediaRecorderProcessing(audioStream, audioContext, peerId, participantName);
+      // Store in recognition map (Web Speech Recognition runs globally, not per stream)
+      if (!speechRecognitionRef.current) {
+        speechRecognitionRef.current = new Map();
+      }
+      
+      speechRecognitionRef.current.set(peerId, {
+        audioContext,
+        stop: () => {
+          audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+        }
+      });
       
       console.log(`✅ Started audio processing for ${participantName} (${peerId})`);
       
@@ -689,7 +707,114 @@ export default function MeetingPage() {
     }
   };
 
-  // Use MediaRecorder to capture audio chunks and process them
+  // Simple browser-based speech recognition for real subtitles  
+  // Note: Web Speech Recognition captures from the default microphone, not specific streams
+  // This is a browser limitation, but it will capture all audio including remote participants
+  const startSpeechRecognitionForRemote = (peerId, participantName) => {
+    try {
+      console.log(`🎤 Setting up Web Speech Recognition for ${participantName}`);
+      
+      // Check if speech recognition is available
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn(`❌ Speech Recognition not supported in this browser`);
+        return null;
+      }
+      
+      // Create speech recognition instance
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false; // Only final results for cleaner subtitles
+      recognition.lang = 'en-US';
+      
+      // Track to avoid duplicate results and associate with participant
+      let lastResult = '';
+      
+      recognition.onresult = (event) => {
+        // Only process if subtitles are still enabled
+        if (!subtitlesEnabledRef.current) return;
+        
+        const result = event.results[event.results.length - 1];
+        if (result.isFinal) {
+          const transcript = result[0].transcript.trim();
+          
+          // Avoid duplicates and very short transcripts
+          if (transcript && transcript.length > 2 && transcript !== lastResult) {
+            lastResult = transcript;
+            console.log(`🗣️ Detected speech: "${transcript}"`);
+            
+            // Create subtitle entry (will capture all speech in the room)
+            const subtitleEntry = {
+              id: `speech-${Date.now()}`,
+              original: transcript,
+              translated: null,
+              text: transcript,
+              timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+              speaker: 'Remote Audio', // Generic since we can't isolate specific participants
+              sourceLanguage: 'en',
+              targetLanguage: 'en',
+              isTranslated: false,
+              createdAt: Date.now()
+            };
+            
+            // Add to subtitle history
+            setSubtitleHistory(prev => {
+              const updated = [...prev.slice(-4), subtitleEntry];
+              
+              // Auto-cleanup after 8 seconds
+              setTimeout(() => {
+                setSubtitleHistory(current => 
+                  current.filter(sub => sub.id !== subtitleEntry.id)
+                );
+              }, 8000);
+              
+              return updated;
+            });
+          }
+        }
+      };
+      
+      recognition.onerror = (event) => {
+        console.error(`❌ Speech recognition error:`, event.error);
+      };
+      
+      recognition.onend = () => {
+        // Auto-restart if subtitles are still enabled
+        if (subtitlesEnabledRef.current) {
+          setTimeout(() => {
+            try {
+              recognition.start();
+              console.log(`🔄 Restarted speech recognition`);
+            } catch (error) {
+              console.warn(`Failed to restart recognition:`, error);
+            }
+          }, 1000);
+        }
+      };
+      
+      // Start recognition
+      recognition.start();
+      console.log(`✅ Started speech recognition`);
+      
+      return {
+        recognition,
+        stop: () => {
+          console.log(`🛑 Stopping speech recognition`);
+          try {
+            recognition.stop();
+          } catch (error) {
+            console.warn(`Error stopping recognition:`, error);
+          }
+        }
+      };
+      
+    } catch (error) {
+      console.error(`❌ Failed to setup speech recognition:`, error);
+      return null;
+    }
+  };
+
+  // Use MediaRecorder to capture audio chunks and process them (LEGACY - for complex processing)
   const startMediaRecorderProcessing = async (audioStream, audioContext, peerId, participantName) => {
     try {
       // Create MediaRecorder to capture audio in chunks
