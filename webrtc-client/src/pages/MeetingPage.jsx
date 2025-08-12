@@ -5,7 +5,7 @@ import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
@@ -66,6 +66,12 @@ export default function MeetingPage() {
   const [avatarTranscript, setAvatarTranscript] = useState('');
   const [isAvatarRecording, setIsAvatarRecording] = useState(false);
 
+  // Screen sharing state
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState(null);
+  const [screenSharingUserId, setScreenSharingUserId] = useState(null);
+  const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
+
   const handleAvatarQuery = async () => {
     if (!avatarQuery) return;
     setAvatarTranscript('Thinking…');
@@ -102,6 +108,84 @@ export default function MeetingPage() {
 
   const handleStartAudio = () => setIsAvatarRecording(true);
   const handleStopAudio  = () => setIsAvatarRecording(false);
+
+  // Screen sharing functions
+  const startScreenShare = async () => {
+    try {
+      console.log('🖥️ Starting screen share...');
+      
+      // Get screen share stream
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 15 }
+        },
+        audio: true // Include system audio if available
+      });
+
+      setScreenStream(stream);
+      setIsScreenSharing(true);
+      setScreenSharingUserId('local');
+      setViewMode('speaker'); // Switch to speaker view when sharing
+
+      // Handle user stopping screen share via browser controls
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log('🛑 Screen share ended by user');
+        stopScreenShare();
+      });
+
+      // Add screen share stream to remote streams so it appears in the UI
+      const updatedRemoteStreams = new Map(remoteStreams);
+      updatedRemoteStreams.set('screen-share-local', stream);
+      
+      // Broadcast screen sharing to all participants
+      if (sfuSocket) {
+        sfuSocket.emit('screenShareStarted', {
+          userId: user.id,
+          userName: user.name,
+          roomId: roomId,
+          hasAudio: stream.getAudioTracks().length > 0
+        });
+        
+        // Broadcast the screen stream to other participants
+        // This would typically be handled by your WebRTC/MediaSoup infrastructure
+        console.log('🔄 Broadcasting screen share to participants...');
+      }
+
+      console.log('✅ Screen share started successfully');
+    } catch (error) {
+      console.error('❌ Failed to start screen share:', error);
+      alert('Failed to start screen sharing. Please make sure you grant permission.');
+    }
+  };
+
+  const stopScreenShare = () => {
+    console.log('🛑 Stopping screen share...');
+    
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+    }
+    
+    // Remove screen share from remote streams
+    const updatedRemoteStreams = new Map(remoteStreams);
+    updatedRemoteStreams.delete('screen-share-local');
+    
+    setIsScreenSharing(false);
+    setScreenSharingUserId(null);
+    setViewMode('gallery'); // Switch back to gallery view
+
+    // Notify all participants that screen sharing has stopped
+    if (sfuSocket) {
+      sfuSocket.emit('screenShareStopped', {
+        userId: user.id,
+        roomId: roomId
+      });
+    }
+
+    console.log('✅ Screen share stopped');
+  };
 
   // 1) Join SFU room and set up transports, produce/consume
   useEffect(() => {
@@ -226,6 +310,53 @@ export default function MeetingPage() {
     setAvatarIndex(avatarNavigate);
     setAvatarTranscript(avatarClips[avatarNavigate]?.snippet || '');
   }, [avatarNavigate, avatarClips]);
+
+  // Screen sharing event listeners
+  useEffect(() => {
+    if (!sfuSocket) return;
+
+    const handleRemoteScreenShareStarted = (data) => {
+      console.log('📺 Remote user started screen sharing:', data);
+      // Only set screen sharing if it's not the local user
+      if (data.userId !== user.id) {
+        setScreenSharingUserId(data.userId);
+        setViewMode('speaker'); // Switch to speaker view when someone shares
+        
+        // In a full implementation, you would receive the remote screen stream
+        // via your WebRTC/MediaSoup infrastructure and add it to remoteStreams
+        console.log('📺 Would receive screen stream from:', data.userName);
+      }
+    };
+
+    const handleRemoteScreenShareStopped = (data) => {
+      console.log('📺 Remote user stopped screen sharing:', data);
+      // Only clear if it was the user who was screen sharing
+      if (data.userId === screenSharingUserId) {
+        setScreenSharingUserId(null);
+        setViewMode('gallery'); // Switch back to gallery view
+        
+        // Remove the remote screen stream
+        const updatedRemoteStreams = new Map(remoteStreams);
+        updatedRemoteStreams.delete(`screen-share-${data.userId}`);
+      }
+    };
+
+    const handleReceiveScreenShare = (data) => {
+      console.log('📺 Receiving screen share stream:', data);
+      // This would be called when you receive the actual screen share stream
+      // The stream would be added to remoteStreams with a special identifier
+    };
+
+    sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
+    sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
+    sfuSocket.on('receiveScreenShare', handleReceiveScreenShare);
+
+    return () => {
+      sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
+      sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
+      sfuSocket.off('receiveScreenShare', handleReceiveScreenShare);
+    };
+  }, [sfuSocket, user, screenSharingUserId, remoteStreams]);
 
   // Close settings on click outside
   useEffect(() => {
@@ -1400,6 +1531,10 @@ export default function MeetingPage() {
     if (subtitlesEnabled) {
       stopSubtitles();
     }
+    // Stop screen sharing if active
+    if (isScreenSharing) {
+      stopScreenShare();
+    }
     leaveMeeting();
     
     // For standalone meeting windows, close the window instead of navigating
@@ -1423,37 +1558,60 @@ export default function MeetingPage() {
     }))
   ];
 
-  // Simple grid layout calculation like Zoom
-  const getGridLayout = (participantCount) => {
-    if (participantCount === 1) {
-      return { columns: 1, rows: 1 };
+  // Add screen sharing tile if active
+  if (screenStream && screenSharingUserId === 'local') {
+    videoTiles.unshift({
+      id: 'screen-share',
+      stream: screenStream,
+      isLocal: true,
+      label: 'Your Screen',
+      isScreenShare: true
+    });
+  }
+
+  // Determine layout based on view mode and screen sharing
+  const getLayout = () => {
+    const hasScreenShare = screenSharingUserId !== null;
+    
+    if (hasScreenShare && viewMode === 'speaker') {
+      // Screen sharing layout: main screen + sidebar thumbnails
+      return {
+        type: 'screen-sharing',
+        mainContent: screenSharingUserId === 'local' ? screenStream : null,
+        participantTiles: videoTiles.filter(tile => !tile.isScreenShare)
+      };
+    } else {
+      // Gallery layout: regular grid
+      const participantCount = videoTiles.length;
+      if (participantCount === 1) {
+        return { type: 'grid', columns: 1, rows: 1 };
+      }
+      if (participantCount === 2) {
+        return { type: 'grid', columns: 2, rows: 1 };
+      }
+      if (participantCount <= 4) {
+        return { type: 'grid', columns: 2, rows: 2 };
+      }
+      if (participantCount <= 6) {
+        return { type: 'grid', columns: 3, rows: 2 };
+      }
+      if (participantCount <= 9) {
+        return { type: 'grid', columns: 3, rows: 3 };
+      }
+      if (participantCount <= 12) {
+        return { type: 'grid', columns: 4, rows: 3 };
+      }
+      if (participantCount <= 16) {
+        return { type: 'grid', columns: 4, rows: 4 };
+      }
+      // For larger groups, use a square-ish grid
+      const columns = Math.ceil(Math.sqrt(participantCount));
+      const rows = Math.ceil(participantCount / columns);
+      return { type: 'grid', columns, rows };
     }
-    if (participantCount === 2) {
-      return { columns: 2, rows: 1 };
-    }
-    if (participantCount <= 4) {
-      return { columns: 2, rows: 2 };
-    }
-    if (participantCount <= 6) {
-      return { columns: 3, rows: 2 };
-    }
-    if (participantCount <= 9) {
-      return { columns: 3, rows: 3 };
-    }
-    if (participantCount <= 12) {
-      return { columns: 4, rows: 3 };
-    }
-    if (participantCount <= 16) {
-      return { columns: 4, rows: 4 };
-    }
-    // For larger groups, use a square-ish grid
-    const columns = Math.ceil(Math.sqrt(participantCount));
-    const rows = Math.ceil(participantCount / columns);
-    return { columns, rows };
   };
 
-  const tileCount = videoTiles.length;
-  const gridLayout = getGridLayout(tileCount);
+  const currentLayout = getLayout();
 
   if (!user) {
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
@@ -1479,83 +1637,180 @@ export default function MeetingPage() {
         </div>
       )}
       
-      {/* Video Grid - Clean Zoom-like Layout */}
-      <div className="flex-1 p-4 overflow-hidden">
-        <div 
-          className="grid gap-2 h-full"
-          style={{
-            gridTemplateColumns: `repeat(${gridLayout.columns}, 1fr)`,
-            gridTemplateRows: `repeat(${gridLayout.rows}, 1fr)`,
-          }}
-        >
-          {videoTiles.map(({ id, stream, isLocal, label }) => (
-            <div
-              key={id}
-              className="relative bg-gray-800 rounded-lg overflow-hidden"
-              style={{ minHeight: '100px' }}
+      {/* Screen Sharing Toggle Ribbon */}
+      {screenSharingUserId && (
+        <div className="bg-blue-600 text-white px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <MonitorSpeaker size={16} />
+            <span className="text-sm font-medium">
+              {screenSharingUserId === 'local' ? 'You are sharing your screen' : `${participantMap[screenSharingUserId] || 'Someone'} is sharing screen`}
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setViewMode('speaker')}
+              className={`px-3 py-1 rounded text-xs ${viewMode === 'speaker' ? 'bg-white/20' : 'bg-transparent'}`}
             >
-              {stream && stream.getVideoTracks().length > 0 ? (
+              Screen View
+            </button>
+            <button
+              onClick={() => setViewMode('gallery')}
+              className={`px-3 py-1 rounded text-xs ${viewMode === 'gallery' ? 'bg-white/20' : 'bg-transparent'}`}
+            >
+              Gallery View
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-hidden">
+        {currentLayout.type === 'screen-sharing' && viewMode === 'speaker' ? (
+          /* Screen Sharing Layout */
+          <div className="flex h-full">
+            {/* Main Screen Area */}
+            <div className="flex-1 bg-black flex items-center justify-center p-4">
+              {currentLayout.mainContent ? (
                 <video
-                  ref={isLocal ? localVideoRef : undefined}
-                  id={isLocal ? undefined : `remote-video-${id}`}
                   autoPlay
-                  muted={isLocal}
                   playsInline
-                  className="w-full h-full object-cover"
-                  style={{ 
-                    background: '#1f2937',
-                    transform: isLocal ? 'scaleX(-1)' : 'none'
-                  }}
-                  srcObject={isLocal ? undefined : stream}
-                  onLoadedMetadata={isLocal ? undefined : () => {
-                    const video = document.getElementById(`remote-video-${id}`);
-                    if (video) {
-                      video.play().catch(err => {
-                        if (err.name !== 'AbortError') console.warn('Video play failed:', err);
-                      });
-                    }
-                  }}
+                  className="max-w-full max-h-full object-contain"
+                  srcObject={currentLayout.mainContent}
+                  style={{ background: 'black' }}
                 />
-              ) : stream && stream.getAudioTracks().length > 0 ? (
-                <>
-                  <audio
-                    id={isLocal ? undefined : `remote-audio-${id}`}
-                    autoPlay
-                    className="hidden"
-                    srcObject={isLocal ? undefined : stream}
-                  />
-                  <div className="w-full h-full flex items-center justify-center bg-gray-700">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-xl mb-2">
-                        {label.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="text-white text-sm">{label}</div>
-                    </div>
-                  </div>
-                </>
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-700">
-                  <div className="text-center">
-                    <VideoOff size={48} className="text-gray-400 mb-2 mx-auto" />
-                    <div className="text-white text-sm">{label}</div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Simple name label */}
-              <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                {label} {isLocal && '(You)'}
-              </div>
-              
-              {/* Simple audio indicator */}
-              {stream && stream.getAudioTracks().length > 0 && !stream.getAudioTracks()[0].enabled && (
-                <div className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
-                  <MicOff size={12} className="text-white" />
+                <div className="text-white text-center">
+                  <MonitorSpeaker size={64} className="mx-auto mb-4 text-gray-400" />
+                  <div className="text-gray-400">Screen being shared...</div>
                 </div>
               )}
             </div>
-          ))}
-        </div>
+
+            {/* Participant Sidebar */}
+            <div className="w-72 bg-gray-800 p-2 flex flex-col space-y-2 overflow-y-auto">
+              {currentLayout.participantTiles.map(({ id, stream, isLocal, label }) => (
+                <div key={id} className="relative bg-gray-700 rounded aspect-video overflow-hidden">
+                  {stream && stream.getVideoTracks().length > 0 ? (
+                    <video
+                      ref={isLocal && id === 'local' ? localVideoRef : undefined}
+                      id={isLocal ? undefined : `remote-video-${id}`}
+                      autoPlay
+                      muted={isLocal}
+                      playsInline
+                      className="w-full h-full object-cover"
+                      style={{ 
+                        background: '#1f2937',
+                        transform: isLocal ? 'scaleX(-1)' : 'none'
+                      }}
+                      srcObject={isLocal ? undefined : stream}
+                      onLoadedMetadata={isLocal ? undefined : () => {
+                        const video = document.getElementById(`remote-video-${id}`);
+                        if (video) {
+                          video.play().catch(err => {
+                            if (err.name !== 'AbortError') console.warn('Video play failed:', err);
+                          });
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-sm mb-1">
+                          {label.charAt(0).toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute bottom-1 left-1 bg-black/70 text-white text-xs px-1 py-0.5 rounded">
+                    {label} {isLocal && '(You)'}
+                  </div>
+                  {stream && stream.getAudioTracks().length > 0 && !stream.getAudioTracks()[0].enabled && (
+                    <div className="absolute top-1 right-1 bg-red-600 rounded-full p-1">
+                      <MicOff size={8} className="text-white" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* Gallery Layout */
+          <div className="p-4 h-full">
+            <div 
+              className="grid gap-2 h-full"
+              style={{
+                gridTemplateColumns: `repeat(${currentLayout.columns}, 1fr)`,
+                gridTemplateRows: `repeat(${currentLayout.rows}, 1fr)`,
+              }}
+            >
+              {videoTiles.filter(tile => !tile.isScreenShare || viewMode === 'gallery').map(({ id, stream, isLocal, label, isScreenShare }) => (
+                <div
+                  key={id}
+                  className="relative bg-gray-800 rounded-lg overflow-hidden"
+                  style={{ minHeight: '100px' }}
+                >
+                  {stream && stream.getVideoTracks().length > 0 ? (
+                    <video
+                      ref={isLocal && id === 'local' ? localVideoRef : undefined}
+                      id={isLocal ? undefined : `remote-video-${id}`}
+                      autoPlay
+                      muted={isLocal}
+                      playsInline
+                      className="w-full h-full object-cover"
+                      style={{ 
+                        background: '#1f2937',
+                        transform: (isLocal && !isScreenShare) ? 'scaleX(-1)' : 'none'
+                      }}
+                      srcObject={isLocal ? undefined : stream}
+                      onLoadedMetadata={isLocal ? undefined : () => {
+                        const video = document.getElementById(`remote-video-${id}`);
+                        if (video) {
+                          video.play().catch(err => {
+                            if (err.name !== 'AbortError') console.warn('Video play failed:', err);
+                          });
+                        }
+                      }}
+                    />
+                  ) : stream && stream.getAudioTracks().length > 0 ? (
+                    <>
+                      <audio
+                        id={isLocal ? undefined : `remote-audio-${id}`}
+                        autoPlay
+                        className="hidden"
+                        srcObject={isLocal ? undefined : stream}
+                      />
+                      <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold text-xl mb-2">
+                            {label.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="text-white text-sm">{label}</div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                      <div className="text-center">
+                        <VideoOff size={48} className="text-gray-400 mb-2 mx-auto" />
+                        <div className="text-white text-sm">{label}</div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                    {label} {isLocal && !isScreenShare && '(You)'}
+                  </div>
+                  
+                  {stream && stream.getAudioTracks().length > 0 && !stream.getAudioTracks()[0].enabled && (
+                    <div className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
+                      <MicOff size={12} className="text-white" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {/* Simplified Subtitles */}
       {subtitlesEnabled && subtitleHistory.length > 0 && (
@@ -1592,6 +1847,14 @@ export default function MeetingPage() {
           title={isRecording ? "Stop recording" : "Start recording"}
         >
           {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
+        </button>
+        
+        <button 
+          onClick={isScreenSharing ? stopScreenShare : startScreenShare} 
+          className={`p-3 rounded-full ${isScreenSharing ? 'bg-green-600' : 'bg-gray-600'} text-white`}
+          title={isScreenSharing ? "Stop sharing screen" : "Share screen"}
+        >
+          {isScreenSharing ? <MonitorSpeaker size={20}/> : <Monitor size={20}/>} 
         </button>
         
         {recordedChunks.length > 0 && (
