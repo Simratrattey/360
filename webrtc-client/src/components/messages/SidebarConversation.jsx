@@ -66,7 +66,7 @@ export default function SidebarConversation({
   };
 
   const otherUser = getOtherUser();
-  const isOnline = otherUser && onlineUsers.has(otherUser._id);
+  // Online status tracking removed for a more compact layout
 
   // Get conversation type config
   const getTypeConfig = (type) => {
@@ -115,11 +115,6 @@ export default function SidebarConversation({
             </div>
           )}
           
-          {/* Online status indicator */}
-          {(conv?.status === 'online' || (conv.type === 'dm' && isOnline)) && (
-            <span className="absolute -bottom-1 -right-1 h-3 w-3 md:h-4 md:w-4 rounded-full border-2 md:border-3 border-white bg-green-500 shadow-md"></span>
-          )}
-          
           {/* Type indicator for groups/communities */}
           {conv.type !== 'dm' && (
             <div className={`absolute -top-1 -right-1 h-4 w-4 md:h-5 md:w-5 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
@@ -145,12 +140,6 @@ export default function SidebarConversation({
                 </span>
               )}
             </h3>
-            {/* Subtitle */}
-            <p className="text-xs md:text-sm text-gray-500 truncate">
-              {conv.type === 'dm' ? (isOnline ? 'Online' : 'Offline') : 
-               conv.type === 'group' ? `${conv.members?.length || 0} members` :
-               `${conv.members?.length || 0} members`}
-            </p>
           </div>
           <div className="flex items-center space-x-1">
             {/* Star button */}

@@ -106,6 +106,34 @@ export default function MessagesPage() {
   const [messagesCache, setMessagesCache] = useState({});
   const { refreshUnreadCount } = useMessageNotifications();
 
+  /**
+   * Move a conversation to the top of its section in the sidebar.
+   * This helper updates the conversation's `lastMessage` and `lastMessageAt` fields
+   * (creating them if they don't exist) and reorders the items array for the
+   * corresponding section so that the most recently active conversation appears first.
+   *
+   * @param {string} convId - The ID of the conversation to move.
+   * @param {string} lastMsg - A preview of the last message (text or file placeholder).
+   * @param {string} time - ISO timestamp of when the activity occurred.
+   */
+  const moveConversationToTop = (convId, lastMsg, time) => {
+    setAllConversations(prevSections => {
+      return prevSections.map(section => {
+        const idx = section.items.findIndex(c => c._id === convId);
+        if (idx === -1) return section;
+        const newItems = [...section.items];
+        const [convItem] = newItems.splice(idx, 1);
+        const updatedConv = {
+          ...convItem,
+          lastMessage: lastMsg,
+          lastMessageAt: time,
+        };
+        // Prepend updated conversation
+        return { ...section, items: [updatedConv, ...newItems] };
+      });
+    });
+  };
+
   // Request notification permission on mount
   useEffect(() => {
     if (window.Notification && Notification.permission === 'default') {
@@ -282,6 +310,13 @@ export default function MessagesPage() {
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         new Notification(title, { body });
       }
+      
+      // Move the corresponding conversation to the top using the latest message
+      moveConversationToTop(
+        msg.conversationId,
+        msg.text || (msg.file ? 'Sent a file' : ''),
+        msg.createdAt || new Date().toISOString()
+      );
     });
 
     // Edit message
@@ -485,11 +520,18 @@ export default function MessagesPage() {
         replyTo: replyTo ? replyTo._id : undefined,
       });
       
+      // Optimistically move conversation to top based on the message we just sent
+      moveConversationToTop(
+        selected._id,
+        input.trim() || (uploadFile ? 'Sent a file' : ''),
+        new Date().toISOString()
+      );
+      
       // Reset input fields
       setInput('');
       setUploadFile(null);
       setReplyTo(null);
-      setTyping(false);
+      setShowEmojiPicker(false);
     } catch (error) {
       console.error('Error sending message:', error);
       // You could add a notification here to show the error to the user
