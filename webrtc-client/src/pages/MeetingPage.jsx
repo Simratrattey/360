@@ -168,7 +168,7 @@ export default function MeetingPage() {
     }
   };
 
-  // Convert WebM to MP4 using FFmpeg
+  // Convert WebM to MP4 using FFmpeg with timeout
   const convertWebMToMP4 = async (webmBlob) => {
     try {
       setIsConverting(true);
@@ -180,30 +180,42 @@ export default function MeetingPage() {
         throw new Error('FFmpeg failed to initialize');
       }
       
-      // Write input file
-      await ffmpegInstance.writeFile('input.webm', await fetchFile(webmBlob));
+      // Create conversion promise with timeout
+      const conversionPromise = async () => {
+        // Write input file
+        await ffmpegInstance.writeFile('input.webm', await fetchFile(webmBlob));
+        
+        // Convert WebM to MP4 with fast settings optimized for browser
+        await ffmpegInstance.exec([
+          '-i', 'input.webm',
+          '-c:v', 'libx264',        // H.264 video codec
+          '-preset', 'ultrafast',   // Fastest encoding (lower quality but much faster)
+          '-crf', '28',             // Balanced quality (higher = faster/lower quality)
+          '-c:a', 'aac',            // AAC audio codec
+          '-b:a', '96k',            // Lower audio bitrate for speed
+          '-movflags', '+faststart', // Enable web streaming
+          '-threads', '1',          // Single thread for stability
+          '-max_muxing_queue_size', '1024', // Prevent buffer issues
+          'output.mp4'
+        ]);
+        
+        // Read the output file
+        const mp4Data = await ffmpegInstance.readFile('output.mp4');
+        
+        // Clean up temporary files
+        await ffmpegInstance.deleteFile('input.webm');
+        await ffmpegInstance.deleteFile('output.mp4');
+        
+        // Create MP4 blob
+        return new Blob([mp4Data], { type: 'video/mp4' });
+      };
       
-      // Convert WebM to MP4 with high quality settings
-      await ffmpegInstance.exec([
-        '-i', 'input.webm',
-        '-c:v', 'libx264',        // H.264 video codec
-        '-preset', 'medium',       // Balance between speed and compression
-        '-crf', '23',             // High quality (lower = better quality)
-        '-c:a', 'aac',            // AAC audio codec
-        '-b:a', '128k',           // Audio bitrate
-        '-movflags', '+faststart', // Enable web streaming
-        'output.mp4'
-      ]);
+      // Add timeout (2 minutes max)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Conversion timeout')), 120000);
+      });
       
-      // Read the output file
-      const mp4Data = await ffmpegInstance.readFile('output.mp4');
-      
-      // Clean up temporary files
-      await ffmpegInstance.deleteFile('input.webm');
-      await ffmpegInstance.deleteFile('output.mp4');
-      
-      // Create MP4 blob
-      const mp4Blob = new Blob([mp4Data], { type: 'video/mp4' });
+      const mp4Blob = await Promise.race([conversionPromise(), timeoutPromise]);
       
       setIsConverting(false);
       console.log('Conversion completed successfully');
@@ -865,8 +877,8 @@ export default function MeetingPage() {
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     
-    // Check if conversion should be attempted
-    const shouldConvert = webmBlob.size < 100 * 1024 * 1024; // Only convert files smaller than 100MB
+    // Check if conversion should be attempted (only small files for reasonable conversion time)
+    const shouldConvert = webmBlob.size < 25 * 1024 * 1024; // Only convert files smaller than 25MB
     
     if (!shouldConvert) {
       console.log('File too large for conversion, downloading as WebM');
@@ -922,6 +934,8 @@ export default function MeetingPage() {
       
       if (error.message.includes('FFmpeg failed to initialize')) {
         alert('MP4 conversion unavailable due to network restrictions. WebM file downloaded instead.\n\nTo convert to MP4:\n1. Use an online converter like CloudConvert\n2. Or install a desktop video converter like VLC');
+      } else if (error.message.includes('timeout')) {
+        alert('MP4 conversion took too long and was cancelled. WebM file downloaded instead.\n\nFor large files, please use a desktop video converter like VLC or FFmpeg.');
       } else {
         alert('Conversion to MP4 failed. WebM file downloaded instead. You can use an online converter to convert it to MP4.');
       }
