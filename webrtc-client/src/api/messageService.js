@@ -1,6 +1,17 @@
 import API from './client';
 
-export const getMessages = (conversationId) => API.get(`/messages/conversation/${conversationId}`);
+/**
+ * Fetch messages for a conversation.
+ *
+ * @param {string} conversationId The ID of the conversation to fetch.
+ * @param {Object} [params] Optional query parameters for pagination (e.g. { limit, skip }).
+ * @returns {Promise} The API response promise.
+ */
+export const getMessages = (conversationId, params = {}) => {
+  // When params is provided, pass it to axios so that query parameters are included in the request.
+  // If no params are given, axios will simply ignore the empty params object.
+  return API.get(`/messages/conversation/${conversationId}`, { params });
+};
 export const sendMessage = (conversationId, data) => API.post(`/messages/conversation/${conversationId}`, data);
 export const editMessage = (messageId, data) => API.put(`/messages/${messageId}`, data);
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);

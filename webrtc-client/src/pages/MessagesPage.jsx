@@ -160,10 +160,33 @@ export default function MessagesPage() {
         { section: 'Groups', icon: Users, items: conversations.filter(c => c.type === 'group') },
         { section: 'Communities', icon: Hash, items: conversations.filter(c => c.type === 'community') },
       ]);
+
+      // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
+      // We limit the number of conversations prefetched per section to avoid overwhelming the server.
+      const PREFETCH_CONVERSATIONS_PER_SECTION = 3;
+      const PREFETCH_MESSAGES_LIMIT = 10;
+      const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
       
-      // Auto-select first conversation
+      // Kick off prefetch asynchronously without blocking the conversation list rendering.
+      conversationsToPrefetch.forEach(conv => {
+        if (!conv || !conv._id) return;
+        // Only prefetch if not already cached.
+        if (!messagesCache[conv._id]) {
+          messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
+            .then(res => {
+              const msgs = res.data?.messages || res.data || [];
+              setMessagesCache(prev => ({ ...prev, [conv._id]: msgs }));
+            })
+            .catch(err => {
+              // Silently fail on prefetch errors to avoid interrupting user flow.
+              console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
+            });
+        }
+      });
+      
+      // Auto-select first conversation if none is selected
       const first = conversations[0];
-      if (first) {
+      if (first && !selected) {
         handleSelect(first);
       }
     } catch (error) {
