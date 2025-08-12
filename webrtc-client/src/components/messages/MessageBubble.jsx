@@ -115,145 +115,157 @@ function MessageBubble({
 
     const fileIcon = getFileIcon(msg.file.category || 'other', msg.file.type);
     const fileSize = formatFileSize(msg.file.size || 0);
+    // Determine preview capability and URL for this file
+    const previewUrl = getPreviewUrl(msg.file);
+    const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
 
-    if (isImage) {
-      return (
-        <div className="mt-3 relative group">
-          <div className="relative inline-block">
-            {!imgError ? (
-              <img 
-                src={msg.file.url} 
-                alt={msg.file.name} 
-                className="max-w-[280px] max-h-[220px] rounded-xl shadow-lg object-cover cursor-pointer hover:opacity-95 transition-all duration-200" 
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <div className="w-[220px] h-[180px] flex flex-col items-center justify-center bg-gray-100 rounded-xl shadow-lg p-4">
-                <div className="text-5xl mb-2">{fileIcon}</div>
-                <p className="text-sm text-gray-700 font-medium mb-2 text-center break-all max-w-full">{msg.file.name}</p>
+    // If the file type can be previewed, show an appropriate preview based on type
+    if (canPreviewFile) {
+      // Image preview with fallback
+      if (isImage) {
+        return (
+          <div className="relative">
+            <img
+              src={previewUrl}
+              alt={msg.file.name}
+              onError={() => setImgError(true)}
+              className={`max-w-full max-h-60 rounded-lg ${imgError ? 'hidden' : ''}`}
+            />
+            {imgError && (
+              <div className="flex items-center space-x-2 p-3 bg-gray-100 rounded-lg">
+                <span className="text-2xl">{fileIcon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
+                  <p className="text-xs text-gray-500">{fileSize}</p>
+                </div>
                 <button
                   onClick={() => handleDownload(msg.file.url, msg.file.name)}
-                  className="mt-2 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg"
-                  title="Download"
+                  className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm"
                 >
-                  <Download className="h-5 w-5" />
+                  Download
                 </button>
               </div>
             )}
-            {/* Download button overlay (only if image loads) */}
             {!imgError && (
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownload(msg.file.url, msg.file.name);
-                  }}
-                  className="p-2 bg-black bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg backdrop-blur-sm"
-                  title="Download"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-            {/* File info overlay (only if image loads) */}
-            {!imgError && (
-              <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-lg backdrop-blur-sm truncate">
-                  {msg.file.name}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    if (isVideo) {
-      return (
-        <div className="mt-3">
-          <div className="relative">
-            <video 
-              src={msg.file.url} 
-              className="max-w-[300px] max-h-[200px] rounded-xl shadow-lg"
-              controls
-              preload="metadata"
-              onPlay={() => setVideoPlaying(true)}
-              onPause={() => setVideoPlaying(false)}
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'flex';
-              }}
-            />
-            {/* Download button overlay */}
-            <div className="absolute top-2 right-2">
               <button
-                onClick={() => handleDownload(msg.file.url, msg.file.name)}
-                className="p-2 bg-black bg-opacity-70 hover:bg-opacity-90 text-white rounded-full shadow-lg backdrop-blur-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownload(msg.file.url, msg.file.name);
+                }}
+                className="absolute bottom-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full shadow-lg"
                 title="Download"
               >
-                <Download className="h-4 w-4" />
+                <Download size={16} />
               </button>
+            )}
+          </div>
+        );
+      }
+      // Video preview
+      if (isVideo) {
+        return (
+          <div className="relative">
+            <video
+              src={previewUrl}
+              controls
+              className="max-w-full max-h-60 rounded-lg"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <button
+              onClick={() => handleDownload(msg.file.url, msg.file.name)}
+              className="absolute bottom-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
+              title="Download"
+            >
+              <Download size={16} />
+            </button>
+            <div className="mt-1 flex items-center space-x-2 text-sm text-gray-600">
+              <span>{fileIcon}</span>
+              <span className="truncate flex-1">{msg.file.name}</span>
+              <span className="text-xs">{fileSize}</span>
             </div>
           </div>
-          {/* File info below video */}
-          <div className="mt-2 p-2 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
-            <div className="flex items-center space-x-2">
-              <div className="text-lg">{fileIcon}</div>
+        );
+      }
+      // Audio preview
+      if (isAudio) {
+        return (
+          <div className="flex flex-col space-y-2 p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <div className="text-2xl text-blue-500">{fileIcon}</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
                 <p className="text-xs text-gray-500">{fileSize}</p>
               </div>
             </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (isAudio) {
-      return (
-        <div className="mt-3 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="text-2xl">{fileIcon}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{msg.file.name}</p>
-              <p className="text-xs text-gray-500">{fileSize}</p>
-            </div>
-            <audio 
-              src={msg.file.url} 
+            <audio
+              src={previewUrl}
               controls
-              className="flex-1"
-              onPlay={() => setAudioPlaying(true)}
-              onPause={() => setAudioPlaying(false)}
+              className="w-full mt-1"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
             />
             <button
               onClick={() => handleDownload(msg.file.url, msg.file.name)}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-              title="Download"
+              className="self-end px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm mt-2"
             >
-              <Download className="h-4 w-4 text-gray-600" />
+              Download
             </button>
           </div>
-        </div>
-      );
+        );
+      }
+      // PDF and text preview via iframe
+      if (
+        msg.file.type === 'application/pdf' ||
+        msg.file.type.startsWith('text/') ||
+        msg.file.type === 'application/json' ||
+        msg.file.type === 'application/xml'
+      ) {
+        return (
+          <div className="flex flex-col space-y-2">
+            <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <iframe
+                src={previewUrl}
+                title={msg.file.name}
+                className="w-full h-full"
+                style={{ border: 'none' }}
+              />
+              <button
+                onClick={() => handleDownload(msg.file.url, msg.file.name)}
+                className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
+                title="Download"
+              >
+                <Download size={16} />
+              </button>
+            </div>
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span>{fileIcon}</span>
+              <span className="truncate flex-1">{msg.file.name}</span>
+              <span className="text-xs">{fileSize}</span>
+            </div>
+          </div>
+        );
+      }
     }
-
-    // For documents, code files, archives, and other files
+    
+    // Fallback for non-previewable files
     return (
-      <div className="mt-3 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200">
+      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
         <div className="flex items-center space-x-3">
           <div className="text-2xl">{fileIcon}</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{msg.file.name}</p>
-            <p className="text-xs text-gray-500">{fileSize} • {msg.file.type || 'Unknown type'}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
+            <p className="text-xs text-gray-500">{fileSize} • {msg.file.type || 'File'}</p>
           </div>
-          <button
-            onClick={() => handleDownload(msg.file.url, msg.file.name)}
-            className="p-2 hover:bg-gray-200 rounded-lg transition-colors flex-shrink-0"
-            title="Download"
-          >
-            <Download className="h-4 w-4 text-gray-600" />
-          </button>
         </div>
+        <button
+          onClick={() => handleDownload(msg.file.url, msg.file.name)}
+          className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm"
+        >
+          Download
+        </button>
       </div>
     );
   };
