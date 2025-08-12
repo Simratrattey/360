@@ -16,7 +16,7 @@ export default function MeetingPage() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
-  const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate } = useContext(SocketContext);
+  const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate, sfuSocket, isSFUConnected } = useContext(SocketContext);
   const { participantMap, recordingStatus, notifyRecordingStarted, notifyRecordingStopped } = useContext(SocketContext);
 
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
@@ -104,9 +104,14 @@ export default function MeetingPage() {
 
   // 1) Join SFU room and set up transports, produce/consume
   useEffect(() => {
-    if (roomId && user) joinMeeting(roomId);
+    if (roomId && user && sfuSocket && isSFUConnected) {
+      console.log('🎯 [MeetingPage] All conditions met, joining meeting:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected });
+      joinMeeting(roomId);
+    } else {
+      console.log('⏳ [MeetingPage] Waiting for conditions:', { roomId, user: !!user, sfuSocket: !!sfuSocket, isSFUConnected });
+    }
     return () => leaveMeeting();
-  }, [roomId, user]);
+  }, [roomId, user, sfuSocket, isSFUConnected, joinMeeting]);
 
   useEffect(() => {
     if (!localStream) {
