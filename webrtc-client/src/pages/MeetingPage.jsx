@@ -665,6 +665,12 @@ export default function MeetingPage() {
 
   // Process individual remote stream for speech recognition
   const startRemoteStreamRecognition = async (stream, peerId, participantName) => {
+    // Prevent duplicate processing for the same participant
+    if (speechRecognitionRef.current?.has(peerId)) {
+      console.log(`⚠️ Audio processing already active for ${participantName} (${peerId})`);
+      return;
+    }
+
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length === 0) {
       console.warn(`No audio tracks found for participant ${participantName}`);
@@ -1493,34 +1499,41 @@ export default function MeetingPage() {
 
           {/* Floating subtitle bubbles - positioned above controls */}
           <div className="fixed bottom-32 left-0 right-0 z-25 pointer-events-none">
-            <div className="max-w-4xl mx-auto px-4">
+            <div className="flex flex-col items-center max-w-6xl mx-auto px-6">
               {/* Only show last 2 subtitles to avoid clutter */}
               {subtitleHistory.slice(-2).map((subtitle, index) => (
                 <div 
                   key={subtitle.id || `${subtitle.speaker}-${subtitle.timestamp}-${index}`} 
-                  className={`mb-2 animate-fade-in ${index === subtitleHistory.slice(-2).length - 1 ? 'opacity-100' : 'opacity-70'}`}
+                  className={`mb-3 animate-fade-in transition-all duration-300 ${
+                    index === subtitleHistory.slice(-2).length - 1 
+                      ? 'opacity-100 scale-100' 
+                      : 'opacity-60 scale-95'
+                  }`}
                 >
-                  <div className="bg-black bg-opacity-75 text-white rounded-2xl px-4 py-2 backdrop-blur-sm border border-white border-opacity-20 shadow-lg inline-block max-w-md">
-                    {/* Speaker name and timestamp */}
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                      <span className="text-blue-300 font-medium text-sm">{subtitle.speaker}</span>
-                      {subtitle.isTranslated && (
-                        <span className="text-xs bg-purple-500 bg-opacity-30 text-purple-200 px-2 py-0.5 rounded-full">
-                          {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag}
-                        </span>
-                      )}
+                  <div className="subtitle-bubble bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-xl border border-gray-600/30 text-white rounded-2xl px-6 py-3 shadow-2xl max-w-3xl">
+                    {/* Speaker header with enhanced styling */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-3 h-3 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full animate-pulse"></div>
+                        <span className="text-blue-300 font-semibold text-sm tracking-wide">{subtitle.speaker}</span>
+                        {subtitle.isTranslated && (
+                          <span className="text-xs bg-gradient-to-r from-purple-500/40 to-pink-500/40 text-purple-200 px-3 py-1 rounded-full border border-purple-400/30">
+                            {supportedLanguages.find(l => l.code === subtitle.targetLanguage)?.flag} Translated
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 font-mono">{subtitle.timestamp}</span>
                     </div>
                     
-                    {/* Main subtitle text - larger and readable */}
-                    <div className="text-white font-medium text-base leading-relaxed">
+                    {/* Main subtitle text - enhanced typography */}
+                    <div className="text-white font-medium text-lg leading-relaxed tracking-wide">
                       {subtitle.text}
                     </div>
                     
-                    {/* Original text if translated - smaller and muted */}
+                    {/* Original text if translated - improved styling */}
                     {subtitle.isTranslated && subtitle.original && (
-                      <div className="text-gray-400 text-sm italic mt-1 opacity-70">
-                        "{subtitle.original}"
+                      <div className="text-gray-300 text-sm italic mt-2 pl-4 border-l-2 border-gray-600/50 opacity-80">
+                        Original: "{subtitle.original}"
                       </div>
                     )}
                   </div>
