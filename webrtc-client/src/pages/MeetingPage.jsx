@@ -131,18 +131,39 @@ export default function MeetingPage() {
     });
     
     try {
-      // Load FFmpeg core
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-      await ffmpegInstance.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
-      });
+      // Try different CDN URLs for better compatibility
+      const cdnUrls = [
+        'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm',
+        'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm',
+        'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+      ];
       
-      setFfmpeg(ffmpegInstance);
-      console.log('FFmpeg initialized successfully');
-      return ffmpegInstance;
+      let loadError = null;
+      
+      for (const baseURL of cdnUrls) {
+        try {
+          console.log(`Trying FFmpeg core from: ${baseURL}`);
+          
+          await ffmpegInstance.load({
+            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+          });
+          
+          setFfmpeg(ffmpegInstance);
+          console.log('FFmpeg initialized successfully');
+          return ffmpegInstance;
+          
+        } catch (error) {
+          console.warn(`Failed to load from ${baseURL}:`, error.message);
+          loadError = error;
+          continue;
+        }
+      }
+      
+      throw loadError || new Error('All CDN URLs failed');
+      
     } catch (error) {
-      console.error('Failed to initialize FFmpeg:', error);
+      console.error('Failed to initialize FFmpeg from all sources:', error);
       return null;
     }
   };
@@ -844,6 +865,26 @@ export default function MeetingPage() {
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     
+    // Check if conversion should be attempted
+    const shouldConvert = webmBlob.size < 100 * 1024 * 1024; // Only convert files smaller than 100MB
+    
+    if (!shouldConvert) {
+      console.log('File too large for conversion, downloading as WebM');
+      const url = URL.createObjectURL(webmBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `meeting-recording-${timestamp}.webm`;
+      
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      alert('Large file downloaded as WebM format. For MP4 conversion, please use a desktop video converter.');
+      return;
+    }
+    
     try {
       // Convert WebM to MP4 using FFmpeg
       console.log('Converting WebM to MP4...');
@@ -879,7 +920,11 @@ export default function MeetingPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      alert('Conversion to MP4 failed. WebM file downloaded instead. You can use an online converter to convert it to MP4.');
+      if (error.message.includes('FFmpeg failed to initialize')) {
+        alert('MP4 conversion unavailable due to network restrictions. WebM file downloaded instead.\n\nTo convert to MP4:\n1. Use an online converter like CloudConvert\n2. Or install a desktop video converter like VLC');
+      } else {
+        alert('Conversion to MP4 failed. WebM file downloaded instead. You can use an online converter to convert it to MP4.');
+      }
     }
   };
 
