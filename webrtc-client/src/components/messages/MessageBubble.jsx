@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl } from '../../api/messageService';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
@@ -31,6 +31,25 @@ function MessageBubble({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  // Click outside handler to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -412,38 +431,66 @@ function MessageBubble({
                 </span>
               )}
 
-              {/* Message actions */}
-              <div className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex space-x-1 transition-opacity duration-200 ${
-                isOwn ? 'bg-blue-500 bg-opacity-20' : 'bg-gray-100'
-              }`}>
-                <button 
-                  className="p-1 hover:bg-white hover:bg-opacity-30 rounded transition-colors" 
-                  onClick={() => onReply(msg)}
-                  title="Reply"
-                >
-                  <Reply className="h-4 w-4" />
-                </button>
-                {isOwn && (
-                  <>
-                    {/* Only show Edit if no file is attached */}
-                    {!msg.file && (
+              {/* Message actions dropdown */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="relative" ref={dropdownRef}>
+                  <button 
+                    className={`p-1.5 rounded-lg transition-all duration-200 hover:scale-105 ${
+                      isOwn 
+                        ? 'bg-blue-500 bg-opacity-20 hover:bg-blue-500 hover:bg-opacity-30 text-blue-100' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                    }`}
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    title="More options"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                  
+                  {/* Dropdown menu */}
+                  {showDropdown && (
+                    <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[140px] animate-in fade-in duration-200 backdrop-blur-sm">
+                      {/* Reply option - available for all messages */}
                       <button 
-                        onClick={() => onEdit(msg)} 
-                        className="p-1 hover:bg-white hover:bg-opacity-30 rounded transition-colors"
-                        title="Edit"
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150 rounded-none first:rounded-t-lg last:rounded-b-lg"
+                        onClick={() => {
+                          onReply(msg);
+                          setShowDropdown(false);
+                        }}
                       >
-                        <Edit className="h-4 w-4" />
+                        <Reply className="h-4 w-4 text-gray-500" />
+                        <span className="font-medium">Reply</span>
                       </button>
-                    )}
-                    <button 
-                      onClick={() => setShowDeleteConfirm(true)} 
-                      className="p-1 hover:bg-white hover:bg-opacity-30 rounded transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
+                      
+                      {/* Edit option - only for own messages without files */}
+                      {isOwn && !msg.file && (
+                        <button 
+                          className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150 rounded-none first:rounded-t-lg last:rounded-b-lg"
+                          onClick={() => {
+                            onEdit(msg);
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 text-gray-500" />
+                          <span className="font-medium">Edit</span>
+                        </button>
+                      )}
+                      
+                      {/* Delete option - only for own messages */}
+                      {isOwn && (
+                        <button 
+                          className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-all duration-150 rounded-none first:rounded-t-lg last:rounded-b-lg"
+                          onClick={() => {
+                            setShowDeleteConfirm(true);
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <span className="font-medium">Delete</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}
