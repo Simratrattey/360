@@ -36,18 +36,22 @@ export default function ChatWindow({
   typing = {},
   messageStatus,
   onlineUsers = [],
+  /**
+   * Controls whether to auto-scroll to bottom. Set to false when edit/reply actions are active.
+   */
+  shouldAutoScroll = true,
 }) {
   // Ref used to scroll to bottom on new messages
   const chatRef = useRef(null);
   // Group messages by date; safe to pass an empty array
   const grouped = groupMessagesByDate(messages);
 
-  // Scroll to bottom whenever messages or typing users change
+  // Scroll to bottom whenever messages or typing users change, but only if shouldAutoScroll is true
   useEffect(() => {
-    if (chatRef.current) {
+    if (chatRef.current && shouldAutoScroll) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
-  }, [messages, typing]);
+  }, [messages, typing, shouldAutoScroll]);
 
   // Use the passed-in loading prop to determine if messages are being fetched
   const isLoading = loading;
