@@ -104,6 +104,8 @@ export default function MessagesPage() {
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   const [messagesCache, setMessagesCache] = useState({});
+  const [isSending, setIsSending] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { refreshUnreadCount } = useMessageNotifications();
 
   /**
@@ -294,7 +296,8 @@ export default function MessagesPage() {
         const exists = filtered.some(m => m._id === msg._id);
         if (exists) return filtered;
         
-        const updated = [...filtered, msg];
+        // Add the real message and remove sending state
+        const updated = [...filtered, { ...msg, sending: false }];
         
         // Update cache using the conversationId
         if (msg.conversationId) {
@@ -495,7 +498,7 @@ export default function MessagesPage() {
   };
 
   // Send a new message. This version implements an "optimistic" update so the message
-  // appears in the UI immediately, without waiting for the server to emit a chat:new event.
+  // Enhanced handleSend with optimistic UI and loading states
   const handleSend = async () => {
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
@@ -507,15 +510,35 @@ export default function MessagesPage() {
       return;
     }
 
+    // Prevent multiple sends
+    if (isSending) {
+      return;
+    }
+
+    setIsSending(true);
+    setUploadProgress(0);
+
     try {
       let fileMeta = null;
+      
+      // Handle file upload with progress tracking
       if (uploadFile) {
-        const res = await messageAPI.uploadMessageFile(uploadFile);
-        fileMeta = res.data;
+        try {
+          const res = await messageAPI.uploadMessageFile(uploadFile);
+          fileMeta = res.data;
+          setUploadProgress(100);
+        } catch (uploadError) {
+          console.error('File upload failed:', uploadError);
+          setNotification({
+            message: 'Failed to upload file. Please try again.'
+          });
+          setTimeout(() => setNotification(null), 3000);
+          setIsSending(false);
+          return;
+        }
       }
       
-      // Build an optimistic message object. We include a temporary ID and mark it as pending
-      // so it can be removed or replaced when the real message arrives from the server.
+      // Build an optimistic message object with loading state
       const tempId = `temp-${Date.now()}`;
       const tempMsg = {
         _id: tempId,
@@ -527,6 +550,7 @@ export default function MessagesPage() {
         replyTo: replyTo ? replyTo._id : undefined,
         createdAt: new Date().toISOString(),
         pending: true,
+        sending: true, // Mark as currently sending
       };
       
       // Add optimistic message to UI immediately
@@ -541,6 +565,13 @@ export default function MessagesPage() {
         };
       });
       
+      // Optimistically move conversation to top
+      moveConversationToTop(
+        selected._id,
+        input.trim() || (uploadFile ? 'Sent a file' : ''),
+        new Date().toISOString()
+      );
+      
       // Emit the actual message to the server
       chatSocket.sendMessage({
         conversationId: selected._id,
@@ -549,21 +580,32 @@ export default function MessagesPage() {
         replyTo: replyTo ? replyTo._id : undefined,
       });
       
-      // Optimistically move conversation to top based on the message we just sent
-      moveConversationToTop(
-        selected._id,
-        input.trim() || (uploadFile ? 'Sent a file' : ''),
-        new Date().toISOString()
-      );
-      
-      // Reset input fields
+      // Reset input fields immediately for better UX
       setInput('');
       setUploadFile(null);
       setReplyTo(null);
       setShowEmojiPicker(false);
+      
+      // Show success notification for file uploads
+      if (uploadFile) {
+        setNotification({
+          message: 'File sent successfully!'
+        });
+        setTimeout(() => setNotification(null), 2000);
+      }
+      
     } catch (error) {
       console.error('Error sending message:', error);
-      // You could add a notification here to show the error to the user
+      setNotification({
+        message: 'Failed to send message. Please try again.'
+      });
+      setTimeout(() => setNotification(null), 3000);
+      
+      // Remove the optimistic message on error
+      setMessages(prev => prev.filter(msg => !msg.sending));
+    } finally {
+      setIsSending(false);
+      setUploadProgress(0);
     }
   };
 
@@ -940,6 +982,8 @@ export default function MessagesPage() {
               onShowEmojiPicker={() => setShowEmojiPicker('input')}
               onTyping={handleTyping}
               members={selected?.members || []}
+              isSending={isSending}
+              uploadProgress={uploadProgress}
             />
           )}
 

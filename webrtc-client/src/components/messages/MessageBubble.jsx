@@ -475,6 +475,16 @@ function MessageBubble({
               <div className={`text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'}`}>
                 {renderTextWithMentions(msg.text)}
               </div>
+              
+              {/* Sending indicator */}
+              {msg.sending && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60"></div>
+                  <span className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                    Sending...
+                  </span>
+                </div>
+              )}
 
               {/* File attachments */}
               {renderFilePreview()}

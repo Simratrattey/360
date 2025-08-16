@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Paperclip, Smile, X, Send, AlertCircle } from 'lucide-react';
+import { Paperclip, Smile, X, Send, AlertCircle, Loader2 } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
@@ -14,6 +14,8 @@ export default function ChatInput({
   onShowEmojiPicker,
   onTyping,
   members = [],
+  isSending = false,
+  uploadProgress = 0,
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
@@ -185,23 +187,45 @@ export default function ChatInput({
             <button 
               onClick={onRemoveFile} 
               className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-200"
+              disabled={isSending}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
+          
+          {/* Upload progress bar */}
+          {isSending && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                <span>Uploading...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Input area */}
       <div className="flex items-end space-x-3 relative">
         {/* File upload button */}
-        <label className="cursor-pointer p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105" title="Upload any file type (max 50MB)">
+        <label className={`cursor-pointer p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
+          isSending 
+            ? 'bg-gray-300 cursor-not-allowed transform-none' 
+            : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 hover:shadow-xl hover:scale-105'
+        }`} title="Upload any file type (max 50MB)">
           <Paperclip className="h-5 w-5" />
           <input 
             type="file" 
             className="hidden" 
             onChange={handleFileChange}
             accept="*/*"
+            disabled={isSending}
           />
         </label>
 
@@ -269,10 +293,21 @@ export default function ChatInput({
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={!input.trim() && !uploadFile}
-          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+          disabled={(!input.trim() && !uploadFile) || isSending}
+          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
         >
-          <Send className="h-5 w-5" />
+          {isSending ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Send className="h-5 w-5" />
+          )}
+          
+          {/* Upload progress indicator for files */}
+          {isSending && uploadFile && uploadProgress > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
         </button>
       </div>
 
