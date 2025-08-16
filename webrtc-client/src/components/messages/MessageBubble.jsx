@@ -57,6 +57,14 @@ function MessageBubble({
     setImgError(false);
     setImgLoading(true);
   }, [messageId]);
+
+  // Reset image loading state when file changes
+  useEffect(() => {
+    if (msg.file && msg.file.type && msg.file.type.startsWith('image/')) {
+      setImgError(false);
+      setImgLoading(true);
+    }
+  }, [msg.file?.url]);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -146,6 +154,11 @@ function MessageBubble({
     const previewUrl = getPreviewUrl(msg.file);
     const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
 
+    // Debug logging for image loading issues
+    if (isImage && previewUrl) {
+      console.log('Image preview URL:', previewUrl);
+    }
+
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
       // Enhanced image preview with better styling and loading states
@@ -154,33 +167,34 @@ function MessageBubble({
           <div className="relative group">
             {/* Image container with loading state */}
             <div className="relative overflow-hidden rounded-lg bg-gray-100">
-              <img
-                src={previewUrl}
-                alt={msg.file.name}
-                onError={() => {
-                  setImgError(true);
-                  setImgLoading(false);
-                }}
-                onLoad={() => {
-                  setImgError(false);
-                  setImgLoading(false);
-                }}
-                className={`max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer ${
-                  imgError || imgLoading ? 'hidden' : ''
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Open image in full screen or modal
-                  window.open(previewUrl, '_blank');
-                }}
-                title="Click to view full size"
-              />
-              
-              {/* Loading placeholder */}
+              {/* Loading placeholder - show while loading */}
               {imgLoading && !imgError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                <div className="flex items-center justify-center h-48 bg-gray-100">
                   <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
+              )}
+              
+              {/* Image - show when loaded */}
+              {!imgLoading && !imgError && (
+                <img
+                  src={previewUrl}
+                  alt={msg.file.name}
+                  onError={() => {
+                    setImgError(true);
+                    setImgLoading(false);
+                  }}
+                  onLoad={() => {
+                    setImgError(false);
+                    setImgLoading(false);
+                  }}
+                  className="max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Open image in full screen or modal
+                    window.open(previewUrl, '_blank');
+                  }}
+                  title="Click to view full size"
+                />
               )}
             </div>
             
@@ -191,14 +205,26 @@ function MessageBubble({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
                   <p className="text-xs text-gray-500">{fileSize}</p>
-                  <p className="text-xs text-red-500">Failed to load preview</p>
+                  <p className="text-xs text-gray-400">Image preview unavailable</p>
                 </div>
-                <button
-                  onClick={() => handleDownload(msg.file.url, msg.file.name)}
-                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
-                >
-                  Download
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setImgError(false);
+                      setImgLoading(true);
+                    }}
+                    className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs transition-colors"
+                    title="Retry loading preview"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={() => handleDownload(msg.file.url, msg.file.name)}
+                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
+                  >
+                    Download
+                  </button>
+                </div>
               </div>
             )}
             
@@ -471,10 +497,15 @@ function MessageBubble({
             </div>
           ) : (
             <>
-              {/* Message text */}
-              <div className={`text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'}`}>
-                {renderTextWithMentions(msg.text)}
-              </div>
+              {/* File attachments - show first */}
+              {renderFilePreview()}
+
+              {/* Message text - show after files */}
+              {msg.text && (
+                <div className={`text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'} ${msg.file ? 'mt-3' : ''}`}>
+                  {renderTextWithMentions(msg.text)}
+                </div>
+              )}
               
               {/* Sending indicator */}
               {msg.sending && (
@@ -485,9 +516,6 @@ function MessageBubble({
                   </span>
                 </div>
               )}
-
-              {/* File attachments */}
-              {renderFilePreview()}
 
               {/* Edited indicator */}
               {msg.edited && (

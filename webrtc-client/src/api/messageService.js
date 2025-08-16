@@ -312,19 +312,30 @@ export const getPreviewUrl = (file) => {
     return null;
   }
 
+  // Handle relative URLs by converting to absolute URLs
+  let url = file.url;
+  if (url && !url.startsWith('http') && !url.startsWith('blob:')) {
+    // If it's a relative URL, make it absolute
+    if (url.startsWith('/')) {
+      url = `${import.meta.env.VITE_API_URL}${url}`;
+    } else {
+      url = `${import.meta.env.VITE_API_URL}/uploads/messages/${url}`;
+    }
+  }
+
   // For images, videos, and audio, return the direct URL
   if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) {
-    return file.url;
+    return url;
   }
 
   // For PDFs, return the URL for iframe embedding
   if (file.type === 'application/pdf') {
-    return file.url;
+    return url;
   }
 
   // For text files, we might want to fetch and display content
   if (file.type.startsWith('text/') || file.type === 'application/json' || file.type === 'application/xml') {
-    return file.url;
+    return url;
   }
 
   return null;
