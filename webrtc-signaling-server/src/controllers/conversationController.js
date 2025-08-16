@@ -21,7 +21,7 @@ export async function listConversations(req, res, next) {
     // Combine user conversations with communities
     const allConversations = [...userConversations, ...communities];
 
-    // Calculate unread counts for each conversation
+    // Calculate unread counts and get latest message for each conversation
     const conversationsWithUnread = await Promise.all(
       allConversations.map(async (conversation) => {
         // Get user's last read time for this conversation
@@ -40,12 +40,35 @@ export async function listConversations(req, res, next) {
           createdAt: { $gt: lastReadAt }
         });
 
+        // Get the latest message in this conversation
+        const latestMessage = await Message.findOne({
+          conversation: conversation._id
+        })
+        .sort({ createdAt: -1 })
+        .select('text file createdAt sender')
+        .populate('sender', 'username fullName')
+        .lean();
+
         return {
           ...conversation.toObject(),
-          unread: unreadCount
+          unread: unreadCount,
+          lastMessage: latestMessage ? {
+            text: latestMessage.text,
+            file: latestMessage.file,
+            createdAt: latestMessage.createdAt,
+            senderName: latestMessage.sender?.fullName || latestMessage.sender?.username
+          } : null,
+          lastMessageAt: latestMessage ? latestMessage.createdAt : conversation.createdAt
         };
       })
     );
+
+    // Sort conversations by lastMessageAt (most recent first)
+    conversationsWithUnread.sort((a, b) => {
+      const dateA = new Date(a.lastMessageAt || a.createdAt);
+      const dateB = new Date(b.lastMessageAt || b.createdAt);
+      return dateB - dateA;
+    });
 
     res.json({ conversations: conversationsWithUnread });
   } catch (err) {

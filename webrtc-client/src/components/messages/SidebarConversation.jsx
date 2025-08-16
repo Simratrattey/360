@@ -140,6 +140,33 @@ export default function SidebarConversation({
                 </span>
               )}
             </h3>
+            {/* Last message preview */}
+            {conv?.lastMessage && (
+              <div className="mt-0.5">
+                <p className="text-xs text-gray-500 truncate">
+                  {conv.lastMessage.senderName && (
+                    <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
+                  )}
+                  {conv.lastMessage.text ? (
+                    conv.lastMessage.text.length > 25 ? 
+                      conv.lastMessage.text.substring(0, 25) + '...' : 
+                      conv.lastMessage.text
+                  ) : conv.lastMessage.file ? (
+                    <span className="italic">📎 {conv.lastMessage.file.name || 'File'}</span>
+                  ) : (
+                    <span className="italic">No messages yet</span>
+                  )}
+                </p>
+                {conv.lastMessageAt && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
+                      ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                    }
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-0.5 ml-1">
             {/* Star button - Smaller */}

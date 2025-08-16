@@ -109,14 +109,14 @@ export default function MessagesPage() {
   /**
    * Move a conversation to the top of its section in the sidebar.
    * This helper updates the conversation's `lastMessage` and `lastMessageAt` fields
-   * (creating them if they don't exist) and reorders the items array for the
-   * corresponding section so that the most recently active conversation appears first.
+   * and reorders the items array for the corresponding section so that the most 
+   * recently active conversation appears first.
    *
    * @param {string} convId - The ID of the conversation to move.
-   * @param {string} lastMsg - A preview of the last message (text or file placeholder).
+   * @param {object} lastMessage - The last message object with text, file, createdAt, senderName.
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
-  const moveConversationToTop = (convId, lastMsg, time) => {
+  const moveConversationToTop = (convId, lastMessage, time) => {
     setAllConversations(prevSections => {
       return prevSections.map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
@@ -125,7 +125,7 @@ export default function MessagesPage() {
         const [convItem] = newItems.splice(idx, 1);
         const updatedConv = {
           ...convItem,
-          lastMessage: lastMsg,
+          lastMessage: lastMessage,
           lastMessageAt: time,
         };
         // Prepend updated conversation
@@ -183,10 +183,17 @@ export default function MessagesPage() {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
       
+      // Sort conversations by lastMessageAt within each type (backend already sorts overall, but we maintain per-section sorting)
+      const sortByLastMessage = (a, b) => {
+        const dateA = new Date(a.lastMessageAt || a.createdAt);
+        const dateB = new Date(b.lastMessageAt || b.createdAt);
+        return dateB - dateA;
+      };
+      
       setAllConversations([
-        { section: 'Direct Messages', icon: User, items: conversations.filter(c => c.type === 'dm') },
-        { section: 'Groups', icon: Users, items: conversations.filter(c => c.type === 'group') },
-        { section: 'Communities', icon: Hash, items: conversations.filter(c => c.type === 'community') },
+        { section: 'Direct Messages', icon: User, items: conversations.filter(c => c.type === 'dm').sort(sortByLastMessage) },
+        { section: 'Groups', icon: Users, items: conversations.filter(c => c.type === 'group').sort(sortByLastMessage) },
+        { section: 'Communities', icon: Hash, items: conversations.filter(c => c.type === 'community').sort(sortByLastMessage) },
       ]);
 
       // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
@@ -314,14 +321,36 @@ export default function MessagesPage() {
       // Move the corresponding conversation to the top using the latest message
       moveConversationToTop(
         msg.conversationId,
-        msg.text || (msg.file ? 'Sent a file' : ''),
+        {
+          text: msg.text,
+          file: msg.file,
+          createdAt: msg.createdAt || new Date().toISOString(),
+          senderName: msg.senderName || (msg.sender && msg.sender.fullName) || 'Unknown'
+        },
         msg.createdAt || new Date().toISOString()
       );
     });
 
     // Edit message
-    chatSocket.on('chat:edit', ({ messageId, text }) => {
+    chatSocket.on('chat:edit', ({ messageId, text, conversationId }) => {
       setMessages(prev => prev.map(m => m._id === messageId ? { ...m, text, edited: true } : m));
+      
+      // Move conversation to top when message is edited
+      if (conversationId) {
+        const editedMessage = messages.find(m => m._id === messageId);
+        if (editedMessage) {
+          moveConversationToTop(
+            conversationId,
+            {
+              text: text,
+              file: editedMessage.file,
+              createdAt: editedMessage.createdAt,
+              senderName: editedMessage.senderName || (editedMessage.sender && editedMessage.sender.fullName) || 'Unknown'
+            },
+            new Date().toISOString()
+          );
+        }
+      }
     });
     // Delete message
     chatSocket.on('chat:delete', ({ messageId }) => {
