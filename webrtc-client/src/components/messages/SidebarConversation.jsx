@@ -144,7 +144,8 @@ export default function SidebarConversation({
             {conv?.lastMessage && (
               <div className="mt-0.5">
                 <p className="text-xs text-gray-500 truncate">
-                  {conv.lastMessage.senderName && (
+                  {/* Only show sender name for group/community conversations, not for direct messages */}
+                  {conv.type !== 'dm' && conv.lastMessage.senderName && (
                     <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
                   )}
                   {conv.lastMessage.text ? (

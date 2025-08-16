@@ -6,6 +6,7 @@ import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl } 
 function MessageBubble({
   msg,
   isOwn,
+  conversationType,
   onEdit,
   onDelete,
   onReply,
@@ -319,10 +320,13 @@ function MessageBubble({
         }`}>
           {/* Sender name and timestamp */}
           <div className="flex items-center justify-between mb-2 min-w-0">
-            <div className={`text-sm font-semibold truncate flex-1 ${isOwn ? 'text-blue-100' : 'text-gray-700'}`}>
-              {senderName}
-            </div>
-            <div className={`flex items-center space-x-2 flex-shrink-0 ml-2 ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+            {/* Only show sender name for group/community conversations, not for direct messages */}
+            {conversationType !== 'dm' && (
+              <div className={`text-sm font-semibold truncate flex-1 ${isOwn ? 'text-blue-100' : 'text-gray-700'}`}>
+                {senderName}
+              </div>
+            )}
+            <div className={`flex items-center space-x-2 flex-shrink-0 ${conversationType === 'dm' ? 'ml-auto' : 'ml-2'} ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
               <span className="text-xs whitespace-nowrap">
                 {new Date(msg.timestamp || msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>

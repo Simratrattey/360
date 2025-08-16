@@ -907,6 +907,7 @@ export default function MessagesPage() {
               loading={messagesLoading}
               messages={messages}
               currentUserId={user?.id}
+              conversationType={selected.type}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReply={handleReply}

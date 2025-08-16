@@ -19,6 +19,7 @@ export default function ChatWindow({
    */
   loading = false,
   currentUserId,
+  conversationType,
   onEdit,
   onDelete,
   onReply,
@@ -97,6 +98,7 @@ export default function ChatWindow({
                       msg.sender === currentUserId ||
                       (msg.sender && typeof msg.sender === 'object' && msg.sender._id === currentUserId)
                     }
+                    conversationType={conversationType}
                     onEdit={onEdit}
                     onDelete={onDelete}
                     onReply={onReply}
