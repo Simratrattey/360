@@ -31,6 +31,7 @@ function MessageBubble({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [imgLoading, setImgLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
   
@@ -50,6 +51,12 @@ function MessageBubble({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showDropdown]);
+
+  // Reset image states when message changes
+  useEffect(() => {
+    setImgError(false);
+    setImgLoading(true);
+  }, [messageId]);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -141,69 +148,117 @@ function MessageBubble({
 
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
-      // Image preview with fallback
+      // Enhanced image preview with better styling and loading states
       if (isImage) {
         return (
-          <div className="relative">
-            <img
-              src={previewUrl}
-              alt={msg.file.name}
-              onError={() => setImgError(true)}
-              className={`max-w-full max-h-60 rounded-lg ${imgError ? 'hidden' : ''}`}
-            />
+          <div className="relative group">
+            {/* Image container with loading state */}
+            <div className="relative overflow-hidden rounded-lg bg-gray-100">
+              <img
+                src={previewUrl}
+                alt={msg.file.name}
+                onError={() => {
+                  setImgError(true);
+                  setImgLoading(false);
+                }}
+                onLoad={() => {
+                  setImgError(false);
+                  setImgLoading(false);
+                }}
+                className={`max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer ${
+                  imgError || imgLoading ? 'hidden' : ''
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Open image in full screen or modal
+                  window.open(previewUrl, '_blank');
+                }}
+                title="Click to view full size"
+              />
+              
+              {/* Loading placeholder */}
+              {imgLoading && !imgError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+            </div>
+            
+            {/* Error fallback */}
             {imgError && (
-              <div className="flex items-center space-x-2 p-3 bg-gray-100 rounded-lg">
-                <span className="text-2xl">{fileIcon}</span>
+              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <span className="text-3xl">{fileIcon}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
                   <p className="text-xs text-gray-500">{fileSize}</p>
+                  <p className="text-xs text-red-500">Failed to load preview</p>
                 </div>
                 <button
                   onClick={() => handleDownload(msg.file.url, msg.file.name)}
-                  className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm"
+                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
                 >
                   Download
                 </button>
               </div>
             )}
-            {!imgError && (
+            
+            {/* Download button overlay - only show on hover */}
+            {!imgError && !imgLoading && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDownload(msg.file.url, msg.file.name);
                 }}
-                className="absolute bottom-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full shadow-lg"
-                title="Download"
+                className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
+                title="Download image"
               >
                 <Download size={16} />
               </button>
             )}
+            
+            {/* File info overlay */}
+            {!imgError && !imgLoading && (
+              <div className="absolute top-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                {fileSize}
+              </div>
+            )}
           </div>
         );
       }
-      // Video preview
+      // Enhanced video preview
       if (isVideo) {
         return (
-          <div className="relative">
-            <video
-              src={previewUrl}
-              controls
-              className="max-w-full max-h-60 rounded-lg"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
+          <div className="relative group">
+            <div className="relative overflow-hidden rounded-lg bg-gray-100">
+              <video
+                src={previewUrl}
+                controls
+                className="max-w-full max-h-80 rounded-lg"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+                preload="metadata"
+              />
+            </div>
+            
+            {/* Download button overlay - only show on hover */}
             <button
               onClick={() => handleDownload(msg.file.url, msg.file.name)}
-              className="absolute bottom-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
-              title="Download"
+              className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
+              title="Download video"
             >
               <Download size={16} />
             </button>
-            <div className="mt-1 flex items-center space-x-2 text-sm text-gray-600">
-              <span>{fileIcon}</span>
-              <span className="truncate flex-1">{msg.file.name}</span>
-              <span className="text-xs">{fileSize}</span>
+            
+            {/* File info overlay */}
+            <div className="absolute top-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              {fileSize}
+            </div>
+            
+            {/* File details below video */}
+            <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
+              <span className="text-lg">{fileIcon}</span>
+              <span className="truncate flex-1 font-medium">{msg.file.name}</span>
             </div>
           </div>
         );
