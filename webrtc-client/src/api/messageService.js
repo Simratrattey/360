@@ -32,6 +32,26 @@ export const getFileUrl = (filename) => {
   return `${import.meta.env.VITE_API_URL}/uploads/messages/${filename}`;
 };
 
+// Helper function to construct proper file URL from file object
+export const constructFileUrl = (fileObj) => {
+  if (!fileObj || !fileObj.url) return null;
+  
+  let url = fileObj.url;
+  
+  // If it's already a complete URL, return as-is
+  if (url.startsWith('http') || url.startsWith('blob:')) {
+    return url;
+  }
+  
+  // If it starts with /, it's an absolute path
+  if (url.startsWith('/')) {
+    return `${import.meta.env.VITE_API_URL}${url}`;
+  }
+  
+  // If it's just a filename, construct full URL
+  return `${import.meta.env.VITE_API_URL}/uploads/messages/${url}`;
+};
+
 // File type utilities
 export const getFileCategory = (mimeType) => {
   if (mimeType.startsWith('image/')) return 'image';
@@ -312,33 +332,7 @@ export const getPreviewUrl = (file) => {
     return null;
   }
 
-  // Handle relative URLs by converting to absolute URLs
-  let url = file.url;
-  if (url && !url.startsWith('http') && !url.startsWith('blob:')) {
-    // If it's a relative URL, make it absolute
-    if (url.startsWith('/')) {
-      url = `${import.meta.env.VITE_API_URL}${url}`;
-    } else {
-      url = `${import.meta.env.VITE_API_URL}/uploads/messages/${url}`;
-    }
-  }
-
-  // For images, videos, and audio, return the direct URL
-  if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) {
-    return url;
-  }
-
-  // For PDFs, return the URL for iframe embedding
-  if (file.type === 'application/pdf') {
-    return url;
-  }
-
-  // For text files, we might want to fetch and display content
-  if (file.type.startsWith('text/') || file.type === 'application/json' || file.type === 'application/xml') {
-    return url;
-  }
-
-  return null;
+  return constructFileUrl(file);
 };
 
 // File validation

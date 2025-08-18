@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical } from 'lucide-react';
-import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl } from '../../api/messageService';
+import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({
@@ -150,6 +150,10 @@ function MessageBubble({
 
     const fileIcon = getFileIcon(msg.file.category || 'other', msg.file.type);
     const fileSize = formatFileSize(msg.file.size || 0);
+    
+    // Fix file URL construction for persistent storage
+    const fileUrl = constructFileUrl(msg.file);
+    
     // Determine preview capability and URL for this file
     const previewUrl = getPreviewUrl(msg.file);
     const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
@@ -219,7 +223,7 @@ function MessageBubble({
                     Retry
                   </button>
                   <button
-                    onClick={() => handleDownload(msg.file.url, msg.file.name)}
+                    onClick={() => handleDownload(fileUrl, msg.file.name)}
                     className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
                   >
                     Download
@@ -233,7 +237,7 @@ function MessageBubble({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDownload(msg.file.url, msg.file.name);
+                  handleDownload(fileUrl, msg.file.name);
                 }}
                 className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
                 title="Download image"
@@ -269,7 +273,7 @@ function MessageBubble({
             
             {/* Download button overlay - only show on hover */}
             <button
-              onClick={() => handleDownload(msg.file.url, msg.file.name)}
+              onClick={() => handleDownload(fileUrl, msg.file.name)}
               className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
               title="Download video"
             >
@@ -309,7 +313,7 @@ function MessageBubble({
               }}
             />
             <button
-              onClick={() => handleDownload(msg.file.url, msg.file.name)}
+              onClick={() => handleDownload(fileUrl, msg.file.name)}
               className="self-end px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm mt-2"
             >
               Download
@@ -334,7 +338,7 @@ function MessageBubble({
                 style={{ border: 'none' }}
               />
               <button
-                onClick={() => handleDownload(msg.file.url, msg.file.name)}
+                onClick={() => handleDownload(fileUrl, msg.file.name)}
                 className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
                 title="Download"
               >
@@ -362,7 +366,7 @@ function MessageBubble({
           </div>
         </div>
         <button
-          onClick={() => handleDownload(msg.file.url, msg.file.name)}
+          onClick={() => handleDownload(fileUrl, msg.file.name)}
           className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm"
         >
           Download

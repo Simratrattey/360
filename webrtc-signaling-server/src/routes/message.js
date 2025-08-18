@@ -80,10 +80,10 @@ router.post('/upload', upload.single('file'), (req, res) => {
   }
   
   try {
-    // Create proper file URL using environment variable or default Render domain
+    // Create proper file URL using environment variable or default local server
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? (process.env.BACKEND_URL || 'https://webrtc-signaling-server.onrender.com')
-      : 'http://localhost:5000';
+      : 'http://localhost:8181';
     
     const fileUrl = `${baseUrl}/uploads/messages/${req.file.filename}`;
     
