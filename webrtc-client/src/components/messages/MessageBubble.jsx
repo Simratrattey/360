@@ -37,6 +37,10 @@ function MessageBubble({
   const dropdownRef = useRef(null);
   
   // File type checks - moved up to prevent hoisting issues
+  const isImage = msg.file && msg.file.type && msg.file.type.startsWith('image/');
+  const isVideo = msg.file && msg.file.type && msg.file.type.startsWith('video/');
+  const isAudio = msg.file && msg.file.type && msg.file.type.startsWith('audio/');
+  const isDocument = msg.file && msg.file.type && (msg.file.type.startsWith('application/pdf') || msg.file.type.includes('document') || msg.file.type.includes('spreadsheet') || msg.file.type.includes('presentation'));
   
   // Click outside handler to close dropdown
   useEffect(() => {
