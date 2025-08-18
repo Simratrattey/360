@@ -1006,7 +1006,10 @@ export default function MessagesPage() {
           {showSearch && selected && (
             <ChatSearch
               onSearch={handleSearch}
-              onClose={() => setShowSearch(false)}
+              onClose={() => {
+                setShowSearch(false);
+                handleClearSearch();
+              }}
               searchResults={searchResults}
               isSearching={isSearching}
               currentResult={currentSearchResult}
