@@ -139,6 +139,7 @@ export default function ChatWindow({
                         replyContext={null}
                         messageStatus={messageStatus}
                         onlineUsers={onlineUsers}
+                        currentUserId={currentUserId}
                         searchFilters={searchFilters}
                       />
                     </div>
