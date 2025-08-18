@@ -24,6 +24,7 @@ function MessageBubble({
   messageStatus,
   onlineUsers,
   currentUserId,
+  searchFilters,
 }) {
   const messageId = msg._id || msg.id;
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -133,11 +134,56 @@ function MessageBubble({
     return null;
   };
 
+  // Helper: highlight search terms in text
+  const highlightSearchTerms = (text, searchQuery) => {
+    if (!text || !searchQuery) return text;
+    
+    try {
+      const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 font-semibold px-1 py-0.5 rounded">$1</mark>');
+    } catch (error) {
+      console.warn('Error highlighting search terms:', error);
+      return text;
+    }
+  };
+
   // Helper: highlight mentions in text
   const renderTextWithMentions = (text) => {
     if (!text) return null;
+    
+    let processedText = text;
+    
+    // First, apply search highlighting if we have search filters
+    if (searchFilters && searchFilters.query) {
+      processedText = highlightSearchTerms(processedText, searchFilters.query);
+    }
+    
+    // Then process mentions - but we need to be careful with the HTML from search highlighting
+    if (processedText.includes('<mark')) {
+      // If we have search highlights, render as HTML
+      return (
+        <div 
+          dangerouslySetInnerHTML={{ 
+            __html: processedText.replace(
+              /@(\w[\w.]*)/g, 
+              (match, username) => {
+                const userObj = getUserObj(currentUserId);
+                const isMe = username.toLowerCase() === (userObj?.username?.toLowerCase() || '');
+                return `<span class="${
+                  isMe
+                    ? 'bg-gradient-to-r from-yellow-300 to-pink-300 text-pink-900 font-bold px-1 py-0.5 rounded'
+                    : 'bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded'
+                } ml-0.5 mr-0.5">${match}</span>`;
+              }
+            )
+          }} 
+        />
+      );
+    }
+    
+    // Otherwise, process normally with React components
     // Regex for @username (alphanumeric, underscore, dot)
-    return text.split(/(\s+)/).map((part, i) => {
+    return processedText.split(/(\s+)/).map((part, i) => {
       if (/^@\w[\w.]*$/.test(part)) {
         const username = part.slice(1);
         // Highlight if it's the current user

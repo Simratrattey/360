@@ -156,6 +156,8 @@ router.use((error, req, res, next) => {
 
 // List messages in a conversation
 router.get('/conversation/:conversationId', ctrl.listMessages);
+// Search messages in a conversation
+router.get('/conversation/:conversationId/search', ctrl.searchMessages);
 // Send a new message
 router.post('/conversation/:conversationId', ctrl.sendMessage);
 // Edit a message

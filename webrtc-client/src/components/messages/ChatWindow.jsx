@@ -40,6 +40,10 @@ export default function ChatWindow({
    * Controls whether to auto-scroll to bottom. Set to false when edit/reply actions are active.
    */
   shouldAutoScroll = true,
+  // Search functionality
+  searchResults = [],
+  currentSearchResult = 0,
+  searchFilters = null,
 }) {
   // Ref used to scroll to bottom on new messages
   const chatRef = useRef(null);
@@ -93,34 +97,53 @@ export default function ChatWindow({
                 </div>
               </div>
               <div className="space-y-4">
-                {msgs.map(msg => (
-                  <MessageBubble
-                    key={msg._id || msg.id}
-                    msg={msg}
-                    isOwn={
-                      msg.senderId === currentUserId ||
-                      msg.sender === currentUserId ||
-                      (msg.sender && typeof msg.sender === 'object' && msg.sender._id === currentUserId)
-                    }
-                    conversationType={conversationType}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onReply={onReply}
-                    onEmoji={onEmoji}
-                    reactions={reactions[msg._id || msg.id]}
-                    showEmojiPicker={showEmojiPicker}
-                    setShowEmojiPicker={setShowEmojiPicker}
-                    emojiList={emojiList}
-                    editMsgId={editMsgId}
-                    editInput={editInput}
-                    setEditInput={setEditInput}
-                    handleEditSave={handleEditSave}
-                    handleEditCancel={handleEditCancel}
-                    replyContext={null}
-                    messageStatus={messageStatus}
-                    onlineUsers={onlineUsers}
-                  />
-                ))}
+                {msgs.map((msg, index) => {
+                  // Check if this message is a search result
+                  const isSearchResult = searchResults.some(result => result._id === msg._id);
+                  const isCurrentSearchResult = searchResults.length > 0 && 
+                    searchResults[currentSearchResult]?._id === msg._id;
+                  
+                  return (
+                    <div 
+                      key={msg._id || msg.id}
+                      id={`message-${msg._id || msg.id}`}
+                      className={`transition-all duration-300 ${
+                        isCurrentSearchResult 
+                          ? 'ring-2 ring-blue-400 ring-opacity-75 bg-blue-50 rounded-lg p-2 -m-2'
+                          : isSearchResult 
+                          ? 'bg-yellow-50 rounded-lg p-1 -m-1'
+                          : ''
+                      }`}
+                    >
+                      <MessageBubble
+                        msg={msg}
+                        isOwn={
+                          msg.senderId === currentUserId ||
+                          msg.sender === currentUserId ||
+                          (msg.sender && typeof msg.sender === 'object' && msg.sender._id === currentUserId)
+                        }
+                        conversationType={conversationType}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onReply={onReply}
+                        onEmoji={onEmoji}
+                        reactions={reactions[msg._id || msg.id]}
+                        showEmojiPicker={showEmojiPicker}
+                        setShowEmojiPicker={setShowEmojiPicker}
+                        emojiList={emojiList}
+                        editMsgId={editMsgId}
+                        editInput={editInput}
+                        setEditInput={setEditInput}
+                        handleEditSave={handleEditSave}
+                        handleEditCancel={handleEditCancel}
+                        replyContext={null}
+                        messageStatus={messageStatus}
+                        onlineUsers={onlineUsers}
+                        searchFilters={searchFilters}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

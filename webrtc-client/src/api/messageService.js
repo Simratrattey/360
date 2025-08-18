@@ -17,6 +17,7 @@ export const editMessage = (messageId, data) => API.put(`/messages/${messageId}`
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);
 export const reactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/react`, { emoji });
 export const unreactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/unreact`, { emoji });
+export const searchMessages = (conversationId, params = {}) => API.get(`/messages/conversation/${conversationId}/search`, { params });
 export const uploadMessageFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);

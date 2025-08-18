@@ -3,6 +3,7 @@ import { User, Users, Hash, Plus, Search, MoreVertical, Settings, Star, Trash2, 
 import SidebarConversation from '../components/messages/SidebarConversation';
 import ChatWindow from '../components/messages/ChatWindow';
 import ChatInput from '../components/messages/ChatInput';
+import ChatSearch from '../components/messages/ChatSearch';
 import CreateConversationModal from '../components/messages/CreateConversationModal';
 import UserSelectionModal from '../components/messages/UserSelectionModal';
 import ConversationSettingsModal from '../components/messages/ConversationSettingsModal';
@@ -107,6 +108,13 @@ export default function MessagesPage() {
   const [isSending, setIsSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { refreshUnreadCount } = useMessageNotifications();
+  // Search functionality
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [currentSearchResult, setCurrentSearchResult] = useState(0);
+  const [totalSearchResults, setTotalSearchResults] = useState(0);
+  const [searchFilters, setSearchFilters] = useState(null);
 
   /**
    * Move a conversation to the top of its section in the sidebar.
@@ -773,6 +781,64 @@ export default function MessagesPage() {
     }
   };
 
+  // Search functionality
+  const handleSearch = async (query, filters) => {
+    if (!selected || !query.trim()) return;
+    
+    setIsSearching(true);
+    setSearchFilters(filters);
+    
+    try {
+      const response = await messageAPI.searchMessages(selected._id, {
+        query: query.trim(),
+        type: filters.type,
+        sender: filters.sender,
+        dateRange: filters.dateRange,
+        limit: 50
+      });
+      
+      const results = response.data.messages || [];
+      setSearchResults(results);
+      setTotalSearchResults(response.data.total || results.length);
+      setCurrentSearchResult(0);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+      setTotalSearchResults(0);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchResults([]);
+    setTotalSearchResults(0);
+    setCurrentSearchResult(0);
+    setSearchFilters(null);
+  };
+
+  const handleNavigateSearchResult = (direction, index) => {
+    if (direction === 'goto' && typeof index === 'number') {
+      setCurrentSearchResult(index);
+      // Scroll to message in ChatWindow
+      const messageId = searchResults[index]?._id;
+      if (messageId) {
+        const messageElement = document.getElementById(`message-${messageId}`);
+        if (messageElement) {
+          messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    } else if (direction === 'next' && currentSearchResult < totalSearchResults - 1) {
+      const newIndex = currentSearchResult + 1;
+      setCurrentSearchResult(newIndex);
+      handleNavigateSearchResult('goto', newIndex);
+    } else if (direction === 'previous' && currentSearchResult > 0) {
+      const newIndex = currentSearchResult - 1;
+      setCurrentSearchResult(newIndex);
+      handleNavigateSearchResult('goto', newIndex);
+    }
+  };
+
   return (
     <div className="flex h-[85vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
       {/* Sidebar - Full width on mobile when open */}
@@ -901,6 +967,17 @@ export default function MessagesPage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-1 md:space-x-2">
+                  <button
+                    onClick={() => setShowSearch(!showSearch)}
+                    className={`p-2 rounded-xl transition-all duration-200 ${
+                      showSearch 
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                        : 'hover:bg-white/50 text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Search Messages"
+                  >
+                    <Search className="h-4 w-4 md:h-5 md:w-5" />
+                  </button>
                   {selected && (
                     <button 
                       onClick={() => setShowSettingsModal(true)} 
@@ -923,6 +1000,20 @@ export default function MessagesPage() {
                 <p className="text-sm md:text-base text-gray-600">Select a conversation to start chatting</p>
               </div>
             </div>
+          )}
+
+          {/* Search Component */}
+          {showSearch && selected && (
+            <ChatSearch
+              onSearch={handleSearch}
+              onClose={() => setShowSearch(false)}
+              searchResults={searchResults}
+              isSearching={isSearching}
+              currentResult={currentSearchResult}
+              totalResults={totalSearchResults}
+              onNavigateResult={handleNavigateSearchResult}
+              onClearSearch={handleClearSearch}
+            />
           )}
 
           {/* Reply context */}
@@ -966,7 +1057,10 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
-              shouldAutoScroll={!editMsgId && !replyTo}
+              shouldAutoScroll={!editMsgId && !replyTo && !showSearch}
+              searchResults={searchResults}
+              currentSearchResult={currentSearchResult}
+              searchFilters={searchFilters}
             />
           )}
 
