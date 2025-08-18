@@ -63,8 +63,23 @@ function MessageBubble({
     if (msg.file && msg.file.type && msg.file.type.startsWith('image/')) {
       setImgError(false);
       setImgLoading(true);
+    } else if (msg.file && !msg.file.type?.startsWith('image/')) {
+      // For non-images, set loading to false immediately
+      setImgLoading(false);
+      setImgError(false);
     }
-  }, [msg.file?.url]);
+  }, [msg.file?.url, msg.file?.type]);
+
+  // Additional effect to handle cases where file URL might be invalid
+  useEffect(() => {
+    if (isImage && msg.file) {
+      // Check if we can construct a valid URL
+      if (!msg.file.url) {
+        setImgError(true);
+        setImgLoading(false);
+      }
+    }
+  }, [isImage, msg.file]);
   
   // Handle populated sender object or sender ID
   let senderName = 'Unknown';
@@ -146,7 +161,12 @@ function MessageBubble({
   };
 
   const renderFilePreview = () => {
-    if (!msg.file) return null;
+    if (!msg.file) {
+      console.log('[MessageBubble] No file object in message');
+      return null;
+    }
+
+    console.log('[MessageBubble] File object:', msg.file);
 
     const fileIcon = getFileIcon(msg.file.category || 'other', msg.file.type);
     const fileSize = formatFileSize(msg.file.size || 0);
@@ -158,9 +178,22 @@ function MessageBubble({
     const previewUrl = getPreviewUrl(msg.file);
     const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
 
-    // Debug logging for image loading issues
-    if (isImage && previewUrl) {
-      console.log('Image preview URL:', previewUrl);
+    console.log('[MessageBubble] Final URLs - fileUrl:', fileUrl, 'previewUrl:', previewUrl);
+
+    // If we don't have a valid URL, show error state
+    if (!fileUrl) {
+      console.warn('No valid file URL constructed for file:', msg.file);
+      return (
+        <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
+          <div className="flex items-center space-x-3">
+            <div className="text-2xl">{fileIcon}</div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
+              <p className="text-xs text-red-500">File URL not available</p>
+            </div>
+          </div>
+        </div>
+      );
     }
 
     // If the file type can be previewed, show an appropriate preview based on type
@@ -171,34 +204,42 @@ function MessageBubble({
           <div className="relative group">
             {/* Image container with loading state */}
             <div className="relative overflow-hidden rounded-lg bg-gray-100">
+              {/* Always try to show the image first */}
+              <img
+                src={previewUrl || fileUrl}
+                alt={msg.file.name}
+                onError={(e) => {
+                  console.error('[MessageBubble] Image failed to load:', e.target.src);
+                  setImgError(true);
+                  setImgLoading(false);
+                }}
+                onLoad={() => {
+                  console.log('[MessageBubble] Image loaded successfully');
+                  setImgError(false);
+                  setImgLoading(false);
+                }}
+                onLoadStart={() => {
+                  console.log('[MessageBubble] Image loading started');
+                  setImgLoading(true);
+                  setImgError(false);
+                }}
+                className={`max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer ${
+                  imgLoading ? 'opacity-0' : 'opacity-100'
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Open image in full screen or modal
+                  window.open(previewUrl || fileUrl, '_blank');
+                }}
+                title="Click to view full size"
+                style={{ display: imgError ? 'none' : 'block' }}
+              />
+              
               {/* Loading placeholder - show while loading */}
               {imgLoading && !imgError && (
-                <div className="flex items-center justify-center h-48 bg-gray-100">
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                   <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 </div>
-              )}
-              
-              {/* Image - show when loaded */}
-              {!imgLoading && !imgError && (
-                <img
-                  src={previewUrl}
-                  alt={msg.file.name}
-                  onError={() => {
-                    setImgError(true);
-                    setImgLoading(false);
-                  }}
-                  onLoad={() => {
-                    setImgError(false);
-                    setImgLoading(false);
-                  }}
-                  className="max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Open image in full screen or modal
-                    window.open(previewUrl, '_blank');
-                  }}
-                  title="Click to view full size"
-                />
               )}
             </div>
             

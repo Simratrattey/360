@@ -34,9 +34,23 @@ export const getFileUrl = (filename) => {
 
 // Helper function to construct proper file URL from file object
 export const constructFileUrl = (fileObj) => {
-  if (!fileObj || !fileObj.url) return null;
+  if (!fileObj) {
+    console.warn('[File URL] No file object provided');
+    return null;
+  }
+  
+  if (!fileObj.url) {
+    console.warn('[File URL] No URL in file object:', fileObj);
+    return null;
+  }
   
   let url = fileObj.url;
+  const baseUrl = import.meta.env.VITE_API_URL;
+  
+  if (!baseUrl) {
+    console.error('[File URL] VITE_API_URL not defined! Make sure .env file exists with VITE_API_URL=http://localhost:8181/api');
+    return null;
+  }
   
   // If it's already a complete URL, return as-is
   if (url.startsWith('http') || url.startsWith('blob:')) {
@@ -45,11 +59,11 @@ export const constructFileUrl = (fileObj) => {
   
   // If it starts with /, it's an absolute path
   if (url.startsWith('/')) {
-    return `${import.meta.env.VITE_API_URL}${url}`;
+    return `${baseUrl}${url}`;
   }
   
   // If it's just a filename, construct full URL
-  return `${import.meta.env.VITE_API_URL}/uploads/messages/${url}`;
+  return `${baseUrl}/uploads/messages/${url}`;
 };
 
 // File type utilities
