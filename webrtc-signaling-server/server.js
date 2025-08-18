@@ -57,6 +57,7 @@ const whitelist = (process.env.CORS_WHITELIST || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+whitelist.push('https://360-five-nu.vercel.app');
 
 const corsOptions = {
   origin: (origin, callback) => {
