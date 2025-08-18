@@ -115,6 +115,7 @@ export default function MessagesPage() {
   const [currentSearchResult, setCurrentSearchResult] = useState(0);
   const [totalSearchResults, setTotalSearchResults] = useState(0);
   const [searchFilters, setSearchFilters] = useState(null);
+  const [reactionInProgress, setReactionInProgress] = useState(false);
 
   /**
    * Move a conversation to the top of its section in the sidebar.
@@ -767,8 +768,34 @@ export default function MessagesPage() {
   };
 
   const handleEmojiClick = async (emoji, msgId) => {
-    chatSocket.reactMessage({ messageId: msgId, emoji });
-    setShowEmojiPicker(false);
+    try {
+      setReactionInProgress(true);
+      
+      // Use the REST API instead of socket for proper toggle logic
+      const response = await messageAPI.reactMessage(msgId, emoji);
+      
+      // Update the local message state with the updated reactions
+      const updatedMessage = response.data.message;
+      setMessages(prev => prev.map(m => 
+        m._id === msgId ? { ...m, reactions: updatedMessage.reactions } : m
+      ));
+      
+      // Update the reactions state as well
+      setReactions(prev => ({
+        ...prev,
+        [msgId]: updatedMessage.reactions
+      }));
+      
+      // Close emoji picker after a small delay to prevent auto-scroll
+      setTimeout(() => {
+        setShowEmojiPicker(false);
+        setReactionInProgress(false);
+      }, 150);
+    } catch (error) {
+      console.error('Error reacting to message:', error);
+      setShowEmojiPicker(false);
+      setReactionInProgress(false);
+    }
   };
 
   const handleReply = (msg) => {
@@ -1060,7 +1087,7 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
-              shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker}
+              shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker && !reactionInProgress}
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
               searchFilters={searchFilters}

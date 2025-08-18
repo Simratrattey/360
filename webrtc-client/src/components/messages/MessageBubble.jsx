@@ -42,22 +42,29 @@ function MessageBubble({
   const isAudio = msg.file && msg.file.type && msg.file.type.startsWith('audio/');
   const isDocument = msg.file && msg.file.type && (msg.file.type.startsWith('application/pdf') || msg.file.type.includes('document') || msg.file.type.includes('spreadsheet') || msg.file.type.includes('presentation'));
   
-  // Click outside handler to close dropdown
+  // Click outside handler to close dropdown and emoji picker
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
+      
+      // Close emoji picker when clicking outside (but not when clicking on reaction buttons)
+      if (showEmojiPicker === messageId && 
+          !event.target.closest('.emoji-picker') && 
+          !event.target.closest('[data-emoji-trigger]')) {
+        setShowEmojiPicker(false);
+      }
     };
 
-    if (showDropdown) {
+    if (showDropdown || showEmojiPicker === messageId) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDropdown]);
+  }, [showDropdown, showEmojiPicker, messageId, setShowEmojiPicker]);
 
   // Reset image states when message changes
   useEffect(() => {
@@ -533,11 +540,12 @@ function MessageBubble({
               }}
               className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
               tabIndex={-1}
+              data-emoji-trigger="true"
             >
               <Smile className="h-5 w-5 text-gray-400" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
+              <div className="emoji-picker absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
                 {emojiList.map(emoji => {
                   const userHasThisReaction = hasUserReacted(emoji);
                   return (
@@ -745,11 +753,12 @@ function MessageBubble({
               }}
               className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-blue-100 focus:opacity-100 focus:bg-blue-100`}
               tabIndex={-1}
+              data-emoji-trigger="true"
             >
               <Smile className="h-5 w-5 text-blue-500" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
+              <div className="emoji-picker absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
                 {emojiList.map(emoji => {
                   const userHasThisReaction = hasUserReacted(emoji);
                   return (
