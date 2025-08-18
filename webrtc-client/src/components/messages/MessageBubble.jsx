@@ -37,10 +37,6 @@ function MessageBubble({
   const dropdownRef = useRef(null);
   
   // File type checks - moved up to prevent hoisting issues
-  const isImage = msg.file && msg.file.type && msg.file.type.startsWith('image/');
-  const isVideo = msg.file && msg.file.type && msg.file.type.startsWith('video/');
-  const isAudio = msg.file && msg.file.type && msg.file.type.startsWith('audio/');
-  const isDocument = msg.file && msg.file.type && (msg.file.type.startsWith('application/pdf') || msg.file.type.includes('document') || msg.file.type.includes('spreadsheet') || msg.file.type.includes('presentation'));
   
   // Click outside handler to close dropdown
   useEffect(() => {
@@ -463,19 +459,61 @@ function MessageBubble({
     );
   };
 
+  // Helper function to handle reaction clicks
+  const handleReactionClick = (emoji, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!currentUserId || !onEmoji) return;
+    
+    // Let the backend handle the toggle logic
+    onEmoji(emoji, messageId);
+    
+    // Close emoji picker
+    setShowEmojiPicker(false);
+  };
+
+  // Helper function to group reactions by emoji
+  const groupReactions = (reactionsArray) => {
+    const grouped = {};
+    (reactionsArray || []).forEach(reaction => {
+      const emoji = reaction.emoji;
+      if (!grouped[emoji]) {
+        grouped[emoji] = [];
+      }
+      grouped[emoji].push(reaction);
+    });
+    return grouped;
+  };
+
+  const reactionGroups = groupReactions(reactions || msg.reactions || []);
+  const hasUserReacted = (emoji) => {
+    return reactionGroups[emoji]?.some(r => 
+      r.user === currentUserId || r.user?._id === currentUserId
+    ) || false;
+  };
+
   return (
     <div className={`flex flex-col items-${isOwn ? 'end' : 'start'} mb-4 group relative`}>
-      {/* Emoji reactions above the bubble, outside */}
-      {(reactions || msg.reactions || []).length > 0 && (
+      {/* Emoji reactions above the bubble, grouped by emoji */}
+      {Object.keys(reactionGroups).length > 0 && (
         <div className={`flex flex-wrap items-center gap-1 mb-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-          {(reactions || msg.reactions || []).map((reaction, i) => (
-            <span
-              key={i}
-              className="text-base cursor-pointer hover:scale-110 transition-transform bg-white/80 border border-gray-200 rounded-full px-1.5 py-0.5 shadow-sm"
-              style={{ fontSize: '1.1rem' }}
+          {Object.entries(reactionGroups).map(([emoji, reactionList]) => (
+            <button
+              key={emoji}
+              onClick={(e) => handleReactionClick(emoji, e)}
+              className={`flex items-center space-x-1 text-sm cursor-pointer hover:scale-105 transition-all duration-200 rounded-full px-2 py-1 shadow-sm border ${
+                hasUserReacted(emoji)
+                  ? 'bg-blue-100 border-blue-300 text-blue-800'
+                  : 'bg-white/90 border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+              title={`${reactionList.length} reaction${reactionList.length !== 1 ? 's' : ''}`}
             >
-              {reaction.emoji}
-            </span>
+              <span className="text-base" style={{ fontSize: '1rem' }}>{emoji}</span>
+              {reactionList.length > 1 && (
+                <span className="text-xs font-medium">{reactionList.length}</span>
+              )}
+            </button>
           ))}
         </div>
       )}
@@ -484,23 +522,35 @@ function MessageBubble({
         {!isOwn && (
           <div className="flex items-center mr-2">
             <button
-              onClick={() => setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId)}
-              className={`p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId);
+              }}
+              className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
               tabIndex={-1}
             >
               <Smile className="h-5 w-5 text-gray-400" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3 flex flex-wrap gap-2 mb-2 min-w-[200px]">
-                {emojiList.map(emoji => (
-                  <span
-                    key={emoji}
-                    className="text-xl cursor-pointer hover:scale-110 transition-transform"
-                    onClick={() => onEmoji(emoji, messageId)}
-                  >
-                    {emoji}
-                  </span>
-                ))}
+              <div className="absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
+                {emojiList.map(emoji => {
+                  const userHasThisReaction = hasUserReacted(emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      className={`text-xl cursor-pointer hover:scale-110 transition-all duration-200 p-1.5 rounded-lg ${
+                        userHasThisReaction 
+                          ? 'bg-blue-100 border-2 border-blue-300' 
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={(e) => handleReactionClick(emoji, e)}
+                      title={userHasThisReaction ? 'Remove reaction' : 'Add reaction'}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -684,23 +734,35 @@ function MessageBubble({
         {isOwn && (
           <div className="flex items-center ml-2">
             <button
-              onClick={() => setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId)}
-              className={`p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100 hover:bg-blue-100 focus:opacity-100 focus:bg-blue-100`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId);
+              }}
+              className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-blue-100 focus:opacity-100 focus:bg-blue-100`}
               tabIndex={-1}
             >
-              <Smile className="h-5 w-5 text-blue-100" />
+              <Smile className="h-5 w-5 text-blue-500" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3 flex flex-wrap gap-2 mb-2 min-w-[200px]">
-                {emojiList.map(emoji => (
-                  <span
-                    key={emoji}
-                    className="text-xl cursor-pointer hover:scale-110 transition-transform"
-                    onClick={() => onEmoji(emoji, messageId)}
-                  >
-                    {emoji}
-                  </span>
-                ))}
+              <div className="absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
+                {emojiList.map(emoji => {
+                  const userHasThisReaction = hasUserReacted(emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      className={`text-xl cursor-pointer hover:scale-110 transition-all duration-200 p-1.5 rounded-lg ${
+                        userHasThisReaction 
+                          ? 'bg-blue-100 border-2 border-blue-300' 
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={(e) => handleReactionClick(emoji, e)}
+                      title={userHasThisReaction ? 'Remove reaction' : 'Add reaction'}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

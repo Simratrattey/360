@@ -1060,7 +1060,7 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
-              shouldAutoScroll={!editMsgId && !replyTo && !showSearch}
+              shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker}
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
               searchFilters={searchFilters}

@@ -84,18 +84,41 @@ export async function deleteMessage(req, res, next) {
   }
 }
 
-// React to a message
+// React to a message (toggle reaction - users can only have one reaction per message)
 export async function reactMessage(req, res, next) {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
     const userId = req.user.id;
-    const message = await Message.findByIdAndUpdate(
-      messageId,
-      { $addToSet: { reactions: { user: userId, emoji } } },
-      { new: true }
-    );
-    res.json({ message });
+    
+    // Find the message first
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+    
+    // Check if user already has a reaction on this message
+    const existingReactionIndex = message.reactions.findIndex(r => r.user.toString() === userId);
+    
+    if (existingReactionIndex !== -1) {
+      const existingReaction = message.reactions[existingReactionIndex];
+      
+      if (existingReaction.emoji === emoji) {
+        // Same emoji - remove the reaction (toggle off)
+        message.reactions.splice(existingReactionIndex, 1);
+      } else {
+        // Different emoji - replace the reaction
+        message.reactions[existingReactionIndex] = { user: userId, emoji };
+      }
+    } else {
+      // No existing reaction - add new one
+      message.reactions.push({ user: userId, emoji });
+    }
+    
+    const updatedMessage = await message.save();
+    await updatedMessage.populate('sender', 'username fullName avatarUrl');
+    
+    res.json({ message: updatedMessage });
   } catch (err) {
     next(err);
   }
