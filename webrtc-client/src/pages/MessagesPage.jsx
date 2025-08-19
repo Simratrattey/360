@@ -396,6 +396,40 @@ export default function MessagesPage() {
         }));
       }
     });
+
+    // Conversation administration events
+    chatSocket.on('conversation:memberAdded', ({ conversationId, userId, addedBy }) => {
+      console.log('🔔 Member added to conversation:', { conversationId, userId, addedBy });
+      if (selected && selected._id === conversationId) {
+        handleConversationUpdated();
+      }
+      fetchConversations(); // Update sidebar
+    });
+
+    chatSocket.on('conversation:memberRemoved', ({ conversationId, userId, removedBy }) => {
+      console.log('🔔 Member removed from conversation:', { conversationId, userId, removedBy });
+      if (selected && selected._id === conversationId) {
+        handleConversationUpdated();
+      }
+      fetchConversations(); // Update sidebar
+    });
+
+    chatSocket.on('conversation:adminAdded', ({ conversationId, userId, adminId }) => {
+      console.log('🔔 Admin added to conversation:', { conversationId, userId, adminId });
+      if (selected && selected._id === conversationId) {
+        handleConversationUpdated();
+      }
+      fetchConversations(); // Update sidebar
+    });
+
+    chatSocket.on('conversation:adminRemoved', ({ conversationId, userId, adminId }) => {
+      console.log('🔔 Admin removed from conversation:', { conversationId, userId, adminId });
+      if (selected && selected._id === conversationId) {
+        handleConversationUpdated();
+      }
+      fetchConversations(); // Update sidebar
+    });
+
     return () => {
       chatSocket.off('chat:new');
       chatSocket.off('chat:edit');
@@ -403,6 +437,10 @@ export default function MessagesPage() {
       chatSocket.off('chat:react');
       chatSocket.off('chat:unreact');
       chatSocket.off('chat:typing');
+      chatSocket.off('conversation:memberAdded');
+      chatSocket.off('conversation:memberRemoved');
+      chatSocket.off('conversation:adminAdded');
+      chatSocket.off('conversation:adminRemoved');
     };
   }, [chatSocket.socket, selected, user.id]);
 
@@ -698,14 +736,26 @@ export default function MessagesPage() {
     setNotification(null);
   };
 
-  const handleConversationUpdated = () => {
+  const handleConversationUpdated = async () => {
     // Refresh conversations list
     fetchConversations();
+    
+    // If there's a selected conversation, refetch its details to update the UI
+    if (selected && selected._id) {
+      try {
+        const response = await conversationAPI.getConversation(selected._id);
+        if (response.data && response.data.conversation) {
+          setSelected(response.data.conversation);
+        }
+      } catch (error) {
+        console.error('Failed to refetch conversation details:', error);
+      }
+    }
     
     setNotification({
       message: 'Conversation updated successfully!'
     });
-    setNotification(null);
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const handleConversationDeleted = (conversationId) => {

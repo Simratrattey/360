@@ -239,6 +239,15 @@ export async function addMember(req, res, next) {
     conversation.members.push(userId);
     await conversation.save();
 
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:memberAdded', {
+        conversationId,
+        userId,
+        addedBy: currentUserId
+      });
+    }
+
     res.json({ message: 'Member added successfully', conversation });
   } catch (err) {
     next(err);
@@ -272,6 +281,15 @@ export async function removeMember(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:memberRemoved', {
+        conversationId,
+        userId,
+        removedBy: currentUserId
+      });
+    }
 
     res.json({ message: 'Member removed successfully', conversation });
   } catch (err) {
@@ -414,6 +432,15 @@ export async function addAdmin(req, res, next) {
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
 
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:adminAdded', {
+        conversationId,
+        userId: newAdminId,
+        adminId: currentUserId
+      });
+    }
+
     res.json({ 
       message: 'Admin added successfully',
       conversation 
@@ -454,6 +481,15 @@ export async function removeAdmin(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:adminRemoved', {
+        conversationId,
+        userId,
+        adminId: currentUserId
+      });
+    }
 
     res.json({ message: 'Admin removed successfully', conversation });
   } catch (err) {

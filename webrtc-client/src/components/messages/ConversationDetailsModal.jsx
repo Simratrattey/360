@@ -41,7 +41,7 @@ export default function ConversationDetailsModal({
   currentUserId,
   onConversationUpdated
 }) {
-  const { onlineUsers } = useChatSocket();
+  const { onlineUsers, socket } = useChatSocket();
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [name, setName] = useState('');
@@ -58,6 +58,13 @@ export default function ConversationDetailsModal({
       setName(conversation.name || '');
       setDescription(conversation.description || '');
       fetchAllUsers();
+      
+      // Debug: Log conversation updates
+      console.log('💬 Conversation updated in modal:', {
+        id: conversation._id,
+        membersCount: conversation.members?.length || 0,
+        adminsCount: conversation.admins?.length || 0
+      });
     }
   }, [isOpen, conversation]);
 
@@ -118,6 +125,16 @@ export default function ConversationDetailsModal({
     try {
       await API.post(`/conversations/${conversation._id}/admins`, { userId });
       setSuccess('Admin added successfully');
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('conversation:adminAdded', {
+          conversationId: conversation._id,
+          userId,
+          adminId: currentUserId
+        });
+      }
+      
       if (typeof onConversationUpdated === 'function') {
         onConversationUpdated();
       }
@@ -134,6 +151,16 @@ export default function ConversationDetailsModal({
     try {
       await API.delete(`/conversations/${conversation._id}/admins/${userId}`);
       setSuccess('Admin removed successfully');
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('conversation:adminRemoved', {
+          conversationId: conversation._id,
+          userId,
+          adminId: currentUserId
+        });
+      }
+      
       if (typeof onConversationUpdated === 'function') {
         onConversationUpdated();
       }
@@ -150,6 +177,16 @@ export default function ConversationDetailsModal({
     try {
       await API.delete(`/conversations/${conversation._id}/members/${userId}`);
       setSuccess('Member removed successfully');
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('conversation:memberRemoved', {
+          conversationId: conversation._id,
+          userId,
+          removedBy: currentUserId
+        });
+      }
+      
       if (typeof onConversationUpdated === 'function') {
         onConversationUpdated();
       }
@@ -168,6 +205,16 @@ export default function ConversationDetailsModal({
     try {
       await API.post(`/conversations/${conversation._id}/members`, { userId: selectedUserToAdd._id });
       setSuccess('Member added successfully');
+      
+      // Emit socket event for real-time updates
+      if (socket) {
+        socket.emit('conversation:memberAdded', {
+          conversationId: conversation._id,
+          userId: selectedUserToAdd._id,
+          addedBy: currentUserId
+        });
+      }
+      
       if (typeof onConversationUpdated === 'function') {
         onConversationUpdated();
       }

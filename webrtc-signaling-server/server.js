@@ -954,6 +954,12 @@ app.post('/api/broadcast/newProducer', express.json(), (req, res) => {
   }
 });
 
+// Middleware to make io instance available to controllers
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Register new conversation and message routes
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
