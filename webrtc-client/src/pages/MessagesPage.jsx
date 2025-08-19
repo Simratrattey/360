@@ -997,7 +997,7 @@ export default function MessagesPage() {
 
       {/* Chat Window - Full width on mobile when sidebar is closed */}
       {(!isMobile || (!sidebarOpen && selected)) && (
-        <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm">
+        <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm min-w-0 overflow-hidden">
           {/* Mobile back button */}
           {isMobile && (
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
@@ -1137,7 +1137,7 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
-              shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker && !reactionInProgress}
+              shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker && !reactionInProgress && showEmojiPicker !== 'input'}
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
               searchFilters={searchFilters}

@@ -80,14 +80,14 @@ export default function ChatWindow({
   return (
     <div
       ref={chatRef}
-      className="flex-1 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50"
     >
       {isLoading ? (
         <div className="flex h-full items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="p-3 sm:p-6 space-y-4 sm:space-y-8">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 w-full">
           {Object.entries(grouped).map(([date, msgs]) => (
             <div key={date} className="space-y-3 sm:space-y-6">
               {/* Date separator */}

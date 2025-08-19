@@ -172,18 +172,18 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
   const currentConfig = getTypeConfig(conversationType);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className={`relative p-4 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
+        <div className={`relative p-3 sm:p-4 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-xl bg-gradient-to-r ${currentConfig.gradient} text-white shadow-lg`}>
-                <currentConfig.icon className="h-6 w-6" />
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className={`p-1.5 sm:p-2 rounded-xl bg-gradient-to-r ${currentConfig.gradient} text-white shadow-lg`}>
+                <currentConfig.icon className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">New Conversation</h2>
-                <p className="text-sm text-gray-600">{currentConfig.description}</p>
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">New Conversation</h2>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{currentConfig.description}</p>
               </div>
             </div>
             <button 

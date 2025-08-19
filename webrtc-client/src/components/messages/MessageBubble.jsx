@@ -556,9 +556,9 @@ function MessageBubble({
         </div>
       )}
       <div className={`flex ${isOwn ? 'justify-end sm:justify-end' : 'justify-start sm:justify-start'} w-full relative`}>
-        {/* Reactions button outside bubble, positioned for mobile optimization */}
+        {/* Reactions button outside bubble - right side for other users */}
         {!isOwn && (
-          <div className="hidden sm:flex items-center mr-2">
+          <div className="hidden sm:flex items-center ml-2">
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -594,7 +594,7 @@ function MessageBubble({
             )}
           </div>
         )}
-        <div className={`max-w-[85%] sm:max-w-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl relative shadow-sm ${
+        <div className={`max-w-[75%] sm:max-w-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl relative shadow-sm ${
           isOwn
             ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
             : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-300'
@@ -683,7 +683,7 @@ function MessageBubble({
 
               {/* Message text - show after files */}
               {msg.text && (
-                <div className={`text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'} ${msg.file ? 'mt-3' : ''}`}>
+                <div className={`text-sm sm:text-base leading-relaxed break-words break-all ${isOwn ? 'text-white' : 'text-gray-800'} ${msg.file ? 'mt-3' : ''}`}>
                   {renderTextWithMentions(msg.text)}
                 </div>
               )}
@@ -769,9 +769,9 @@ function MessageBubble({
             </>
           )}
         </div>
-        {/* Reactions button for own messages, hidden on mobile */}
+        {/* Reactions button for own messages - left side */}
         {isOwn && (
-          <div className="hidden sm:flex items-center ml-2">
+          <div className="hidden sm:flex items-center mr-2 order-first">
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -785,7 +785,7 @@ function MessageBubble({
               <Smile className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
             </button>
             {showEmojiPicker === messageId && (
-              <div className="emoji-picker absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-2 sm:p-3 flex flex-wrap gap-1 sm:gap-2 mb-2 min-w-[180px] sm:min-w-[220px] animate-in fade-in duration-200">
+              <div className="emoji-picker absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-2 sm:p-3 flex flex-wrap gap-1 sm:gap-2 mb-2 min-w-[180px] sm:min-w-[220px] animate-in fade-in duration-200">
                 {emojiList.map(emoji => {
                   const userHasThisReaction = hasUserReacted(emoji);
                   return (
@@ -808,7 +808,7 @@ function MessageBubble({
           </div>
         )}
         
-        {/* Mobile reaction buttons - opposite side positioning */}
+        {/* Mobile reaction buttons - proper side positioning */}
         <div className={`sm:hidden absolute ${isOwn ? 'left-0' : 'right-0'} top-1/2 transform -translate-y-1/2 ${isOwn ? '-translate-x-8' : 'translate-x-8'}`}>
           <button
             onClick={(e) => {
