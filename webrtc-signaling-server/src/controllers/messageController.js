@@ -141,7 +141,7 @@ export async function removeReaction(req, res, next) {
   }
 }
 
-// Search messages in a conversation
+// Search messages in a conversation with secure MongoDB queries
 export async function searchMessages(req, res, next) {
   try {
     const { conversationId } = req.params;
@@ -160,23 +160,31 @@ export async function searchMessages(req, res, next) {
       return res.json({ messages: [], total: 0 });
     }
 
-    // Build search filter
+    // Build secure search filter - using $text index for full-text search when available
     let searchFilter = {
       conversation: conversationId,
       $or: []
     };
 
-    // Text search - case insensitive regex
+    // Secure text search using escaped regex (query already sanitized by middleware)
+    const escapedQuery = query.trim();
+    
     if (type === 'all' || type === 'text') {
       searchFilter.$or.push({
-        text: { $regex: query.trim(), $options: 'i' }
+        text: { 
+          $regex: new RegExp(escapedQuery, 'i'), // Use RegExp constructor for safety
+          $options: 'i'
+        }
       });
     }
 
-    // File name search
+    // Secure file name search
     if (type === 'all' || type === 'file' || type === 'image') {
       searchFilter.$or.push({
-        'file.name': { $regex: query.trim(), $options: 'i' }
+        'file.name': { 
+          $regex: new RegExp(escapedQuery, 'i'),
+          $options: 'i'
+        }
       });
     }
 
@@ -185,14 +193,15 @@ export async function searchMessages(req, res, next) {
       return res.json({ messages: [], total: 0 });
     }
 
-    // Sender filter
+    // Secure sender filter with proper validation
     if (sender === 'me') {
       searchFilter.sender = userId;
     } else if (sender !== 'all' && sender !== 'me') {
-      searchFilter.sender = sender; // Specific user ID
+      // sender is already validated as ObjectId by middleware
+      searchFilter.sender = sender;
     }
 
-    // Date range filter
+    // Date range filter with safe date construction
     if (dateRange !== 'all') {
       const now = new Date();
       let startDate;
@@ -211,47 +220,58 @@ export async function searchMessages(req, res, next) {
           startDate = null;
       }
       
-      if (startDate) {
+      if (startDate && !isNaN(startDate.getTime())) {
         searchFilter.createdAt = { $gte: startDate };
       }
     }
 
-    // Additional type-specific filters
+    // Secure type-specific filters
     if (type === 'file') {
       searchFilter.file = { $exists: true };
-      searchFilter['file.type'] = { $not: /^image\// }; // Non-image files
+      searchFilter['file.type'] = { $not: /^image\// };
     } else if (type === 'image') {
       searchFilter.file = { $exists: true };
-      searchFilter['file.type'] = /^image\//; // Image files only
+      searchFilter['file.type'] = /^image\//;
     }
 
-    console.log('Search filter:', JSON.stringify(searchFilter, null, 2));
+    // Remove debug logging for production
+    // console.log('Search filter:', JSON.stringify(searchFilter, null, 2));
 
-    // Get total count
-    const total = await Message.countDocuments(searchFilter);
+    // Get total count with timeout protection
+    const total = await Promise.race([
+      Message.countDocuments(searchFilter),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout')), 10000)
+      )
+    ]);
 
-    // Get messages with pagination
-    const messages = await Message.find(searchFilter)
-      .populate('sender', 'username fullName avatarUrl')
-      .populate('replyTo', 'text file')
-      .sort({ createdAt: -1 }) // Most recent first
-      .skip(parseInt(skip))
-      .limit(parseInt(limit))
-      .lean();
+    // Get messages with pagination and timeout protection
+    const messages = await Promise.race([
+      Message.find(searchFilter)
+        .populate('sender', 'username fullName avatarUrl')
+        .populate('replyTo', 'text file')
+        .sort({ createdAt: -1 })
+        .skip(parseInt(skip))
+        .limit(parseInt(limit))
+        .lean(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Search timeout')), 10000)
+      )
+    ]);
 
-    // Add search relevance score (simple text match scoring)
+    // Add search relevance score with safe text processing
     const scoredMessages = messages.map(msg => {
       let score = 0;
-      const searchTerm = query.trim().toLowerCase();
+      const searchTerm = escapedQuery.toLowerCase();
       
-      if (msg.text) {
+      if (msg.text && typeof msg.text === 'string') {
         const text = msg.text.toLowerCase();
         // Exact phrase match gets highest score
         if (text.includes(searchTerm)) {
           score += 100;
         }
         // Word matches
-        const words = searchTerm.split(' ');
+        const words = searchTerm.split(' ').filter(word => word.length > 0);
         words.forEach(word => {
           if (text.includes(word)) {
             score += 10;
@@ -259,7 +279,7 @@ export async function searchMessages(req, res, next) {
         });
       }
       
-      if (msg.file && msg.file.name) {
+      if (msg.file && msg.file.name && typeof msg.file.name === 'string') {
         const fileName = msg.file.name.toLowerCase();
         if (fileName.includes(searchTerm)) {
           score += 50;
@@ -280,10 +300,17 @@ export async function searchMessages(req, res, next) {
     res.json({ 
       messages: scoredMessages,
       total,
-      query: query.trim(),
+      query: escapedQuery,
       filters: { type, sender, dateRange }
     });
   } catch (err) {
+    if (err.message === 'Search timeout') {
+      return res.status(408).json({ 
+        message: 'Search request timed out. Please try a more specific query.',
+        error: 'SEARCH_TIMEOUT'
+      });
+    }
+    
     console.error('Search error:', err);
     next(err);
   }

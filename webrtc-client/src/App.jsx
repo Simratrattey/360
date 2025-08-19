@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext.jsx';
 import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Layout from './components/Layout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
@@ -21,37 +22,81 @@ export default function App() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
 
-  // If not logged in, show login page
-  if (!user) {
-    return (
-      <>
-        <Routes>
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="*" element={ <Navigate to="/login" state={{ from: location }} replace /> } />
-        </Routes>
-        <Toaster position="top-right" />
-      </>
-    );
-  }
-
-  // If logged in, show the main app with layout
   return (
-    <>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/meetings" element={<MeetingsPage />} />
-          <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
-          <Route path="/meetings/:id" element={<MeetingDetailsPage />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/messages" element={<MessagesPage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
-      <Toaster position="top-right" />
-    </>
+    <ErrorBoundary level="app" showDetails={process.env.NODE_ENV === 'development'}>
+      {/* If not logged in, show login page */}
+      {!user ? (
+        <>
+          <Routes>
+            <Route path="/register" element={
+              <ErrorBoundary level="page">
+                <RegisterPage />
+              </ErrorBoundary>
+            } />
+            <Route path="/login" element={
+              <ErrorBoundary level="page">
+                <LoginPage />
+              </ErrorBoundary>
+            } />
+            <Route path="*" element={ <Navigate to="/login" state={{ from: location }} replace /> } />
+          </Routes>
+          <Toaster position="top-right" />
+        </>
+      ) : (
+        /* If logged in, show the main app with layout */
+        <>
+          <ErrorBoundary level="page">
+            <Layout>
+              <Routes>
+                <Route path="/" element={
+                  <ErrorBoundary level="page">
+                    <DashboardPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/meetings" element={
+                  <ErrorBoundary level="page">
+                    <MeetingsPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/meeting/:roomId" element={ 
+                  <PrivateRoute> 
+                    <ErrorBoundary level="page">
+                      <MeetingPage />
+                    </ErrorBoundary>
+                  </PrivateRoute> 
+                } />
+                <Route path="/meetings/:id" element={
+                  <ErrorBoundary level="page">
+                    <MeetingDetailsPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/contacts" element={
+                  <ErrorBoundary level="page">
+                    <ContactsPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/settings" element={
+                  <ErrorBoundary level="page">
+                    <SettingsPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/messages" element={
+                  <ErrorBoundary level="page">
+                    <MessagesPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/search" element={
+                  <ErrorBoundary level="page">
+                    <SearchResultsPage />
+                  </ErrorBoundary>
+                } />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          </ErrorBoundary>
+          <Toaster position="top-right" />
+        </>
+      )}
+    </ErrorBoundary>
   );
 }

@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
+import DOMPurify from 'dompurify';
+import MessageErrorBoundary from '../MessageErrorBoundary';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({
@@ -142,59 +144,80 @@ function MessageBubble({
     return null;
   };
 
-  // Helper: highlight search terms in text
-  const highlightSearchTerms = (text, searchQuery) => {
+  // Helper: safely highlight search terms in text with XSS protection
+  const highlightSearchTerms = useMemo(() => (text, searchQuery) => {
     if (!text || !searchQuery) return text;
     
     try {
-      const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-      return text.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 font-semibold px-1 py-0.5 rounded">$1</mark>');
+      // First sanitize the input text
+      const sanitizedText = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+      
+      // Escape special regex characters in search query
+      const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedQuery})`, 'gi');
+      
+      // Apply highlighting and sanitize the result
+      const highlighted = sanitizedText.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 font-semibold px-1 py-0.5 rounded">$1</mark>');
+      
+      // Final sanitization to ensure only safe HTML
+      return DOMPurify.sanitize(highlighted, { 
+        ALLOWED_TAGS: ['mark'], 
+        ALLOWED_ATTR: ['class'] 
+      });
     } catch (error) {
       console.warn('Error highlighting search terms:', error);
-      return text;
+      // Return sanitized text without highlighting on error
+      return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
     }
-  };
+  }, []);
 
-  // Helper: highlight mentions in text
-  const renderTextWithMentions = (text) => {
+  // Helper: safely highlight mentions in text with XSS protection
+  const renderTextWithMentions = useMemo(() => (text) => {
     if (!text) return null;
     
-    let processedText = text;
+    // First sanitize the input text to prevent XSS
+    let processedText = DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
     
-    // First, apply search highlighting if we have search filters
+    // Apply search highlighting if we have search filters
     if (searchFilters && searchFilters.query) {
       processedText = highlightSearchTerms(processedText, searchFilters.query);
     }
     
-    // Then process mentions - but we need to be careful with the HTML from search highlighting
+    // If we have HTML from search highlighting, handle it safely
     if (processedText.includes('<mark')) {
-      // If we have search highlights, render as HTML
+      // Process mentions in the highlighted text
+      const processedWithMentions = processedText.replace(
+        /@(\w[\w.]*)/g, 
+        (match, username) => {
+          // Sanitize the username
+          const sanitizedUsername = DOMPurify.sanitize(username, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+          const userObj = getUserObj(currentUserId);
+          const isMe = sanitizedUsername.toLowerCase() === (userObj?.username?.toLowerCase() || '');
+          
+          const spanClass = isMe
+            ? 'bg-gradient-to-r from-yellow-300 to-pink-300 text-pink-900 font-bold px-1 py-0.5 rounded'
+            : 'bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded';
+          
+          return `<span class="${spanClass} ml-0.5 mr-0.5">@${sanitizedUsername}</span>`;
+        }
+      );
+      
+      // Final sanitization with allowed tags for mentions and search highlights
+      const finalSafeHTML = DOMPurify.sanitize(processedWithMentions, { 
+        ALLOWED_TAGS: ['mark', 'span'], 
+        ALLOWED_ATTR: ['class'],
+        ALLOW_DATA_ATTR: false
+      });
+      
       return (
-        <div 
-          dangerouslySetInnerHTML={{ 
-            __html: processedText.replace(
-              /@(\w[\w.]*)/g, 
-              (match, username) => {
-                const userObj = getUserObj(currentUserId);
-                const isMe = username.toLowerCase() === (userObj?.username?.toLowerCase() || '');
-                return `<span class="${
-                  isMe
-                    ? 'bg-gradient-to-r from-yellow-300 to-pink-300 text-pink-900 font-bold px-1 py-0.5 rounded'
-                    : 'bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded'
-                } ml-0.5 mr-0.5">${match}</span>`;
-              }
-            )
-          }} 
-        />
+        <div dangerouslySetInnerHTML={{ __html: finalSafeHTML }} />
       );
     }
     
-    // Otherwise, process normally with React components
-    // Regex for @username (alphanumeric, underscore, dot)
+    // Otherwise, process normally with React components (no HTML)
     return processedText.split(/(\s+)/).map((part, i) => {
       if (/^@\w[\w.]*$/.test(part)) {
         const username = part.slice(1);
-        // Highlight if it's the current user
         const userObj = getUserObj(currentUserId);
         const isMe = username.toLowerCase() === (userObj?.username?.toLowerCase() || '');
         return (
@@ -212,7 +235,7 @@ function MessageBubble({
       }
       return part;
     });
-  };
+  }, [searchFilters, currentUserId, getUserObj, highlightSearchTerms]);
 
   const renderFilePreview = () => {
     if (!msg.file) {
@@ -484,25 +507,29 @@ function MessageBubble({
     setShowEmojiPicker(false);
   };
 
-  // Helper function to group reactions by emoji
-  const groupReactions = (reactionsArray) => {
+  // Helper function to group reactions by emoji (memoized for performance)
+  const reactionGroups = useMemo(() => {
+    const reactionsArray = reactions || msg.reactions || [];
     const grouped = {};
-    (reactionsArray || []).forEach(reaction => {
+    
+    reactionsArray.forEach(reaction => {
+      if (!reaction?.emoji) return; // Skip invalid reactions
+      
       const emoji = reaction.emoji;
       if (!grouped[emoji]) {
         grouped[emoji] = [];
       }
       grouped[emoji].push(reaction);
     });
+    
     return grouped;
-  };
+  }, [reactions, msg.reactions]);
 
-  const reactionGroups = groupReactions(reactions || msg.reactions || []);
-  const hasUserReacted = (emoji) => {
+  const hasUserReacted = useMemo(() => (emoji) => {
     return reactionGroups[emoji]?.some(r => 
       r.user === currentUserId || r.user?._id === currentUserId
     ) || false;
-  };
+  }, [reactionGroups, currentUserId]);
 
   return (
     <div className={`flex flex-col items-${isOwn ? 'end' : 'start'} mb-4 group relative`}>
@@ -810,4 +837,13 @@ function MessageBubble({
 }
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
-export default React.memo(MessageBubble);
+// Wrap with error boundary to handle any errors in message rendering
+const MessageBubbleWithErrorBoundary = React.memo((props) => (
+  <MessageErrorBoundary>
+    <MessageBubble {...props} />
+  </MessageErrorBoundary>
+));
+
+MessageBubbleWithErrorBoundary.displayName = 'MessageBubbleWithErrorBoundary';
+
+export default MessageBubbleWithErrorBoundary;

@@ -353,23 +353,67 @@ export function ChatSocketProvider({ children }) {
 
     setSocket(s);
 
+    // Cleanup function to prevent memory leaks
     return () => {
+      console.log('🔔 Cleaning up socket connection and listeners');
+      
+      // Clear heartbeat interval if exists
+      if (s.heartbeatInterval) {
+        clearInterval(s.heartbeatInterval);
+        s.heartbeatInterval = null;
+      }
+      
+      // Remove all event listeners to prevent memory leaks
+      s.removeAllListeners();
+      
+      // Clear listeners ref
+      listeners.current = {};
+      
+      // Disconnect socket
       s.disconnect();
+      
+      // Reset state
+      setSocket(null);
+      setConnected(false);
+      setOnlineUsers(new Map());
+      setMessageStatus(new Map());
     };
   }, [user]);
 
-  // Register event listeners
+  // Register event listeners with proper cleanup tracking
   const on = (event, cb) => {
     if (!socket) return;
+    
+    // Remove existing listener if present to prevent duplicates
+    if (listeners.current[event]) {
+      socket.off(event, listeners.current[event]);
+    }
+    
     socket.on(event, cb);
     listeners.current[event] = cb;
   };
   
   const off = (event) => {
     if (!socket) return;
-    socket.off(event, listeners.current[event]);
-    delete listeners.current[event];
+    
+    if (listeners.current[event]) {
+      socket.off(event, listeners.current[event]);
+      delete listeners.current[event];
+    }
   };
+
+  // Cleanup function to remove all custom listeners
+  useEffect(() => {
+    return () => {
+      // Cleanup all registered listeners on component unmount
+      Object.keys(listeners.current).forEach(event => {
+        if (socket) {
+          socket.off(event, listeners.current[event]);
+        }
+      });
+      listeners.current = {};
+    };
+  }, [socket]);
 
   // Chat actions
   const joinConversation = (conversationId) => {
