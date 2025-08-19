@@ -258,8 +258,12 @@ export default function MessagesPage() {
       const convId = selected._id;
       
       const currentCache = messagesCacheRef.current;
+      console.log(`🔍 Switching to conversation ${convId}, cache has:`, Object.keys(currentCache));
+      console.log(`🔍 Cache for this conversation:`, currentCache[convId]?.length || 0, 'messages');
+      
       if (currentCache[convId]) {
         // Messages are in cache, use them and indicate loading has finished
+        console.log(`✅ Loading ${currentCache[convId].length} messages from cache`);
         setMessages(currentCache[convId]);
         setMessagesLoading(false);
       } else {
@@ -295,6 +299,15 @@ export default function MessagesPage() {
     }
   }, [selected]);
 
+  // Watch for cache updates for the currently selected conversation
+  useEffect(() => {
+    if (selected && selected._id && messagesCache[selected._id]) {
+      console.log(`🔄 Cache updated for current conversation ${selected._id}, updating messages`);
+      setMessages(messagesCache[selected._id]);
+      setMessagesLoading(false);
+    }
+  }, [selected?._id, messagesCache]);
+
   // Real-time event listeners
   useEffect(() => {
     if (!chatSocket.socket) return;
@@ -322,6 +335,7 @@ export default function MessagesPage() {
         });
         
         const updatedMessages = [...filtered, { ...msg, sending: false }];
+        console.log(`📦 Cache updated for conversation ${msg.conversationId}: ${updatedMessages.length} messages`);
         
         return {
           ...prevCache,
@@ -375,6 +389,11 @@ export default function MessagesPage() {
         msg.createdAt || new Date().toISOString(),
         shouldIncrementUnread
       );
+      
+      // Update unread count in sidebar badge if this message increments unread count
+      if (shouldIncrementUnread && refreshUnreadCount) {
+        refreshUnreadCount();
+      }
     });
 
     // Edit message
