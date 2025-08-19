@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { User, Users, Hash, Plus, Search, MoreVertical, Settings, Star, Trash2, Send, Paperclip, Smile, MessageCircle, X, Check } from 'lucide-react';
 import SidebarConversation from '../components/messages/SidebarConversation';
 import ChatWindow from '../components/messages/ChatWindow';
@@ -138,24 +138,40 @@ export default function MessagesPage() {
    * @param {object} lastMessage - The last message object with text, file, createdAt, senderName.
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
-  const moveConversationToTop = (convId, lastMessage, time, incrementUnread = false) => {
+  const moveConversationToTop = useCallback((convId, lastMessage, time, incrementUnread = false) => {
+    console.log(`🔄 moveConversationToTop called for ${convId}, incrementUnread: ${incrementUnread}`);
+    
     setAllConversations(prevSections => {
-      return prevSections.map(section => {
+      const newSections = prevSections.map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
         if (idx === -1) return section;
+        
         const newItems = [...section.items];
         const [convItem] = newItems.splice(idx, 1);
+        
+        // Force new object references to ensure React re-renders
         const updatedConv = {
           ...convItem,
-          lastMessage: lastMessage,
+          lastMessage: { ...lastMessage }, // New object reference
           lastMessageAt: time,
-          unread: incrementUnread ? (convItem.unread || 0) + 1 : (convItem.unread || 0)
+          unread: incrementUnread ? (convItem.unread || 0) + 1 : (convItem.unread || 0),
+          _lastUpdated: Date.now() // Force re-render trigger
         };
+        
+        console.log(`🔄 Updated conversation ${convId} - unread: ${updatedConv.unread}`);
+        
         // Prepend updated conversation
-        return { ...section, items: [updatedConv, ...newItems] };
+        return { 
+          ...section, 
+          items: [updatedConv, ...newItems],
+          _lastUpdated: Date.now() // Force section re-render
+        };
       });
+      
+      console.log(`🔄 Updated ${newSections.length} sections`);
+      return newSections;
     });
-  };
+  }, []);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -258,8 +274,10 @@ export default function MessagesPage() {
       const convId = selected._id;
       
       const currentCache = messagesCacheRef.current;
-      console.log(`🔍 Switching to conversation ${convId}, cache has:`, Object.keys(currentCache));
+      console.log(`🔍 Switching to conversation ${convId}`);
+      console.log(`🔍 Cache keys:`, Object.keys(currentCache));
       console.log(`🔍 Cache for this conversation:`, currentCache[convId]?.length || 0, 'messages');
+      console.log(`🔍 Current allConversations length:`, allConversations.length);
       
       if (currentCache[convId]) {
         // Messages are in cache, use them and indicate loading has finished
@@ -393,8 +411,12 @@ export default function MessagesPage() {
       );
       
       // Update unread count in sidebar badge if this message increments unread count
+      // Delay the API refresh to allow local updates to render first and avoid race conditions
       if (shouldIncrementUnread && refreshUnreadCount) {
-        refreshUnreadCount();
+        setTimeout(() => {
+          console.log(`📡 Delayed refreshUnreadCount call for conversation ${conversationId}`);
+          refreshUnreadCount();
+        }, 200);
       }
     });
 
@@ -533,6 +555,15 @@ export default function MessagesPage() {
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
+    // Create a deep comparison key to force updates when conversation properties change
+    const conversationsKey = allConversations.map(section => 
+      `${section.section}-${section._lastUpdated || 0}-${section.items.map(conv => 
+        `${conv._id}-${conv.unread || 0}-${conv.lastMessageAt || ''}-${conv._lastUpdated || 0}`
+      ).join(',')}`
+    ).join('|');
+    
+    console.log(`🔍 useMemo recomputing filteredConversations for ${allConversations.length} sections`);
+    
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
