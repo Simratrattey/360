@@ -316,8 +316,10 @@ export default function MessagesPage() {
       console.log('Received new message:', msg); // Debug log
       
       // Update cache for the conversation that received the message
+      // Handle both conversationId and conversation properties
+      const conversationId = msg.conversationId || msg.conversation;
       setMessagesCache(prevCache => {
-        const conversationMessages = prevCache[msg.conversationId] || [];
+        const conversationMessages = prevCache[conversationId] || [];
         
         // Check if message already exists in cache
         const exists = conversationMessages.some(m => m._id === msg._id);
@@ -329,28 +331,28 @@ export default function MessagesPage() {
         const filtered = conversationMessages.filter(m => {
           if (!m.pending) return true;
           return !(
-            m.conversationId === msg.conversationId &&
+            (m.conversationId === conversationId || m.conversation === conversationId) &&
             m.senderId === msg.senderId
           );
         });
         
-        const updatedMessages = [...filtered, { ...msg, sending: false }];
-        console.log(`📦 Cache updated for conversation ${msg.conversationId}: ${updatedMessages.length} messages`);
+        const updatedMessages = [...filtered, { ...msg, sending: false, conversationId }];
+        console.log(`📦 Cache updated for conversation ${conversationId}: ${updatedMessages.length} messages`);
         
         return {
           ...prevCache,
-          [msg.conversationId]: updatedMessages
+          [conversationId]: updatedMessages
         };
       });
       
       // Only update the displayed messages if this message belongs to the currently selected conversation
-      if (selectedRef.current && selectedRef.current._id === msg.conversationId) {
+      if (selectedRef.current && selectedRef.current._id === conversationId) {
         setMessages(prev => {
           // Remove any pending optimistic messages
           let filtered = prev.filter(m => {
             if (!m.pending) return true;
             return !(
-              m.conversationId === msg.conversationId &&
+              (m.conversationId === conversationId || m.conversation === conversationId) &&
               m.senderId === msg.senderId
             );
           });
@@ -360,7 +362,7 @@ export default function MessagesPage() {
           if (exists) return filtered;
           
           // Add the real message
-          return [...filtered, { ...msg, sending: false }];
+          return [...filtered, { ...msg, sending: false, conversationId }];
         });
       }
       
@@ -377,9 +379,9 @@ export default function MessagesPage() {
       
       // Move the corresponding conversation to the top using the latest message
       // Increment unread count only if message is not for the currently active conversation
-      const shouldIncrementUnread = !selectedRef.current || selectedRef.current._id !== msg.conversationId;
+      const shouldIncrementUnread = !selectedRef.current || selectedRef.current._id !== conversationId;
       moveConversationToTop(
-        msg.conversationId,
+        conversationId,
         {
           text: msg.text,
           file: msg.file,
