@@ -144,31 +144,47 @@ export default function MessagesPage() {
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
   const moveConversationToTop = useCallback((convId, lastMessage, time, incrementUnread = false) => {
+    console.log(`🔄 ATTEMPTING to move conversation ${convId} to top, incrementUnread: ${incrementUnread}`);
+    
     setAllConversations(prevSections => {
       let convFound = false;
-      const newSections = [...prevSections].map(section => {
+      const newSections = prevSections.map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
         if (idx === -1) return section;
 
         convFound = true;
         const newItems = [...section.items];
         const [convItem] = newItems.splice(idx, 1);
+        
+        const oldUnread = convItem.unread || 0;
+        const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
 
+        // Force new object references to ensure React re-renders
         const updatedConv = {
           ...convItem,
-          lastMessage: { ...lastMessage },
+          lastMessage: { 
+            ...lastMessage,
+            _forceUpdate: Date.now() // Force update trigger
+          },
           lastMessageAt: time,
-          unread: incrementUnread ? (convItem.unread || 0) + 1 : (convItem.unread || 0),
+          unread: newUnread,
+          _lastUpdated: Date.now() // Force conversation re-render
         };
 
+        console.log(`🔄 UPDATED conversation ${convId}: unread ${oldUnread} -> ${newUnread}, lastMessage: "${lastMessage.text}"`);
+
+        // Force new section object reference
         return {
           ...section,
           items: [updatedConv, ...newItems],
+          _lastUpdated: Date.now() // Force section re-render
         };
       });
 
       if (convFound) {
-        console.log(`[moveConversationToTop] Moved ${convId} to top. Unread: ${incrementUnread}`);
+        console.log(`✅ SUCCESS: Moved conversation ${convId} to top with unread count update`);
+      } else {
+        console.log(`❌ FAILED: Conversation ${convId} not found in any section`);
       }
       return newSections;
     });
@@ -374,26 +390,24 @@ export default function MessagesPage() {
           return [...filtered, { ...msg, conversationId, pending: false, sending: false }];
         });
       } else {
-        console.log(`📝 Message for different conversation ${conversationId}, current: ${selectedRef.current?._id}`);
+        console.log(`📝 Message for DIFFERENT conversation ${conversationId}, current: ${selectedRef.current?._id}`);
         
         // Check if this conversation exists in our sidebar using ref to avoid stale state
         const currentConversations = allConversationsRef.current;
         const allItems = currentConversations.flatMap(section => section.items);
         const conversationExists = allItems.some(conv => conv._id === conversationId);
         
-        console.log(`🔍 Checking if conversation ${conversationId} exists in sidebar:`, conversationExists);
-        console.log(`🔍 Current conversations:`, currentConversations.map(s => 
-          `${s.section}: [${s.items.map(c => c._id).join(', ')}]`
-        ));
+        console.log(`🔍 Conversation ${conversationId} exists in sidebar: ${conversationExists}`);
         
         if (!conversationExists) {
-          console.log(`🆕 NEW CONVERSATION DETECTED: ${conversationId}, immediately refreshing conversation list`);
-          // Immediately fetch conversations without delay to ensure real-time update
+          console.log(`🆕 NEW CONVERSATION DETECTED: ${conversationId}, refreshing conversation list`);
           fetchConversations().then(() => {
             console.log(`✅ Conversation list refreshed after detecting new conversation ${conversationId}`);
           }).catch(error => {
             console.error(`❌ Failed to refresh conversations:`, error);
           });
+        } else {
+          console.log(`✅ Existing conversation ${conversationId} will be updated by moveConversationToTop`);
         }
       }
       
