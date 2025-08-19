@@ -354,15 +354,34 @@ export default function MessagesPage() {
       // Always update the displayed messages if this is for the current conversation
       if (selectedRef.current && selectedRef.current._id === conversationId) {
         setMessages(prev => {
-          // Check if message already exists
-          const exists = prev.some(m => m._id === msg._id);
-          if (exists) return prev;
+          // Remove any pending optimistic messages from the same sender
+          let filtered = prev.filter(m => {
+            if (!m.pending || !m.sending) return true;
+            // Remove pending messages that match this real message
+            return !(m.senderId === msg.senderId && m.text === msg.text);
+          });
           
-          console.log(`✅ Adding message to current conversation ${conversationId}`);
-          return [...prev, { ...msg, conversationId }];
+          // Check if the real message already exists
+          const exists = filtered.some(m => m._id === msg._id);
+          if (exists) return filtered;
+          
+          console.log(`✅ Adding real message to current conversation ${conversationId}`);
+          return [...filtered, { ...msg, conversationId, pending: false, sending: false }];
         });
       } else {
         console.log(`📝 Message for different conversation ${conversationId}, current: ${selectedRef.current?._id}`);
+        
+        // Check if this conversation exists in our sidebar
+        const allItems = allConversations.flatMap(section => section.items);
+        const conversationExists = allItems.some(conv => conv._id === conversationId);
+        
+        if (!conversationExists) {
+          console.log(`🆕 New conversation detected: ${conversationId}, refreshing conversation list`);
+          // Refresh conversations list to include the new conversation
+          setTimeout(() => {
+            fetchConversations();
+          }, 500);
+        }
       }
       
       // Show browser notification if message is not from current user
@@ -504,7 +523,7 @@ export default function MessagesPage() {
       chatSocket.off('conversation:adminAdded');
       chatSocket.off('conversation:adminRemoved');
     };
-  }, [chatSocket.socket, user.id]);
+  }, [chatSocket.socket, user.id, allConversations]);
 
   // Mark messages as read when conversation is selected
   useEffect(() => {
