@@ -108,6 +108,7 @@ export default function MessagesPage() {
   const windowFocused = useRef(true);
   const selectedRef = useRef(selected);
   const messagesCacheRef = useRef(messagesCache);
+  const allConversationsRef = useRef(allConversations);
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
@@ -119,6 +120,10 @@ export default function MessagesPage() {
   useEffect(() => {
     messagesCacheRef.current = messagesCache;
   }, [messagesCache]);
+  
+  useEffect(() => {
+    allConversationsRef.current = allConversations;
+  }, [allConversations]);
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -371,16 +376,24 @@ export default function MessagesPage() {
       } else {
         console.log(`📝 Message for different conversation ${conversationId}, current: ${selectedRef.current?._id}`);
         
-        // Check if this conversation exists in our sidebar
-        const allItems = allConversations.flatMap(section => section.items);
+        // Check if this conversation exists in our sidebar using ref to avoid stale state
+        const currentConversations = allConversationsRef.current;
+        const allItems = currentConversations.flatMap(section => section.items);
         const conversationExists = allItems.some(conv => conv._id === conversationId);
         
+        console.log(`🔍 Checking if conversation ${conversationId} exists in sidebar:`, conversationExists);
+        console.log(`🔍 Current conversations:`, currentConversations.map(s => 
+          `${s.section}: [${s.items.map(c => c._id).join(', ')}]`
+        ));
+        
         if (!conversationExists) {
-          console.log(`🆕 New conversation detected: ${conversationId}, refreshing conversation list`);
-          // Refresh conversations list to include the new conversation
-          setTimeout(() => {
-            fetchConversations();
-          }, 500);
+          console.log(`🆕 NEW CONVERSATION DETECTED: ${conversationId}, immediately refreshing conversation list`);
+          // Immediately fetch conversations without delay to ensure real-time update
+          fetchConversations().then(() => {
+            console.log(`✅ Conversation list refreshed after detecting new conversation ${conversationId}`);
+          }).catch(error => {
+            console.error(`❌ Failed to refresh conversations:`, error);
+          });
         }
       }
       
@@ -523,7 +536,7 @@ export default function MessagesPage() {
       chatSocket.off('conversation:adminAdded');
       chatSocket.off('conversation:adminRemoved');
     };
-  }, [chatSocket.socket, user.id, allConversations]);
+  }, [chatSocket.socket, user.id]);
 
   // Mark messages as read when conversation is selected
   useEffect(() => {
