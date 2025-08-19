@@ -143,10 +143,10 @@ export default function ChatInput({
   };
 
   return (
-    <div className="p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
+    <div className="p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
       {/* File error message */}
       {fileError && (
-        <div className="mb-4 p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
+        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
           <AlertCircle className="h-4 w-4" />
           <span className="text-sm font-medium">{fileError}</span>
           <button 
@@ -160,7 +160,7 @@ export default function ChatInput({
 
       {/* File preview */}
       {uploadFile && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-gray-200">
+        <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {uploadFile.type && uploadFile.type.startsWith('image/') ? (
@@ -212,14 +212,14 @@ export default function ChatInput({
       )}
 
       {/* Input area */}
-      <div className="flex items-end space-x-3 relative">
+      <div className="flex items-end space-x-2 sm:space-x-3 relative">
         {/* File upload button */}
-        <label className={`cursor-pointer p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
+        <label className={`cursor-pointer p-2 sm:p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
           isSending 
             ? 'bg-gray-300 cursor-not-allowed transform-none' 
             : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 hover:shadow-xl hover:scale-105'
         }`} title="Upload any file type (max 50MB)">
-          <Paperclip className="h-5 w-5" />
+          <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
           <input 
             type="file" 
             className="hidden" 
@@ -244,7 +244,7 @@ export default function ChatInput({
             }}
             placeholder="Type a message..."
             rows={1}
-            className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none shadow-sm"
+            className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 sm:pr-12 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none shadow-sm text-sm sm:text-base"
             style={{ minHeight: '48px', maxHeight: '120px' }}
           />
           
@@ -252,10 +252,10 @@ export default function ChatInput({
           <button 
             type="button"
             onClick={() => setShowEmojiPicker(v => !v)} 
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full hover:bg-gray-100 transition-all duration-200 text-gray-400 hover:text-gray-600"
+            className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-all duration-200 text-gray-400 hover:text-gray-600"
             tabIndex={-1}
           >
-            <Smile className="h-5 w-5" />
+            <Smile className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
           {/* Emoji picker popover (emoji-mart v5+) */}
           {showEmojiPicker && (
@@ -294,12 +294,12 @@ export default function ChatInput({
         <button
           onClick={handleSend}
           disabled={(!input.trim() && !uploadFile) || isSending}
-          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
+          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
         >
           {isSending ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
           ) : (
-            <Send className="h-5 w-5" />
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
           )}
           
           {/* Upload progress indicator for files */}
@@ -312,8 +312,8 @@ export default function ChatInput({
       </div>
 
       {/* Helper text */}
-      <div className="mt-2 text-center">
-        <p className="text-xs text-gray-500">
+      <div className="mt-1 sm:mt-2 text-center">
+        <p className="text-xs text-gray-500 px-2">
           Press Enter to send, Shift+Enter for new line • Max file size: 50MB
         </p>
       </div>

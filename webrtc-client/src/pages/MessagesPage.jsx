@@ -917,25 +917,25 @@ export default function MessagesPage() {
   };
 
   return (
-    <div className="flex h-[85vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
+    <div className="flex h-[100dvh] sm:h-[85vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 sm:rounded-2xl shadow-2xl overflow-hidden border-0 sm:border border-gray-100">
       {/* Sidebar - Full width on mobile when open */}
       {(!isMobile || sidebarOpen) && (
         <div className={`${isMobile ? 'w-full' : 'w-80 lg:w-96'} bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col`}>
           {/* Header - More compact */}
-          <div className="p-3 md:p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="p-2 md:p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 md:space-x-3">
-                <div className="p-1.5 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md">
-                  <MessageCircle className="h-4 w-4 md:h-5 md:w-5" />
+              <div className="flex items-center space-x-1.5 md:space-x-3">
+                <div className="p-1 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md">
+                  <MessageCircle className="h-3.5 w-3.5 md:h-5 md:w-5" />
                 </div>
                 <div>
-                  <h1 className="text-base md:text-lg font-bold text-gray-900">Messages</h1>
-                  <p className="text-xs text-gray-600">Connect with your team</p>
+                  <h1 className="text-sm md:text-lg font-bold text-gray-900">Messages</h1>
+                  <p className="text-xs text-gray-600 hidden sm:block">Connect with your team</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowCreateModal(true)} 
-                className="p-1.5 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
+                className="p-1 md:p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
                 title="New Conversation"
               >
                 <Plus className="h-3.5 w-3.5 md:h-4 md:w-4" />
@@ -944,15 +944,15 @@ export default function MessagesPage() {
           </div>
 
           {/* Search - More compact */}
-          <div className="p-2 md:p-3 border-b border-gray-100">
+          <div className="p-1.5 md:p-3 border-b border-gray-100">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 md:h-3.5 md:w-3.5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search conversations..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 md:py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-sm"
+                className="w-full pl-7 md:pl-9 pr-2 md:pr-3 py-1.5 md:py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-xs md:text-sm"
               />
             </div>
           </div>
@@ -1000,7 +1000,7 @@ export default function MessagesPage() {
         <div className="flex-1 flex flex-col bg-white/60 backdrop-blur-sm">
           {/* Mobile back button */}
           {isMobile && (
-            <div className="flex items-center justify-between p-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
               <button
                 className="p-2 rounded-full bg-blue-100 text-blue-600 shadow-md hover:bg-blue-200 transition-colors"
                 onClick={() => setSidebarOpen(true)}
@@ -1009,24 +1009,24 @@ export default function MessagesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                 </svg>
               </button>
-              <h2 className="text-lg font-bold text-gray-900">Messages</h2>
+              <h2 className="text-base font-bold text-gray-900">Messages</h2>
               <div className="w-9"></div> {/* Spacer for centering */}
             </div>
           )}
 
           {/* Chat header */}
           {selected ? (
-            <div className="border-b border-gray-100 px-4 md:px-6 py-3 md:py-4 bg-gradient-to-r from-gray-50 to-blue-50">
+            <div className="border-b border-gray-100 px-3 md:px-6 py-2 md:py-4 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex items-center justify-between">
                 <div 
-                  className="flex items-center space-x-3 md:space-x-4 cursor-pointer hover:bg-white/50 p-2 md:p-3 rounded-xl transition-all duration-200"
+                  className="flex items-center space-x-2 md:space-x-4 cursor-pointer hover:bg-white/50 p-1 md:p-3 rounded-xl transition-all duration-200"
                   onClick={() => setShowDetailsModal(true)}
                 >
                   <div className="relative">
                     {selected.avatar ? (
-                      <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
+                      <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-8 w-8 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
                     ) : (
-                      <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-base md:text-lg shadow-lg">
+                      <div className="h-8 w-8 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg">
                         {getInitials(getConversationDisplayName(selected, user?.id))}
                       </div>
                     )}
@@ -1035,9 +1035,9 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className="text-base md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?.id)}</h2>
+                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?.id)}</h2>
                     {selected && (selected.type === 'group' || selected.type === 'community') && (
-                      <p className="text-xs md:text-sm text-gray-600">
+                      <p className="text-xs text-gray-600">
                         {selected.members?.length || 0} members
                       </p>
                     )}
@@ -1068,13 +1068,13 @@ export default function MessagesPage() {
               </div>
             </div>
           ) : (
-            <div className="border-b border-gray-100 px-4 md:px-6 py-6 md:py-8 bg-gradient-to-r from-gray-50 to-blue-50">
+            <div className="border-b border-gray-100 px-3 md:px-6 py-4 md:py-8 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="text-center">
-                <div className="p-3 md:p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 w-12 h-12 md:w-16 md:h-16 mx-auto mb-3 md:mb-4 flex items-center justify-center">
-                  <MessageCircle className="h-6 w-6 md:h-8 md:w-8 text-white" />
+                <div className="p-2 md:p-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 w-10 h-10 md:w-16 md:h-16 mx-auto mb-2 md:mb-4 flex items-center justify-center">
+                  <MessageCircle className="h-4 w-4 md:h-8 md:w-8 text-white" />
                 </div>
-                <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-2">Welcome to Messages</h2>
-                <p className="text-sm md:text-base text-gray-600">Select a conversation to start chatting</p>
+                <h2 className="text-base md:text-xl font-bold text-gray-900 mb-1 md:mb-2">Welcome to Messages</h2>
+                <p className="text-xs md:text-base text-gray-600">Select a conversation to start chatting</p>
               </div>
             </div>
           )}
