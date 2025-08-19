@@ -139,36 +139,32 @@ export default function MessagesPage() {
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
   const moveConversationToTop = useCallback((convId, lastMessage, time, incrementUnread = false) => {
-    console.log(`🔄 moveConversationToTop called for ${convId}, incrementUnread: ${incrementUnread}`);
-    
     setAllConversations(prevSections => {
-      const newSections = prevSections.map(section => {
+      let convFound = false;
+      const newSections = [...prevSections].map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
         if (idx === -1) return section;
-        
+
+        convFound = true;
         const newItems = [...section.items];
         const [convItem] = newItems.splice(idx, 1);
-        
-        // Force new object references to ensure React re-renders
+
         const updatedConv = {
           ...convItem,
-          lastMessage: { ...lastMessage }, // New object reference
+          lastMessage: { ...lastMessage },
           lastMessageAt: time,
           unread: incrementUnread ? (convItem.unread || 0) + 1 : (convItem.unread || 0),
-          _lastUpdated: Date.now() // Force re-render trigger
         };
-        
-        console.log(`🔄 Updated conversation ${convId} - unread: ${updatedConv.unread}`);
-        
-        // Prepend updated conversation
-        return { 
-          ...section, 
+
+        return {
+          ...section,
           items: [updatedConv, ...newItems],
-          _lastUpdated: Date.now() // Force section re-render
         };
       });
-      
-      console.log(`🔄 Updated ${newSections.length} sections`);
+
+      if (convFound) {
+        console.log(`[moveConversationToTop] Moved ${convId} to top. Unread: ${incrementUnread}`);
+      }
       return newSections;
     });
   }, []);
@@ -317,71 +313,56 @@ export default function MessagesPage() {
     }
   }, [selected]);
 
-  // Watch for cache updates for the currently selected conversation
+  // Simplified: Always reload messages when switching conversations
+  // This ensures messages are always up-to-date and eliminates cache sync issues
   useEffect(() => {
-    if (selected && selected._id && messagesCache[selected._id]) {
-      console.log(`🔄 Cache updated for current conversation ${selected._id}, updating messages`);
-      setMessages(messagesCache[selected._id]);
-      setMessagesLoading(false);
+    if (selected && selected._id) {
+      console.log(`🔄 Reloading messages for conversation ${selected._id}`);
+      setMessagesLoading(true);
+      
+      messageAPI.getMessages(selected._id)
+        .then(res => {
+          const freshMessages = res.data.messages || [];
+          console.log(`✅ Loaded ${freshMessages.length} fresh messages`);
+          setMessages(freshMessages);
+          
+          // Update cache with fresh data
+          setMessagesCache(prev => ({
+            ...prev,
+            [selected._id]: freshMessages
+          }));
+        })
+        .catch(error => {
+          console.error('Error reloading messages:', error);
+          setMessages([]);
+        })
+        .finally(() => {
+          setMessagesLoading(false);
+        });
     }
-  }, [selected?._id, messagesCache]);
+  }, [selected?._id]);
 
   // Real-time event listeners
   useEffect(() => {
     if (!chatSocket.socket) return;
-    // New message
+    // New message - Simplified approach
     chatSocket.on('chat:new', msg => {
-      console.log('Received new message:', msg); // Debug log
+      console.log('🔔 Received new message:', msg);
       
-      // Update cache for the conversation that received the message
-      // Handle both conversationId and conversation properties
       const conversationId = msg.conversationId || msg.conversation;
-      setMessagesCache(prevCache => {
-        const conversationMessages = prevCache[conversationId] || [];
-        
-        // Check if message already exists in cache
-        const exists = conversationMessages.some(m => m._id === msg._id);
-        if (exists) {
-          return prevCache;
-        }
-        
-        // Remove any pending optimistic messages and add the real message
-        const filtered = conversationMessages.filter(m => {
-          if (!m.pending) return true;
-          return !(
-            (m.conversationId === conversationId || m.conversation === conversationId) &&
-            m.senderId === msg.senderId
-          );
-        });
-        
-        const updatedMessages = [...filtered, { ...msg, sending: false, conversationId }];
-        console.log(`📦 Cache updated for conversation ${conversationId}: ${updatedMessages.length} messages`);
-        
-        return {
-          ...prevCache,
-          [conversationId]: updatedMessages
-        };
-      });
       
-      // Only update the displayed messages if this message belongs to the currently selected conversation
+      // Always update the displayed messages if this is for the current conversation
       if (selectedRef.current && selectedRef.current._id === conversationId) {
         setMessages(prev => {
-          // Remove any pending optimistic messages
-          let filtered = prev.filter(m => {
-            if (!m.pending) return true;
-            return !(
-              (m.conversationId === conversationId || m.conversation === conversationId) &&
-              m.senderId === msg.senderId
-            );
-          });
+          // Check if message already exists
+          const exists = prev.some(m => m._id === msg._id);
+          if (exists) return prev;
           
-          // Check if message already exists to prevent duplicates
-          const exists = filtered.some(m => m._id === msg._id);
-          if (exists) return filtered;
-          
-          // Add the real message
-          return [...filtered, { ...msg, sending: false, conversationId }];
+          console.log(`✅ Adding message to current conversation ${conversationId}`);
+          return [...prev, { ...msg, conversationId }];
         });
+      } else {
+        console.log(`📝 Message for different conversation ${conversationId}, current: ${selectedRef.current?._id}`);
       }
       
       // Show browser notification if message is not from current user
@@ -395,15 +376,14 @@ export default function MessagesPage() {
         new Notification(title, { body });
       }
       
-      // Move the corresponding conversation to the top using the latest message  
-      // Increment unread count only if:
-      // 1. Message is NOT for the currently active conversation, AND
-      // 2. Message is from someone else (not the current user)
-      const isFromOtherUser = msg.senderId !== user.id && (msg.sender?._id || msg.sender?.id || msg.sender) !== user.id;
+      // Simple unread count handling - only increment for messages from others to inactive conversations
+      const isFromOtherUser = msg.senderId !== user.id;
       const isNotActiveConversation = !selectedRef.current || selectedRef.current._id !== conversationId;
       const shouldIncrementUnread = isFromOtherUser && isNotActiveConversation;
       
-      console.log(`🔍 Message analysis - From other user: ${isFromOtherUser}, Not active conversation: ${isNotActiveConversation}, Should increment: ${shouldIncrementUnread}`);
+      console.log(`🔍 Should increment unread: ${shouldIncrementUnread} (from other: ${isFromOtherUser}, not active: ${isNotActiveConversation})`);
+      
+      // Always move conversation to top for any new message
       moveConversationToTop(
         conversationId,
         {
@@ -416,13 +396,12 @@ export default function MessagesPage() {
         shouldIncrementUnread
       );
       
-      // Update unread count in sidebar badge if this message increments unread count
-      // Delay the API refresh to allow local updates to render first and avoid race conditions
-      if (shouldIncrementUnread && refreshUnreadCount) {
+      // Always refresh unread count from server for real-time updates
+      if (refreshUnreadCount) {
         setTimeout(() => {
-          console.log(`📡 Delayed refreshUnreadCount call for conversation ${conversationId}`);
+          console.log(`📡 Refreshing unread count from server`);
           refreshUnreadCount();
-        }, 200);
+        }, 100);
       }
     });
 
