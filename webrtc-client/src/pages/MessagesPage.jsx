@@ -102,8 +102,14 @@ export default function MessagesPage() {
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
   const windowFocused = useRef(true);
+  const selectedRef = useRef(selected);
   const isMobile = useMediaQuery({ maxWidth: 767 });
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+  
+  // Keep selectedRef in sync with selected state
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
   const [messagesCache, setMessagesCache] = useState({});
   const [isSending, setIsSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -313,7 +319,7 @@ export default function MessagesPage() {
       });
       
       // Only update the displayed messages if this message belongs to the currently selected conversation
-      if (selected && selected._id === msg.conversationId) {
+      if (selectedRef.current && selectedRef.current._id === msg.conversationId) {
         setMessages(prev => {
           // Remove any pending optimistic messages
           let filtered = prev.filter(m => {
@@ -456,7 +462,7 @@ export default function MessagesPage() {
       chatSocket.off('conversation:adminAdded');
       chatSocket.off('conversation:adminRemoved');
     };
-  }, [chatSocket.socket, selected, user.id]);
+  }, [chatSocket.socket, user.id]);
 
   // Mark messages as read when conversation is selected
   useEffect(() => {
