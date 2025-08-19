@@ -101,19 +101,24 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
-  const windowFocused = useRef(true);
-  const selectedRef = useRef(selected);
-  const isMobile = useMediaQuery({ maxWidth: 767 });
-  const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
-  
-  // Keep selectedRef in sync with selected state
-  useEffect(() => {
-    selectedRef.current = selected;
-  }, [selected]);
   const [messagesCache, setMessagesCache] = useState({});
   const [isSending, setIsSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { refreshUnreadCount } = useMessageNotifications();
+  const windowFocused = useRef(true);
+  const selectedRef = useRef(selected);
+  const messagesCacheRef = useRef(messagesCache);
+  const isMobile = useMediaQuery({ maxWidth: 767 });
+  const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+  
+  useEffect(() => {
+    messagesCacheRef.current = messagesCache;
+  }, [messagesCache]);
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -133,7 +138,7 @@ export default function MessagesPage() {
    * @param {object} lastMessage - The last message object with text, file, createdAt, senderName.
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
-  const moveConversationToTop = (convId, lastMessage, time) => {
+  const moveConversationToTop = (convId, lastMessage, time, incrementUnread = false) => {
     setAllConversations(prevSections => {
       return prevSections.map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
@@ -144,6 +149,7 @@ export default function MessagesPage() {
           ...convItem,
           lastMessage: lastMessage,
           lastMessageAt: time,
+          unread: incrementUnread ? (convItem.unread || 0) + 1 : (convItem.unread || 0)
         };
         // Prepend updated conversation
         return { ...section, items: [updatedConv, ...newItems] };
@@ -251,9 +257,10 @@ export default function MessagesPage() {
     if (selected && selected._id) {
       const convId = selected._id;
       
-      if (messagesCache[convId]) {
+      const currentCache = messagesCacheRef.current;
+      if (currentCache[convId]) {
         // Messages are in cache, use them and indicate loading has finished
-        setMessages(messagesCache[convId]);
+        setMessages(currentCache[convId]);
         setMessagesLoading(false);
       } else {
         // No cache; start loading and fetch messages
@@ -301,7 +308,9 @@ export default function MessagesPage() {
         
         // Check if message already exists in cache
         const exists = conversationMessages.some(m => m._id === msg._id);
-        if (exists) return prevCache;
+        if (exists) {
+          return prevCache;
+        }
         
         // Remove any pending optimistic messages and add the real message
         const filtered = conversationMessages.filter(m => {
@@ -312,9 +321,11 @@ export default function MessagesPage() {
           );
         });
         
+        const updatedMessages = [...filtered, { ...msg, sending: false }];
+        
         return {
           ...prevCache,
-          [msg.conversationId]: [...filtered, { ...msg, sending: false }]
+          [msg.conversationId]: updatedMessages
         };
       });
       
@@ -351,6 +362,8 @@ export default function MessagesPage() {
       }
       
       // Move the corresponding conversation to the top using the latest message
+      // Increment unread count only if message is not for the currently active conversation
+      const shouldIncrementUnread = !selectedRef.current || selectedRef.current._id !== msg.conversationId;
       moveConversationToTop(
         msg.conversationId,
         {
@@ -359,7 +372,8 @@ export default function MessagesPage() {
           createdAt: msg.createdAt || new Date().toISOString(),
           senderName: msg.senderName || (msg.sender && msg.sender.fullName) || 'Unknown'
         },
-        msg.createdAt || new Date().toISOString()
+        msg.createdAt || new Date().toISOString(),
+        shouldIncrementUnread
       );
     });
 
