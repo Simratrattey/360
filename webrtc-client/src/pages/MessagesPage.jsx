@@ -289,35 +289,49 @@ export default function MessagesPage() {
     chatSocket.on('chat:new', msg => {
       console.log('Received new message:', msg); // Debug log
       
-      setMessages(prev => {
-        // Remove any pending optimistic messages from the same sender for this conversation.
-        // We consider a message "pending" if it has the pending flag and matches the current user.
-        let filtered = prev.filter(m => {
+      // Update cache for the conversation that received the message
+      setMessagesCache(prevCache => {
+        const conversationMessages = prevCache[msg.conversationId] || [];
+        
+        // Check if message already exists in cache
+        const exists = conversationMessages.some(m => m._id === msg._id);
+        if (exists) return prevCache;
+        
+        // Remove any pending optimistic messages and add the real message
+        const filtered = conversationMessages.filter(m => {
           if (!m.pending) return true;
-          // Remove pending optimistic messages from the same conversation and sender
           return !(
             m.conversationId === msg.conversationId &&
             m.senderId === msg.senderId
           );
         });
         
-        // Check if message already exists to prevent duplicates
-        const exists = filtered.some(m => m._id === msg._id);
-        if (exists) return filtered;
-        
-        // Add the real message and remove sending state
-        const updated = [...filtered, { ...msg, sending: false }];
-        
-        // Update cache using the conversationId
-        if (msg.conversationId) {
-          setMessagesCache(cache => ({ 
-            ...cache, 
-            [msg.conversationId]: updated 
-          }));
-        }
-        
-        return updated;
+        return {
+          ...prevCache,
+          [msg.conversationId]: [...filtered, { ...msg, sending: false }]
+        };
       });
+      
+      // Only update the displayed messages if this message belongs to the currently selected conversation
+      if (selected && selected._id === msg.conversationId) {
+        setMessages(prev => {
+          // Remove any pending optimistic messages
+          let filtered = prev.filter(m => {
+            if (!m.pending) return true;
+            return !(
+              m.conversationId === msg.conversationId &&
+              m.senderId === msg.senderId
+            );
+          });
+          
+          // Check if message already exists to prevent duplicates
+          const exists = filtered.some(m => m._id === msg._id);
+          if (exists) return filtered;
+          
+          // Add the real message
+          return [...filtered, { ...msg, sending: false }];
+        });
+      }
       
       // Show browser notification if message is not from current user
       if (
@@ -1118,7 +1132,7 @@ export default function MessagesPage() {
           {selected && (
             <ChatWindow
               loading={messagesLoading}
-              messages={messages.filter(m => m.conversationId === selected._id)}
+              messages={messages}
               currentUserId={user?.id}
               conversationType={selected.type}
               onEdit={handleEdit}
