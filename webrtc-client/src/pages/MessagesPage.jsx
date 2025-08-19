@@ -395,9 +395,15 @@ export default function MessagesPage() {
         new Notification(title, { body });
       }
       
-      // Move the corresponding conversation to the top using the latest message
-      // Increment unread count only if message is not for the currently active conversation
-      const shouldIncrementUnread = !selectedRef.current || selectedRef.current._id !== conversationId;
+      // Move the corresponding conversation to the top using the latest message  
+      // Increment unread count only if:
+      // 1. Message is NOT for the currently active conversation, AND
+      // 2. Message is from someone else (not the current user)
+      const isFromOtherUser = msg.senderId !== user.id && (msg.sender?._id || msg.sender?.id || msg.sender) !== user.id;
+      const isNotActiveConversation = !selectedRef.current || selectedRef.current._id !== conversationId;
+      const shouldIncrementUnread = isFromOtherUser && isNotActiveConversation;
+      
+      console.log(`🔍 Message analysis - From other user: ${isFromOtherUser}, Not active conversation: ${isNotActiveConversation}, Should increment: ${shouldIncrementUnread}`);
       moveConversationToTop(
         conversationId,
         {
