@@ -87,16 +87,16 @@ export default function ChatWindow({
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="p-6 space-y-8">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-8">
           {Object.entries(grouped).map(([date, msgs]) => (
-            <div key={date} className="space-y-6">
+            <div key={date} className="space-y-3 sm:space-y-6">
               {/* Date separator */}
               <div className="flex items-center justify-center my-8">
                 <div className="bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-gray-200">
                   <span className="text-sm font-bold text-gray-700 tracking-wide">{date}</span>
                 </div>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-2 sm:space-y-4">
                 {msgs.map((msg, index) => {
                   // Check if this message is a search result
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
