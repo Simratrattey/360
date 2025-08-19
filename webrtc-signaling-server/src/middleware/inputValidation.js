@@ -1,4 +1,4 @@
-const validator = require('validator');
+import validator from 'validator';
 
 // Input validation and sanitization middleware
 const inputValidation = {
@@ -153,4 +153,4 @@ const inputValidation = {
   }
 };
 
-module.exports = inputValidation;
+export default inputValidation;
