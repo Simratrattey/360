@@ -106,10 +106,11 @@ export default function ConversationDetailsModal({
       setIsEditingDescription(false);
       setSuccess('Description updated successfully');
       onConversationUpdated();
-      setSuccess(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
+      console.error('Description update error:', error);
       setError(error.response?.data?.message || 'Failed to update description');
-      setError(null);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -117,13 +118,15 @@ export default function ConversationDetailsModal({
     try {
       await API.post(`/conversations/${conversation._id}/admins`, { userId });
       setSuccess('Admin added successfully');
-      onConversationUpdated();
+      if (typeof onConversationUpdated === 'function') {
+        onConversationUpdated();
+      }
       setMemberActionMenu(null);
-      setSuccess(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Admin add error:', error);
       setError(error.response?.data?.message || 'Failed to add admin');
-      setError(null);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -131,13 +134,15 @@ export default function ConversationDetailsModal({
     try {
       await API.delete(`/conversations/${conversation._id}/admins/${userId}`);
       setSuccess('Admin removed successfully');
-      onConversationUpdated();
+      if (typeof onConversationUpdated === 'function') {
+        onConversationUpdated();
+      }
       setMemberActionMenu(null);
-      setSuccess(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
       console.error('Admin remove error:', error);
       setError(error.response?.data?.message || 'Failed to remove admin');
-      setError(null);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -145,12 +150,15 @@ export default function ConversationDetailsModal({
     try {
       await API.delete(`/conversations/${conversation._id}/members/${userId}`);
       setSuccess('Member removed successfully');
-      onConversationUpdated();
+      if (typeof onConversationUpdated === 'function') {
+        onConversationUpdated();
+      }
       setMemberActionMenu(null);
-      setSuccess(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
+      console.error('Member remove error:', error);
       setError(error.response?.data?.message || 'Failed to remove member');
-      setError(null);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -160,13 +168,16 @@ export default function ConversationDetailsModal({
     try {
       await API.post(`/conversations/${conversation._id}/members`, { userId: selectedUserToAdd._id });
       setSuccess('Member added successfully');
-      onConversationUpdated();
+      if (typeof onConversationUpdated === 'function') {
+        onConversationUpdated();
+      }
       setShowAddMemberModal(false);
       setSelectedUserToAdd(null);
-      setSuccess(null);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (error) {
+      console.error('Member add error:', error);
       setError(error.response?.data?.message || 'Failed to add member');
-      setError(null);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -391,12 +402,18 @@ export default function ConversationDetailsModal({
                               src={member.avatarUrl}
                               alt={member.fullName || member.username}
                               className="h-10 w-10 rounded-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextElementSibling.style.display = 'flex';
+                              }}
                             />
-                          ) : (
-                            <span className="text-white font-bold text-sm">
-                              {getInitials(member.fullName || member.username)}
-                            </span>
-                          )}
+                          ) : null}
+                          <span 
+                            className="text-white font-bold text-sm flex items-center justify-center h-full w-full"
+                            style={{ display: member.avatarUrl ? 'none' : 'flex' }}
+                          >
+                            {getInitials(member.fullName || member.username)}
+                          </span>
                         </div>
                         {/* Online status indicator */}
                         {onlineUsers.has(member._id) && (
@@ -533,12 +550,18 @@ export default function ConversationDetailsModal({
                               src={user.avatarUrl}
                               alt={user.fullName || user.username}
                               className="h-10 w-10 rounded-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextElementSibling.style.display = 'flex';
+                              }}
                             />
-                          ) : (
-                            <span className="text-white font-bold text-sm">
-                              {getInitials(user.fullName || user.username)}
-                            </span>
-                          )}
+                          ) : null}
+                          <span 
+                            className="text-white font-bold text-sm flex items-center justify-center h-full w-full"
+                            style={{ display: user.avatarUrl ? 'none' : 'flex' }}
+                          >
+                            {getInitials(user.fullName || user.username)}
+                          </span>
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900">

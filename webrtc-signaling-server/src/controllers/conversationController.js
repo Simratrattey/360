@@ -217,17 +217,22 @@ export async function addMember(req, res, next) {
     const { userId } = req.body;
     const currentUserId = req.user.id;
 
+    // Validate request body
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
     // Check if user is admin (for groups/communities) or member (for DMs)
-    if (conversation.type !== 'dm' && !conversation.admins.includes(currentUserId)) {
+    if (conversation.type !== 'dm' && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only admins can add members' });
     }
 
-    if (conversation.members.includes(userId)) {
+    if (conversation.members.some(memberId => memberId.toString() === userId)) {
       return res.status(400).json({ message: 'User is already a member' });
     }
 
@@ -252,11 +257,11 @@ export async function removeMember(req, res, next) {
     }
 
     // Check if user is admin (for groups/communities) or member (for DMs)
-    if (conversation.type !== 'dm' && !conversation.admins.includes(currentUserId)) {
+    if (conversation.type !== 'dm' && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only admins can remove members' });
     }
 
-    if (!conversation.members.includes(userId)) {
+    if (!conversation.members.some(memberId => memberId.toString() === userId)) {
       return res.status(400).json({ message: 'User is not a member' });
     }
 
@@ -378,23 +383,28 @@ export async function addAdmin(req, res, next) {
     const { userId: newAdminId } = req.body;
     const currentUserId = req.user.id;
 
+    // Validate request body
+    if (!newAdminId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
     // Check if user is owner or admin
-    if (conversation.createdBy !== currentUserId && !conversation.admins.includes(currentUserId)) {
+    if (conversation.createdBy.toString() !== currentUserId && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only owners and admins can add admins' });
     }
 
     // Check if user is a member
-    if (!conversation.members.includes(newAdminId)) {
+    if (!conversation.members.some(memberId => memberId.toString() === newAdminId)) {
       return res.status(400).json({ message: 'User must be a member to become admin' });
     }
 
     // Check if user is already an admin
-    if (conversation.admins.includes(newAdminId)) {
+    if (conversation.admins.some(adminId => adminId.toString() === newAdminId)) {
       return res.status(400).json({ message: 'User is already an admin' });
     }
 
@@ -425,17 +435,17 @@ export async function removeAdmin(req, res, next) {
     }
 
     // Check if user is owner or admin
-    if (conversation.createdBy !== currentUserId && !conversation.admins.includes(currentUserId)) {
+    if (conversation.createdBy.toString() !== currentUserId && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only owners and admins can remove admins' });
     }
 
     // Check if user is an admin
-    if (!conversation.admins.includes(userId)) {
+    if (!conversation.admins.some(adminId => adminId.toString() === userId)) {
       return res.status(400).json({ message: 'User is not an admin' });
     }
 
     // Cannot remove the owner from admin
-    if (userId === conversation.createdBy) {
+    if (userId === conversation.createdBy.toString()) {
       return res.status(400).json({ message: 'Cannot remove the owner from admin' });
     }
 
