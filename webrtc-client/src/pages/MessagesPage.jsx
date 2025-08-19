@@ -1118,7 +1118,7 @@ export default function MessagesPage() {
           {selected && (
             <ChatWindow
               loading={messagesLoading}
-              messages={messages}
+              messages={messages.filter(m => m.conversationId === selected._id)}
               currentUserId={user?.id}
               conversationType={selected.type}
               onEdit={handleEdit}
