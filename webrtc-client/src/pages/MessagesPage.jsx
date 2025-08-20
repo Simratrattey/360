@@ -366,88 +366,63 @@ export default function MessagesPage() {
   // Real-time event listeners
   useEffect(() => {
     if (!chatSocket.socket) return;
-    // New message - Simplified approach
+    // COMPLETELY REBUILT real-time message handling
     chatSocket.on('chat:new', msg => {
-      console.log('🔔 Received new message:', msg);
+      console.log('🔔 NEW MESSAGE RECEIVED:', msg);
       
       const conversationId = msg.conversationId || msg.conversation;
+      const isFromOtherUser = msg.senderId !== user.id;
+      const isCurrentConversation = selectedRef.current && selectedRef.current._id === conversationId;
       
-      // Always update the displayed messages if this is for the current conversation
-      if (selectedRef.current && selectedRef.current._id === conversationId) {
+      console.log(`📋 Message Analysis:
+        - Conversation: ${conversationId}
+        - From other user: ${isFromOtherUser}
+        - Current conversation: ${isCurrentConversation}
+        - Current selected: ${selectedRef.current?._id || 'none'}`);
+      
+      // 1. UPDATE DISPLAYED MESSAGES (if for current conversation)
+      if (isCurrentConversation) {
         setMessages(prev => {
-          // Remove any pending optimistic messages from the same sender
-          let filtered = prev.filter(m => {
-            if (!m.pending || !m.sending) return true;
-            // Remove pending messages that match this real message
-            return !(m.senderId === msg.senderId && m.text === msg.text);
-          });
-          
-          // Check if the real message already exists
+          // Remove any pending messages
+          const filtered = prev.filter(m => !m.pending || !m.sending);
+          // Add real message if not exists
           const exists = filtered.some(m => m._id === msg._id);
           if (exists) return filtered;
-          
-          console.log(`✅ Adding real message to current conversation ${conversationId}`);
-          return [...filtered, { ...msg, conversationId, pending: false, sending: false }];
+          return [...filtered, { ...msg, conversationId }];
         });
-      } else {
-        console.log(`📝 Message for DIFFERENT conversation ${conversationId}, current: ${selectedRef.current?._id}`);
-        
-        // Check if this conversation exists in our sidebar using ref to avoid stale state
-        const currentConversations = allConversationsRef.current;
-        const allItems = currentConversations.flatMap(section => section.items);
-        const conversationExists = allItems.some(conv => conv._id === conversationId);
-        
-        console.log(`🔍 Conversation ${conversationId} exists in sidebar: ${conversationExists}`);
-        
-        if (!conversationExists) {
-          console.log(`🆕 NEW CONVERSATION DETECTED: ${conversationId}, refreshing conversation list`);
-          fetchConversations().then(() => {
-            console.log(`✅ Conversation list refreshed after detecting new conversation ${conversationId}`);
-          }).catch(error => {
-            console.error(`❌ Failed to refresh conversations:`, error);
-          });
-        } else {
-          console.log(`✅ Existing conversation ${conversationId} will be updated by moveConversationToTop`);
-        }
+        console.log(`✅ Updated displayed messages for active conversation`);
       }
       
-      // Show browser notification if message is not from current user
-      if (
-        window.Notification &&
-        Notification.permission === 'granted' &&
-        msg.senderId !== user.id
-      ) {
+      // 2. ALWAYS UPDATE SIDEBAR (for all conversations)
+      console.log(`🔄 UPDATING SIDEBAR for conversation ${conversationId}`);
+      
+      // Force sidebar update by refreshing entire conversation list
+      fetchConversations().then(() => {
+        console.log(`✅ SIDEBAR REFRESHED - conversation list updated from server`);
+        
+        // Additional force update after a brief delay to ensure server has processed the message
+        setTimeout(() => {
+          fetchConversations().then(() => {
+            console.log(`✅ DOUBLE REFRESH completed for extra reliability`);
+          });
+        }, 200);
+      }).catch(error => {
+        console.error(`❌ Failed to refresh sidebar:`, error);
+      });
+      
+      // 3. UPDATE UNREAD COUNT IN HEADER
+      if (refreshUnreadCount) {
+        setTimeout(() => {
+          console.log(`📊 Refreshing header unread count`);
+          refreshUnreadCount();
+        }, 300);
+      }
+      
+      // 4. SHOW BROWSER NOTIFICATION
+      if (window.Notification && Notification.permission === 'granted' && isFromOtherUser) {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         new Notification(title, { body });
-      }
-      
-      // Simple unread count handling - only increment for messages from others to inactive conversations
-      const isFromOtherUser = msg.senderId !== user.id;
-      const isNotActiveConversation = !selectedRef.current || selectedRef.current._id !== conversationId;
-      const shouldIncrementUnread = isFromOtherUser && isNotActiveConversation;
-      
-      console.log(`🔍 Should increment unread: ${shouldIncrementUnread} (from other: ${isFromOtherUser}, not active: ${isNotActiveConversation})`);
-      
-      // Always move conversation to top for any new message
-      moveConversationToTop(
-        conversationId,
-        {
-          text: msg.text,
-          file: msg.file,
-          createdAt: msg.createdAt || new Date().toISOString(),
-          senderName: msg.senderName || (msg.sender && msg.sender.fullName) || 'Unknown'
-        },
-        msg.createdAt || new Date().toISOString(),
-        shouldIncrementUnread
-      );
-      
-      // Always refresh unread count from server for real-time updates
-      if (refreshUnreadCount) {
-        setTimeout(() => {
-          console.log(`📡 Refreshing unread count from server`);
-          refreshUnreadCount();
-        }, 100);
       }
     });
 
