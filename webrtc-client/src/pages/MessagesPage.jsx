@@ -275,9 +275,9 @@ export default function MessagesPage() {
         }
       });
       
-      // Auto-select first conversation if none is selected
+      // Auto-select first conversation if none is selected (only on initial load, not during real-time updates)
       const first = conversations[0];
-      if (first && !selected) {
+      if (first && !selected && !selectedRef.current) {
         handleSelect(first);
       }
     } catch (error) {
@@ -379,6 +379,33 @@ export default function MessagesPage() {
         - From other user: ${isFromOtherUser}
         - Current conversation: ${isCurrentConversation}
         - Current selected: ${selectedRef.current?._id || 'none'}`);
+      
+      // UNIVERSAL: Always cache messages for ALL conversations (critical for persistence)
+      setMessagesCache(cache => {
+        const convMsgs = cache[conversationId] || [];
+        
+        // For sender's own messages, remove optimistic duplicates first
+        let updatedMsgs = convMsgs;
+        if (msg.senderId === user.id) {
+          updatedMsgs = convMsgs.filter(m => {
+            if (!m.pending && !m.sending) return true; // Keep real messages
+            // Remove optimistic messages that match this real one
+            const textMatches = m.text === msg.text || (!m.text && !msg.text);
+            const fileMatches = Boolean(m.file) === Boolean(msg.file);
+            return !(textMatches && fileMatches);
+          });
+        }
+        
+        const exists = updatedMsgs.some(m => m._id === msg._id);
+        if (!exists) {
+          console.log(`💾 Caching message for conversation ${conversationId}`);
+          return {
+            ...cache,
+            [conversationId]: [...updatedMsgs, { ...msg, conversationId }]
+          };
+        }
+        return cache;
+      });
       
       // 1. UPDATE DISPLAYED MESSAGES (if for current conversation)
       if (isCurrentConversation) {
