@@ -101,7 +101,16 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [messagesCache, setMessagesCache] = useState({});
+  // Initialize messages cache with localStorage persistence
+  const [messagesCache, setMessagesCache] = useState(() => {
+    try {
+      const cached = localStorage.getItem('messagesCache');
+      return cached ? JSON.parse(cached) : {};
+    } catch (error) {
+      console.warn('Failed to load messages cache from localStorage:', error);
+      return {};
+    }
+  });
   const [isSending, setIsSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { refreshUnreadCount } = useMessageNotifications();
@@ -119,6 +128,13 @@ export default function MessagesPage() {
   
   useEffect(() => {
     messagesCacheRef.current = messagesCache;
+    
+    // Persist cache to localStorage for page reload persistence
+    try {
+      localStorage.setItem('messagesCache', JSON.stringify(messagesCache));
+    } catch (error) {
+      console.warn('Failed to persist messages cache to localStorage:', error);
+    }
   }, [messagesCache]);
   
   useEffect(() => {
@@ -258,20 +274,31 @@ export default function MessagesPage() {
       const PREFETCH_MESSAGES_LIMIT = 10;
       const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
       
-      // Kick off prefetch asynchronously without blocking the conversation list rendering.
+      // FIXED: Smart prefetch that never overwrites real-time cached messages
       conversationsToPrefetch.forEach(conv => {
         if (!conv || !conv._id) return;
-        // Only prefetch if not already cached.
-        if (!messagesCache[conv._id]) {
+        // Only prefetch if NO cache exists at all (empty or undefined)
+        const existingCache = messagesCache[conv._id];
+        if (!existingCache || existingCache.length === 0) {
+          console.log(`🔄 Prefetching messages for conversation ${conv._id} (no cache exists)`);
           messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
             .then(res => {
               const msgs = res.data?.messages || res.data || [];
-              setMessagesCache(prev => ({ ...prev, [conv._id]: msgs }));
+              // CRITICAL: Only update cache if it's still empty (avoid overwriting real-time messages)
+              setMessagesCache(prev => {
+                if (prev[conv._id] && prev[conv._id].length > 0) {
+                  console.log(`⚠️ Skipping prefetch cache update - real-time messages already present`);
+                  return prev;
+                }
+                console.log(`💾 Prefetch: caching ${msgs.length} messages for ${conv._id}`);
+                return { ...prev, [conv._id]: msgs };
+              });
             })
             .catch(err => {
-              // Silently fail on prefetch errors to avoid interrupting user flow.
               console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
             });
+        } else {
+          console.log(`⚡ Skipping prefetch for ${conv._id} - already has ${existingCache.length} cached messages`);
         }
       });
       
@@ -299,7 +326,8 @@ export default function MessagesPage() {
     // First, immediately show cached messages (WhatsApp instant loading)
     const cachedMessages = messagesCache[convId];
     if (cachedMessages && cachedMessages.length > 0) {
-      console.log(`⚡ INSTANT LOAD: ${cachedMessages.length} cached messages`);
+      console.log(`⚡ INSTANT LOAD: ${cachedMessages.length} cached messages for ${convId}`);
+      console.log(`⚡ Messages:`, cachedMessages.map(m => ({id: m._id, text: m.text?.substring(0, 30), from: m.senderName})));
       setMessages(cachedMessages);
       setMessagesLoading(false);
       
@@ -316,12 +344,19 @@ export default function MessagesPage() {
           const serverMessages = res.data.messages || [];
           console.log(`✅ LOADED: ${serverMessages.length} messages from server`);
           
-          // Update both cache and display
+          // Update display
           setMessages(serverMessages);
-          setMessagesCache(prev => ({
-            ...prev,
-            [convId]: serverMessages
-          }));
+          
+          // SMART CACHE UPDATE: Only update cache if we don't have newer real-time messages
+          setMessagesCache(prev => {
+            const existingCache = prev[convId];
+            if (existingCache && existingCache.length > serverMessages.length) {
+              console.log(`⚠️ Keeping existing cache with ${existingCache.length} messages (more than server's ${serverMessages.length})`);
+              return prev;
+            }
+            console.log(`💾 Updating cache with ${serverMessages.length} server messages`);
+            return { ...prev, [convId]: serverMessages };
+          });
           
           // Join socket room after loading
           chatSocket.joinConversation(convId);
@@ -359,12 +394,15 @@ export default function MessagesPage() {
       console.log(`📋 Message: conv=${conversationId}, mine=${isMyMessage}, current=${isCurrentConversation}`);
       
       // 1. ALWAYS UPDATE MESSAGE CACHE (WhatsApp stores everything)
+      console.log(`📝 BEFORE CACHE UPDATE: Total conversations in cache: ${Object.keys(messagesCache).length}`);
+      console.log(`📝 Current cache for ${conversationId}:`, messagesCache[conversationId]?.length || 0, 'messages');
+      
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
         // Skip if message already exists
         if (convMessages.some(m => m._id === msg._id)) {
-          console.log(`⚠️ Message ${msg._id} already in cache`);
+          console.log(`⚠️ Message ${msg._id} already in cache - skipping`);
           return prev;
         }
         
@@ -375,10 +413,19 @@ export default function MessagesPage() {
           console.log(`🧹 Cleaned ${convMessages.length - cleanMessages.length} optimistic messages`);
         }
         
+        const newCache = [...cleanMessages, { ...msg, conversationId }];
+        // Limit cache size per conversation to prevent localStorage overflow
+        const MAX_CACHED_MESSAGES = 50;
+        const limitedCache = newCache.length > MAX_CACHED_MESSAGES 
+          ? newCache.slice(-MAX_CACHED_MESSAGES)
+          : newCache;
+        
         console.log(`💾 Caching message in conversation ${conversationId}`);
+        console.log(`💾 Cache now has ${limitedCache.length} messages for conversation ${conversationId}:`, limitedCache.map(m => ({id: m._id, text: m.text?.substring(0, 20)})));
+        
         return {
           ...prev,
-          [conversationId]: [...cleanMessages, { ...msg, conversationId }]
+          [conversationId]: limitedCache
         };
       });
       
@@ -415,9 +462,11 @@ export default function MessagesPage() {
         !isMyMessage && !isCurrentConversation // increment unread only for others' messages when not in that conversation
       );
       
-      // 4. INSTANT SYNC WITH SERVER (WhatsApp immediate updates)
-      fetchConversations();
-      if (refreshUnreadCount) refreshUnreadCount();
+      // 4. DELAYED SYNC WITH SERVER (avoid race conditions)
+      setTimeout(() => {
+        fetchConversations();
+        if (refreshUnreadCount) refreshUnreadCount();
+      }, 500);
       
       // 5. BROWSER NOTIFICATION (only for others' messages)
       if (!isMyMessage && window.Notification && Notification.permission === 'granted') {
