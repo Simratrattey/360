@@ -285,138 +285,169 @@ export default function MessagesPage() {
     }
   };
 
-  // Fetch messages when a conversation is selected (REST, then join room)
+  // NEW ARCHITECTURE: Clean Conversation Switching Logic
   useEffect(() => {
-    if (selected && selected._id) {
-      const convId = selected._id;
-      
-      console.log(`🔍 Switching to conversation ${convId}`);
-      console.log(`🔍 Cache keys:`, Object.keys(messagesCache));
-      console.log(`🔍 Cache for this conversation:`, messagesCache[convId]?.length || 0, 'messages');
-      console.log(`🔍 Current allConversations length:`, allConversations.length);
-      
-      if (messagesCache[convId] && messagesCache[convId].length > 0) {
-        // Messages are in cache, use them and indicate loading has finished
-        console.log(`✅ Loading ${messagesCache[convId].length} messages from cache`);
-        setMessages(messagesCache[convId]);
-        setMessagesLoading(false);
-      } else {
-        // No cache; start loading and fetch messages
-        setMessagesLoading(true);
-        messageAPI.getMessages(convId)
-          .then(res => {
-            const messages = res.data.messages || [];
-            setMessages(messages);
-            setMessagesCache(prev => ({
-              ...prev,
-              [convId]: messages
-            }));
-          })
-          .catch(error => {
-            console.error('Error fetching messages:', error);
-            setMessages([]);
-          })
-          .finally(() => {
-            setMessagesLoading(false);
-          });
-      }
-      
-      // Join the conversation room for real-time updates
-      chatSocket.joinConversation(convId);
-      
-      // Cleanup function to leave the conversation when component unmounts or conversation changes
-      return () => chatSocket.leaveConversation(convId);
-    } else {
-      // No conversation selected, reset messages and loading state
+    if (!selected?._id) {
       setMessages([]);
       setMessagesLoading(false);
+      return;
     }
+    
+    const convId = selected._id;
+    console.log(`🔄 Switching to conversation: ${convId}`);
+    
+    // Always check cache first for instant loading
+    const cachedMessages = messagesCache[convId];
+    if (cachedMessages && cachedMessages.length > 0) {
+      console.log(`⚡ Loading ${cachedMessages.length} messages from cache`);
+      setMessages(cachedMessages);
+      setMessagesLoading(false);
+    } else {
+      // No cache - fetch from API
+      console.log(`🌐 Fetching messages from API for conversation ${convId}`);
+      setMessagesLoading(true);
+      
+      messageAPI.getMessages(convId)
+        .then(res => {
+          const freshMessages = res.data.messages || [];
+          console.log(`✅ Loaded ${freshMessages.length} fresh messages`);
+          
+          // Update both displayed messages and cache
+          setMessages(freshMessages);
+          setMessagesCache(prev => ({
+            ...prev,
+            [convId]: freshMessages
+          }));
+        })
+        .catch(error => {
+          console.error('❌ Error fetching messages:', error);
+          setMessages([]);
+        })
+        .finally(() => {
+          setMessagesLoading(false);
+        });
+    }
+    
+    // Join socket room for real-time updates
+    chatSocket.joinConversation(convId);
+    
+    return () => {
+      // Leave room when switching away
+      chatSocket.leaveConversation(convId);
+    };
   }, [selected]);
 
-  // REMOVED: This useEffect was causing infinite loops and blocking real-time updates
+  // Cache-to-Display Sync: Update displayed messages when cache changes for current conversation
+  useEffect(() => {
+    if (selected?._id && messagesCache[selected._id]) {
+      const cachedMessages = messagesCache[selected._id];
+      const currentDisplayed = messages.length;
+      const cached = cachedMessages.length;
+      
+      // Only update if cache has more messages (new message arrived)
+      if (cached > currentDisplayed) {
+        console.log(`📥 Cache updated: syncing ${cached} messages to display`);
+        setMessages(cachedMessages);
+      }
+    }
+  }, [messagesCache[selected?._id]?.length, selected?._id]);
 
-  // Real-time event listeners
+  // NEW ARCHITECTURE: Clean Real-time Message Handler
   useEffect(() => {
     if (!chatSocket.socket) return;
-    // COMPLETELY REBUILT real-time message handling
-    chatSocket.on('chat:new', msg => {
-      console.log('🔔 NEW MESSAGE RECEIVED:', msg);
+    
+    const handleNewMessage = (msg) => {
+      console.log('📨 NEW MESSAGE:', msg);
       
       const conversationId = msg.conversationId || msg.conversation;
-      const isFromOtherUser = msg.senderId !== user.id;
-      const isCurrentConversation = selectedRef.current && selectedRef.current._id === conversationId;
+      const isFromCurrentUser = msg.senderId === user.id;
+      const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log(`📋 Message Analysis:
-        - Conversation: ${conversationId}
-        - From other user: ${isFromOtherUser}
-        - Current conversation: ${isCurrentConversation}
-        - Current selected: ${selectedRef.current?._id || 'none'}`);
+      console.log(`📋 Analysis: conv=${conversationId}, fromMe=${isFromCurrentUser}, current=${isCurrentConversation}`);
       
-      // UNIVERSAL: Always cache messages for ALL conversations (simplified approach)
+      // STEP 1: UNIVERSAL MESSAGE PERSISTENCE - Always cache ALL messages
       setMessagesCache(cache => {
-        const convMsgs = cache[conversationId] || [];
+        const existingMessages = cache[conversationId] || [];
         
         // Check if message already exists
-        const exists = convMsgs.some(m => m._id === msg._id);
-        if (!exists) {
-          console.log(`💾 Caching message for conversation ${conversationId}`);
-          // For sender's own messages, remove all pending first to avoid duplicates
-          const filteredMsgs = msg.senderId === user.id 
-            ? convMsgs.filter(m => !m.pending && !m.sending)
-            : convMsgs;
-            
-          return {
-            ...cache,
-            [conversationId]: [...filteredMsgs, { ...msg, conversationId }]
-          };
+        if (existingMessages.some(m => m._id === msg._id)) {
+          return cache;
         }
-        return cache;
+        
+        // For current user's messages, remove any pending/optimistic versions
+        const cleanedMessages = isFromCurrentUser 
+          ? existingMessages.filter(m => !m.pending && !m.sending)
+          : existingMessages;
+        
+        console.log(`💾 Caching message in conversation ${conversationId}`);
+        return {
+          ...cache,
+          [conversationId]: [...cleanedMessages, { ...msg, conversationId }]
+        };
       });
       
-      // 1. UPDATE DISPLAYED MESSAGES (if for current conversation)
+      // STEP 2: UPDATE CURRENT CONVERSATION VIEW - Only if viewing this conversation
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Simple approach: Remove all pending messages, then add real message if not exists
-          const filtered = prev.filter(m => !m.pending && !m.sending);
-          const exists = filtered.some(m => m._id === msg._id);
-          if (exists) return filtered;
-          return [...filtered, { ...msg, conversationId }];
+          // Remove any pending messages if this is from current user
+          const cleaned = isFromCurrentUser 
+            ? prev.filter(m => !m.pending && !m.sending)
+            : prev;
+          
+          // Add message if not already present
+          if (cleaned.some(m => m._id === msg._id)) return cleaned;
+          
+          console.log(`✅ Adding message to current view`);
+          return [...cleaned, { ...msg, conversationId }];
         });
-        console.log(`✅ Updated displayed messages for active conversation`);
       }
       
-      // 2. SIDEBAR UPDATE - Always update conversation order for any new message
-      console.log(`🔄 UPDATING SIDEBAR for conversation ${conversationId}`);
+      // STEP 3: SIDEBAR REAL-TIME UPDATE - Always update for proper notification badges
+      if (!isFromCurrentUser) {
+        console.log(`🔔 Updating sidebar for message from other user`);
+        
+        // Use optimistic sidebar update
+        moveConversationToTop(
+          conversationId,
+          {
+            text: msg.text,
+            file: msg.file,
+            createdAt: msg.createdAt || new Date().toISOString(),
+            senderName: msg.senderName || 'Unknown'
+          },
+          msg.createdAt || new Date().toISOString(),
+          true // increment unread
+        );
+        
+        // Sync with server data after brief delay
+        setTimeout(() => {
+          fetchConversations();
+          if (refreshUnreadCount) refreshUnreadCount();
+        }, 200);
+      } else {
+        // For current user's messages, just reorder without unread increment
+        moveConversationToTop(
+          conversationId,
+          {
+            text: msg.text,
+            file: msg.file,
+            createdAt: msg.createdAt || new Date().toISOString(),
+            senderName: msg.senderName || 'You'
+          },
+          msg.createdAt || new Date().toISOString(),
+          false // don't increment unread for own messages
+        );
+      }
       
-      // Always move conversation to top when there's a new message, but only increment unread for others
-      moveConversationToTop(
-        conversationId,
-        {
-          text: msg.text,
-          file: msg.file,
-          createdAt: msg.createdAt || new Date().toISOString(),
-          senderName: msg.senderName || (msg.sender && msg.sender.fullName) || 'Unknown'
-        },
-        msg.createdAt || new Date().toISOString(),
-        isFromOtherUser // increment unread count only for messages from others
-      );
-      
-      // Refresh unread counts and conversation data after a delay
-      setTimeout(() => {
-        fetchConversations();
-        if (refreshUnreadCount) {
-          console.log(`📊 Refreshing header unread count`);
-          refreshUnreadCount();
-        }
-      }, 300);
-      
-      // 4. SHOW BROWSER NOTIFICATION
-      if (window.Notification && Notification.permission === 'granted' && isFromOtherUser) {
+      // STEP 4: BROWSER NOTIFICATION - Only for messages from others
+      if (!isFromCurrentUser && window.Notification && Notification.permission === 'granted') {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         new Notification(title, { body });
       }
-    });
+    };
+    
+    chatSocket.on('chat:new', handleNewMessage);
 
     // Edit message
     chatSocket.on('chat:edit', ({ messageId, text, conversationId }) => {
