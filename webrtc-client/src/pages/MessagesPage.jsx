@@ -919,11 +919,48 @@ export default function MessagesPage() {
     try {
       await conversationAPI.deleteConversation(conv._id);
       
-      // Note: Real-time update will be handled by 'conversation:deleted' socket event
-      // Emit socket event to notify other clients
+      // Immediate local update - don't wait for socket events
+      setAllConversations(prev => {
+        const newSections = prev.map(section => ({
+          ...section,
+          items: section.items.filter(c => c._id !== conv._id)
+        }));
+        
+        // Update ref
+        allConversationsRef.current = newSections;
+        return newSections;
+      });
+      
+      // If this was the selected conversation, clear selection
+      if (selected && selected._id === conv._id) {
+        setSelected(null);
+        selectedRef.current = null;
+        setMessages([]);
+      }
+      
+      // Remove from message cache
+      setMessagesCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[conv._id];
+        
+        // Update localStorage
+        try {
+          localStorage.setItem('messagesCache', JSON.stringify(newCache));
+        } catch (error) {
+          console.error('Error updating localStorage cache:', error);
+        }
+        
+        messagesCacheRef.current = newCache;
+        return newCache;
+      });
+      
+      // Emit socket event to notify other clients (for when backend supports it)
       if (chatSocket.socket) {
         chatSocket.socket.emit('conversation:delete', { conversationId: conv._id });
       }
+      
+      // Refresh unread count in header
+      if (refreshUnreadCount) refreshUnreadCount();
       
       setNotification({
         message: 'Conversation deleted successfully!'
@@ -939,14 +976,44 @@ export default function MessagesPage() {
   };
 
   const handleConversationCreated = (newConversation) => {
-    // Note: Real-time update will be handled by 'conversation:created' socket event
-    // Emit socket event to notify other clients
+    // Immediate local update - don't wait for socket events
+    setAllConversations(prev => {
+      const newSections = [...prev];
+      const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
+                         newConversation.type === 'group' ? 'Groups' : 'Communities';
+      const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+      
+      if (sectionIndex !== -1) {
+        // Check if conversation already exists to prevent duplicates
+        const existingIndex = newSections[sectionIndex].items.findIndex(
+          item => item._id === newConversation._id
+        );
+        
+        if (existingIndex === -1) {
+          // Add to the beginning of the list for newest first
+          newSections[sectionIndex].items.unshift(newConversation);
+        }
+      }
+      
+      return newSections;
+    });
+    
+    // Update refs for real-time access
+    setAllConversations(prev => {
+      allConversationsRef.current = prev;
+      return prev;
+    });
+    
+    // Select the new conversation
+    handleSelect(newConversation);
+    
+    // Emit socket event to notify other clients (for when backend supports it)
     if (chatSocket.socket) {
       chatSocket.socket.emit('conversation:create', newConversation);
     }
     
-    // Select the new conversation
-    handleSelect(newConversation);
+    // Refresh unread count in header
+    if (refreshUnreadCount) refreshUnreadCount();
     
     setNotification({
       message: 'Conversation created successfully!'
@@ -977,11 +1044,48 @@ export default function MessagesPage() {
   };
 
   const handleConversationDeleted = (conversationId) => {
-    // Note: Real-time update will be handled by 'conversation:deleted' socket event
-    // Emit socket event to notify other clients
+    // Immediate local update - don't wait for socket events
+    setAllConversations(prev => {
+      const newSections = prev.map(section => ({
+        ...section,
+        items: section.items.filter(c => c._id !== conversationId)
+      }));
+      
+      // Update ref
+      allConversationsRef.current = newSections;
+      return newSections;
+    });
+    
+    // If this was the selected conversation, clear selection
+    if (selected && selected._id === conversationId) {
+      setSelected(null);
+      selectedRef.current = null;
+      setMessages([]);
+    }
+    
+    // Remove from message cache
+    setMessagesCache(prev => {
+      const newCache = { ...prev };
+      delete newCache[conversationId];
+      
+      // Update localStorage
+      try {
+        localStorage.setItem('messagesCache', JSON.stringify(newCache));
+      } catch (error) {
+        console.error('Error updating localStorage cache:', error);
+      }
+      
+      messagesCacheRef.current = newCache;
+      return newCache;
+    });
+    
+    // Emit socket event to notify other clients (for when backend supports it)
     if (chatSocket.socket) {
       chatSocket.socket.emit('conversation:delete', { conversationId });
     }
+    
+    // Refresh unread count in header
+    if (refreshUnreadCount) refreshUnreadCount();
     
     setNotification({
       message: 'Conversation deleted successfully!'
@@ -998,16 +1102,44 @@ export default function MessagesPage() {
       
       const newConversation = response.data.conversation;
       
-      // Note: Real-time update will be handled by 'conversation:created' socket event
-      // No need to call fetchConversations() anymore
+      // Immediate local update - don't wait for socket events
+      setAllConversations(prev => {
+        const newSections = [...prev];
+        const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
+                           newConversation.type === 'group' ? 'Groups' : 'Communities';
+        const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+        
+        if (sectionIndex !== -1) {
+          // Check if conversation already exists to prevent duplicates
+          const existingIndex = newSections[sectionIndex].items.findIndex(
+            item => item._id === newConversation._id
+          );
+          
+          if (existingIndex === -1) {
+            // Add to the beginning of the list for newest first
+            newSections[sectionIndex].items.unshift(newConversation);
+          }
+        }
+        
+        return newSections;
+      });
+      
+      // Update refs for real-time access
+      setAllConversations(prev => {
+        allConversationsRef.current = prev;
+        return prev;
+      });
       
       // Select the new conversation
       handleSelect(newConversation);
       
-      // Emit socket event to notify other clients
+      // Emit socket event to notify other clients (for when backend supports it)
       if (chatSocket.socket) {
         chatSocket.socket.emit('conversation:create', newConversation);
       }
+      
+      // Refresh unread count in header
+      if (refreshUnreadCount) refreshUnreadCount();
       
       setNotification({
         message: response.data.message || 'Conversation created successfully!'
