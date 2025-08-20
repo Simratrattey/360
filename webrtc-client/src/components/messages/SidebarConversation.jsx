@@ -46,6 +46,7 @@ export default function SidebarConversation({
   onSelect,
   onStar,
   onDelete,
+  onDismissDeleted,
   starred,
   getInitials,
   currentUserId,
@@ -98,9 +99,11 @@ export default function SidebarConversation({
   return (
     <div
       className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 ${
-        isActive 
-          ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-md transform scale-[1.01]` 
-          : 'hover:bg-gray-50 border border-transparent hover:border-gray-200 hover:shadow-sm'
+        conv.isDeleted
+          ? 'bg-red-50 border border-red-200 opacity-75'
+          : isActive 
+            ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-md transform scale-[1.01]` 
+            : 'hover:bg-gray-50 border border-transparent hover:border-gray-200 hover:shadow-sm'
       }`}
       onClick={onSelect}
     >
@@ -108,9 +111,13 @@ export default function SidebarConversation({
         {/* Avatar/Icon - Smaller size for better space utilization */}
         <div className="relative flex-shrink-0">
           {conv?.avatar ? (
-            <img src={conv.avatar} alt={displayName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-sm" />
+            <img src={conv.avatar} alt={displayName} className={`h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-sm ${conv.isDeleted ? 'grayscale' : ''}`} />
           ) : (
-            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-sm`}>
+            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-sm ${
+              conv.isDeleted 
+                ? 'bg-gray-400' 
+                : `bg-gradient-to-r ${typeConfig.gradient}`
+            }`}>
               {conv.type === 'dm' ? initials : <typeConfig.icon className="h-3 w-3 md:h-4 md:w-4" />}
             </div>
           )}
@@ -131,12 +138,24 @@ export default function SidebarConversation({
         {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className={`font-medium truncate text-sm ${isActive ? 'text-gray-900' : 'text-gray-800'} flex items-center`}>
-              {displayName}
+            <h3 className={`font-medium truncate text-sm flex items-center ${
+              conv.isDeleted 
+                ? 'text-gray-500 line-through' 
+                : isActive 
+                  ? 'text-gray-900' 
+                  : 'text-gray-800'
+            }`}>
+              {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
               {/* Notification badge - Smaller and more compact */}
-              {conv?.unread > 0 && (
+              {conv?.unread > 0 && !conv.isDeleted && (
                 <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 md:w-5 md:h-5 shadow-sm border border-white">
                   {conv.unread > 99 ? '99+' : conv.unread}
+                </span>
+              )}
+              {/* Deleted indicator */}
+              {conv.isDeleted && (
+                <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 shadow-sm">
+                  Deleted
                 </span>
               )}
             </h3>
@@ -181,12 +200,25 @@ export default function SidebarConversation({
             >
               <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-3.5 md:w-3.5" />
             </button>
-            {/* Delete button - Improved mobile visibility and feedback */}
-            {canDelete && (
+            {/* Delete/Dismiss button - Different behavior for deleted conversations */}
+            {(canDelete || conv.isDeleted) && (
               <button 
-                onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
-                className="p-0.5 md:p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-110 active:bg-red-100"
-                title="Delete conversation"
+                onClick={e => { 
+                  e.stopPropagation(); 
+                  if (conv.isDeleted) {
+                    // For deleted conversations, dismiss immediately
+                    onDismissDeleted && onDismissDeleted();
+                  } else {
+                    // For active conversations, show confirmation
+                    setShowDeleteConfirm(true);
+                  }
+                }} 
+                className={`p-0.5 md:p-1 rounded-full transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-110 ${
+                  conv.isDeleted 
+                    ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50 active:bg-orange-100' 
+                    : 'text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100'
+                }`}
+                title={conv.isDeleted ? "Dismiss deleted conversation" : "Delete conversation"}
               >
                 <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
               </button>
