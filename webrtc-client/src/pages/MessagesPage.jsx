@@ -290,16 +290,15 @@ export default function MessagesPage() {
     if (selected && selected._id) {
       const convId = selected._id;
       
-      const currentCache = messagesCacheRef.current;
       console.log(`🔍 Switching to conversation ${convId}`);
-      console.log(`🔍 Cache keys:`, Object.keys(currentCache));
-      console.log(`🔍 Cache for this conversation:`, currentCache[convId]?.length || 0, 'messages');
+      console.log(`🔍 Cache keys:`, Object.keys(messagesCache));
+      console.log(`🔍 Cache for this conversation:`, messagesCache[convId]?.length || 0, 'messages');
       console.log(`🔍 Current allConversations length:`, allConversations.length);
       
-      if (currentCache[convId]) {
+      if (messagesCache[convId] && messagesCache[convId].length > 0) {
         // Messages are in cache, use them and indicate loading has finished
-        console.log(`✅ Loading ${currentCache[convId].length} messages from cache`);
-        setMessages(currentCache[convId]);
+        console.log(`✅ Loading ${messagesCache[convId].length} messages from cache`);
+        setMessages(messagesCache[convId]);
         setMessagesLoading(false);
       } else {
         // No cache; start loading and fetch messages
@@ -334,7 +333,19 @@ export default function MessagesPage() {
     }
   }, [selected]);
 
-  // REMOVED: This duplicate useEffect was causing race conditions and message loss
+  // Update displayed messages when cache updates for current conversation
+  useEffect(() => {
+    if (selected && selected._id && messagesCache[selected._id] && messagesCache[selected._id].length > 0) {
+      // Only update if cache has more messages than currently displayed
+      const cachedCount = messagesCache[selected._id].length;
+      const displayedCount = messages.length;
+      
+      if (cachedCount > displayedCount) {
+        console.log(`📥 Cache updated for current conversation - updating displayed messages`);
+        setMessages(messagesCache[selected._id]);
+      }
+    }
+  }, [messagesCache, selected?._id, messages.length]);
 
   // Real-time event listeners
   useEffect(() => {
@@ -383,8 +394,18 @@ export default function MessagesPage() {
       // 1. UPDATE DISPLAYED MESSAGES (if for current conversation)
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Remove any pending messages
-          const filtered = prev.filter(m => !m.pending || !m.sending);
+          // Remove optimistic messages that match this real message
+          const filtered = prev.filter(m => {
+            if (!m.pending && !m.sending) return true; // Keep all real messages
+            // Remove optimistic messages that match by sender and content
+            if (msg.senderId === user.id && m.senderId === user.id) {
+              const textMatches = m.text === msg.text || (!m.text && !msg.text);
+              const fileMatches = Boolean(m.file) === Boolean(msg.file);
+              return !(textMatches && fileMatches); // Remove if matches
+            }
+            return true; // Keep other optimistic messages
+          });
+          
           // Add real message if not exists
           const exists = filtered.some(m => m._id === msg._id);
           if (exists) return filtered;
