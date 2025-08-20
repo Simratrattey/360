@@ -275,17 +275,17 @@ export default function MessagesPage() {
         }
       });
       
-      // Auto-select first conversation if none is selected (only on initial load, not during real-time updates)
-      const first = conversations[0];
-      if (first && !selected && !selectedRef.current) {
-        handleSelect(first);
+      // WHATSAPP-STYLE: Auto-select only on very first load when no conversation ever selected
+      if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
+        console.log('🏠 FIRST LOAD: Auto-selecting first conversation');
+        handleSelect(conversations[0]);
       }
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
   };
 
-  // NEW ARCHITECTURE: Clean Conversation Switching Logic
+  // WHATSAPP-STYLE: Instant Conversation Loading
   useEffect(() => {
     if (!selected?._id) {
       setMessages([]);
@@ -294,153 +294,133 @@ export default function MessagesPage() {
     }
     
     const convId = selected._id;
-    console.log(`🔄 Switching to conversation: ${convId}`);
+    console.log(`🔄 WHATSAPP-STYLE: Opening conversation ${convId}`);
     
-    // Always check cache first for instant loading
+    // First, immediately show cached messages (WhatsApp instant loading)
     const cachedMessages = messagesCache[convId];
     if (cachedMessages && cachedMessages.length > 0) {
-      console.log(`⚡ Loading ${cachedMessages.length} messages from cache`);
+      console.log(`⚡ INSTANT LOAD: ${cachedMessages.length} cached messages`);
       setMessages(cachedMessages);
       setMessagesLoading(false);
+      
+      // Join socket room immediately for real-time updates
+      chatSocket.joinConversation(convId);
     } else {
-      // No cache - fetch from API
-      console.log(`🌐 Fetching messages from API for conversation ${convId}`);
+      // No cache - show loading and fetch from server
+      console.log(`🌐 LOADING: Fetching messages for conversation ${convId}`);
+      setMessages([]);
       setMessagesLoading(true);
       
       messageAPI.getMessages(convId)
         .then(res => {
-          const freshMessages = res.data.messages || [];
-          console.log(`✅ Loaded ${freshMessages.length} fresh messages`);
+          const serverMessages = res.data.messages || [];
+          console.log(`✅ LOADED: ${serverMessages.length} messages from server`);
           
-          // Update both displayed messages and cache
-          setMessages(freshMessages);
+          // Update both cache and display
+          setMessages(serverMessages);
           setMessagesCache(prev => ({
             ...prev,
-            [convId]: freshMessages
+            [convId]: serverMessages
           }));
+          
+          // Join socket room after loading
+          chatSocket.joinConversation(convId);
         })
         .catch(error => {
-          console.error('❌ Error fetching messages:', error);
+          console.error('❌ Failed to load messages:', error);
           setMessages([]);
+          // Still join room even if loading failed
+          chatSocket.joinConversation(convId);
         })
         .finally(() => {
           setMessagesLoading(false);
         });
     }
     
-    // Join socket room for real-time updates
-    chatSocket.joinConversation(convId);
-    
+    // Always leave previous room when switching
     return () => {
-      // Leave room when switching away
       chatSocket.leaveConversation(convId);
     };
   }, [selected]);
 
-  // Cache-to-Display Sync: Update displayed messages when cache changes for current conversation
-  useEffect(() => {
-    if (selected?._id && messagesCache[selected._id]) {
-      const cachedMessages = messagesCache[selected._id];
-      const currentDisplayed = messages.length;
-      const cached = cachedMessages.length;
-      
-      // Only update if cache has more messages (new message arrived)
-      if (cached > currentDisplayed) {
-        console.log(`📥 Cache updated: syncing ${cached} messages to display`);
-        setMessages(cachedMessages);
-      }
-    }
-  }, [messagesCache[selected?._id]?.length, selected?._id]);
+  // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
 
-  // NEW ARCHITECTURE: Clean Real-time Message Handler
+  // WHATSAPP-STYLE: Simple, Reliable Real-time Handler
   useEffect(() => {
     if (!chatSocket.socket) return;
     
     const handleNewMessage = (msg) => {
-      console.log('📨 NEW MESSAGE:', msg);
+      console.log('📨 WHATSAPP-STYLE MESSAGE HANDLER:', msg);
       
       const conversationId = msg.conversationId || msg.conversation;
-      const isFromCurrentUser = msg.senderId === user.id;
+      const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log(`📋 Analysis: conv=${conversationId}, fromMe=${isFromCurrentUser}, current=${isCurrentConversation}`);
+      console.log(`📋 Message: conv=${conversationId}, mine=${isMyMessage}, current=${isCurrentConversation}`);
       
-      // STEP 1: UNIVERSAL MESSAGE PERSISTENCE - Always cache ALL messages
-      setMessagesCache(cache => {
-        const existingMessages = cache[conversationId] || [];
+      // 1. ALWAYS UPDATE MESSAGE CACHE (WhatsApp stores everything)
+      setMessagesCache(prev => {
+        const convMessages = prev[conversationId] || [];
         
-        // Check if message already exists
-        if (existingMessages.some(m => m._id === msg._id)) {
-          return cache;
+        // Skip if message already exists
+        if (convMessages.some(m => m._id === msg._id)) {
+          console.log(`⚠️ Message ${msg._id} already in cache`);
+          return prev;
         }
         
-        // For current user's messages, remove any pending/optimistic versions
-        const cleanedMessages = isFromCurrentUser 
-          ? existingMessages.filter(m => !m.pending && !m.sending)
-          : existingMessages;
+        // For my own messages, remove optimistic duplicates
+        let cleanMessages = convMessages;
+        if (isMyMessage) {
+          cleanMessages = convMessages.filter(m => !m.pending && !m.sending);
+          console.log(`🧹 Cleaned ${convMessages.length - cleanMessages.length} optimistic messages`);
+        }
         
         console.log(`💾 Caching message in conversation ${conversationId}`);
         return {
-          ...cache,
-          [conversationId]: [...cleanedMessages, { ...msg, conversationId }]
+          ...prev,
+          [conversationId]: [...cleanMessages, { ...msg, conversationId }]
         };
       });
       
-      // STEP 2: UPDATE CURRENT CONVERSATION VIEW - Only if viewing this conversation
+      // 2. UPDATE CURRENT CONVERSATION VIEW (if this is the active chat)
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Remove any pending messages if this is from current user
-          const cleaned = isFromCurrentUser 
-            ? prev.filter(m => !m.pending && !m.sending)
-            : prev;
+          // For my messages, remove optimistic versions
+          let filtered = prev;
+          if (isMyMessage) {
+            filtered = prev.filter(m => !m.pending && !m.sending);
+          }
           
-          // Add message if not already present
-          if (cleaned.some(m => m._id === msg._id)) return cleaned;
+          // Add if not already there
+          if (filtered.some(m => m._id === msg._id)) return filtered;
           
-          console.log(`✅ Adding message to current view`);
-          return [...cleaned, { ...msg, conversationId }];
+          console.log(`📱 Adding message to current conversation view`);
+          return [...filtered, { ...msg, conversationId }];
         });
       }
       
-      // STEP 3: SIDEBAR REAL-TIME UPDATE - Always update for proper notification badges
-      if (!isFromCurrentUser) {
-        console.log(`🔔 Updating sidebar for message from other user`);
-        
-        // Use optimistic sidebar update
-        moveConversationToTop(
-          conversationId,
-          {
-            text: msg.text,
-            file: msg.file,
-            createdAt: msg.createdAt || new Date().toISOString(),
-            senderName: msg.senderName || 'Unknown'
-          },
-          msg.createdAt || new Date().toISOString(),
-          true // increment unread
-        );
-        
-        // Sync with server data after brief delay
-        setTimeout(() => {
-          fetchConversations();
-          if (refreshUnreadCount) refreshUnreadCount();
-        }, 200);
-      } else {
-        // For current user's messages, just reorder without unread increment
-        moveConversationToTop(
-          conversationId,
-          {
-            text: msg.text,
-            file: msg.file,
-            createdAt: msg.createdAt || new Date().toISOString(),
-            senderName: msg.senderName || 'You'
-          },
-          msg.createdAt || new Date().toISOString(),
-          false // don't increment unread for own messages
-        );
-      }
+      // 3. ALWAYS UPDATE SIDEBAR (WhatsApp updates sidebar for ALL messages)
+      console.log(`📋 Updating sidebar for conversation ${conversationId}`);
       
-      // STEP 4: BROWSER NOTIFICATION - Only for messages from others
-      if (!isFromCurrentUser && window.Notification && Notification.permission === 'granted') {
+      // Move conversation to top with latest message info
+      moveConversationToTop(
+        conversationId,
+        {
+          text: msg.text,
+          file: msg.file,
+          createdAt: msg.createdAt || new Date().toISOString(),
+          senderName: msg.senderName || (isMyMessage ? 'You' : 'Unknown')
+        },
+        msg.createdAt || new Date().toISOString(),
+        !isMyMessage && !isCurrentConversation // increment unread only for others' messages when not in that conversation
+      );
+      
+      // 4. INSTANT SYNC WITH SERVER (WhatsApp immediate updates)
+      fetchConversations();
+      if (refreshUnreadCount) refreshUnreadCount();
+      
+      // 5. BROWSER NOTIFICATION (only for others' messages)
+      if (!isMyMessage && window.Notification && Notification.permission === 'granted') {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
         new Notification(title, { body });
