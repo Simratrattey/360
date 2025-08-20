@@ -333,19 +333,7 @@ export default function MessagesPage() {
     }
   }, [selected]);
 
-  // Update displayed messages when cache updates for current conversation
-  useEffect(() => {
-    if (selected && selected._id && messagesCache[selected._id] && messagesCache[selected._id].length > 0) {
-      // Only update if cache has more messages than currently displayed
-      const cachedCount = messagesCache[selected._id].length;
-      const displayedCount = messages.length;
-      
-      if (cachedCount > displayedCount) {
-        console.log(`📥 Cache updated for current conversation - updating displayed messages`);
-        setMessages(messagesCache[selected._id]);
-      }
-    }
-  }, [messagesCache, selected?._id, messages.length]);
+  // REMOVED: This useEffect was causing infinite loops and blocking real-time updates
 
   // Real-time event listeners
   useEffect(() => {
@@ -364,28 +352,22 @@ export default function MessagesPage() {
         - Current conversation: ${isCurrentConversation}
         - Current selected: ${selectedRef.current?._id || 'none'}`);
       
-      // UNIVERSAL: Always cache messages for ALL conversations (critical for persistence)
+      // UNIVERSAL: Always cache messages for ALL conversations (simplified approach)
       setMessagesCache(cache => {
         const convMsgs = cache[conversationId] || [];
         
-        // For sender's own messages, remove optimistic duplicates first
-        let updatedMsgs = convMsgs;
-        if (msg.senderId === user.id) {
-          updatedMsgs = convMsgs.filter(m => {
-            if (!m.pending && !m.sending) return true; // Keep real messages
-            // Remove optimistic messages that match this real one
-            const textMatches = m.text === msg.text || (!m.text && !msg.text);
-            const fileMatches = Boolean(m.file) === Boolean(msg.file);
-            return !(textMatches && fileMatches);
-          });
-        }
-        
-        const exists = updatedMsgs.some(m => m._id === msg._id);
+        // Check if message already exists
+        const exists = convMsgs.some(m => m._id === msg._id);
         if (!exists) {
           console.log(`💾 Caching message for conversation ${conversationId}`);
+          // For sender's own messages, remove all pending first to avoid duplicates
+          const filteredMsgs = msg.senderId === user.id 
+            ? convMsgs.filter(m => !m.pending && !m.sending)
+            : convMsgs;
+            
           return {
             ...cache,
-            [conversationId]: [...updatedMsgs, { ...msg, conversationId }]
+            [conversationId]: [...filteredMsgs, { ...msg, conversationId }]
           };
         }
         return cache;
@@ -394,19 +376,8 @@ export default function MessagesPage() {
       // 1. UPDATE DISPLAYED MESSAGES (if for current conversation)
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Remove optimistic messages that match this real message
-          const filtered = prev.filter(m => {
-            if (!m.pending && !m.sending) return true; // Keep all real messages
-            // Remove optimistic messages that match by sender and content
-            if (msg.senderId === user.id && m.senderId === user.id) {
-              const textMatches = m.text === msg.text || (!m.text && !msg.text);
-              const fileMatches = Boolean(m.file) === Boolean(msg.file);
-              return !(textMatches && fileMatches); // Remove if matches
-            }
-            return true; // Keep other optimistic messages
-          });
-          
-          // Add real message if not exists
+          // Simple approach: Remove all pending messages, then add real message if not exists
+          const filtered = prev.filter(m => !m.pending && !m.sending);
           const exists = filtered.some(m => m._id === msg._id);
           if (exists) return filtered;
           return [...filtered, { ...msg, conversationId }];
@@ -414,10 +385,10 @@ export default function MessagesPage() {
         console.log(`✅ Updated displayed messages for active conversation`);
       }
       
-      // 2. SMART SIDEBAR UPDATE - Use incremental updates instead of full refresh
+      // 2. SIDEBAR UPDATE - Always update conversation order for any new message
       console.log(`🔄 UPDATING SIDEBAR for conversation ${conversationId}`);
       
-      // Use the existing moveConversationToTop function for instant local update
+      // Always move conversation to top when there's a new message, but only increment unread for others
       moveConversationToTop(
         conversationId,
         {
@@ -430,18 +401,14 @@ export default function MessagesPage() {
         isFromOtherUser // increment unread count only for messages from others
       );
       
-      // Single lightweight refresh after delay to sync with server (no auto-selection during this)
+      // Refresh unread counts and conversation data after a delay
       setTimeout(() => {
         fetchConversations();
-      }, 500);
-      
-      // 3. UPDATE UNREAD COUNT IN HEADER
-      if (refreshUnreadCount) {
-        setTimeout(() => {
+        if (refreshUnreadCount) {
           console.log(`📊 Refreshing header unread count`);
           refreshUnreadCount();
-        }, 300);
-      }
+        }
+      }, 300);
       
       // 4. SHOW BROWSER NOTIFICATION
       if (window.Notification && Notification.permission === 'granted' && isFromOtherUser) {
