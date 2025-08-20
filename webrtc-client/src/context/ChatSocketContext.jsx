@@ -485,6 +485,18 @@ export function ChatSocketProvider({ children }) {
     }
   };
 
+  const createConversation = (data) => {
+    if (socket) {
+      socket.emit('conversation:create', data);
+    }
+  };
+
+  const deleteConversation = (data) => {
+    if (socket) {
+      socket.emit('conversation:delete', data);
+    }
+  };
+
   return (
     <ChatSocketContext.Provider value={{
       socket,
@@ -502,6 +514,8 @@ export function ChatSocketProvider({ children }) {
       unreactMessage,
       sendTyping,
       markAsRead,
+      createConversation,
+      deleteConversation,
     }}>
       {children}
     </ChatSocketContext.Provider>

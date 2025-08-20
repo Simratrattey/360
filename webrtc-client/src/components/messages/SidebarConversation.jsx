@@ -181,11 +181,11 @@ export default function SidebarConversation({
             >
               <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-3.5 md:w-3.5" />
             </button>
-            {/* Delete button - Smaller */}
+            {/* Delete button - Improved mobile visibility and feedback */}
             {canDelete && (
               <button 
                 onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
-                className="p-0.5 md:p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
+                className="p-0.5 md:p-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-110 active:bg-red-100"
                 title="Delete conversation"
               >
                 <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
@@ -200,23 +200,37 @@ export default function SidebarConversation({
         <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {/* Enhanced delete confirmation dialog with better UX */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-xs w-full flex flex-col items-center">
-            <Trash2 className="h-6 w-6 md:h-8 md:w-8 text-red-500 mb-2" />
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in-0 duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDeleteConfirm(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-sm w-full flex flex-col items-center animate-in zoom-in-95 fade-in-0 duration-200">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <Trash2 className="h-6 w-6 md:h-8 md:w-8 text-red-500" />
+            </div>
             <h3 className="text-base md:text-lg font-bold mb-2 text-gray-900 text-center">Delete Conversation?</h3>
-            <p className="text-sm md:text-base text-gray-600 mb-4 text-center">Are you sure you want to delete this conversation? This action cannot be undone.</p>
+            <p className="text-sm md:text-base text-gray-600 mb-6 text-center leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold text-gray-800">{displayName}</span>? This action cannot be undone and all messages will be permanently lost.
+            </p>
             <div className="flex gap-3 md:gap-4 w-full">
               <button
-                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium text-sm md:text-base"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 font-medium text-sm md:text-base transition-colors duration-150"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Cancel
               </button>
               <button
-                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow text-sm md:text-base"
-                onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 active:from-red-700 active:to-pink-700 shadow-lg hover:shadow-xl transition-all duration-150 text-sm md:text-base"
+                onClick={() => { 
+                  setShowDeleteConfirm(false); 
+                  onDelete(); 
+                }}
               >
                 Delete
               </button>

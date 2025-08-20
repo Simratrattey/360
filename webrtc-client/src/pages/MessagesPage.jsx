@@ -565,6 +565,92 @@ export default function MessagesPage() {
       fetchConversations(); // Update sidebar
     });
 
+    // Real-time conversation creation/deletion events
+    chatSocket.on('conversation:created', (newConversation) => {
+      console.log('🔔 New conversation created:', newConversation);
+      
+      // Check if current user is a member of this conversation
+      const userId = user?.id;
+      const isMember = newConversation.members?.some(m => 
+        (typeof m === 'string' ? m : m._id) === userId
+      );
+      
+      if (isMember) {
+        // Add to conversations list in real-time
+        setAllConversations(prev => {
+          const newSections = [...prev];
+          const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
+                             newConversation.type === 'group' ? 'Groups' : 'Communities';
+          const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+          
+          if (sectionIndex !== -1) {
+            // Check if conversation already exists to prevent duplicates
+            const existingIndex = newSections[sectionIndex].items.findIndex(
+              item => item._id === newConversation._id
+            );
+            
+            if (existingIndex === -1) {
+              // Add to the beginning of the list for newest first
+              newSections[sectionIndex].items.unshift(newConversation);
+            }
+          }
+          
+          return newSections;
+        });
+        
+        // Update all conversations ref for real-time access
+        setAllConversations(prev => {
+          allConversationsRef.current = prev;
+          return prev;
+        });
+        
+        // Refresh unread count in header
+        if (refreshUnreadCount) refreshUnreadCount();
+      }
+    });
+
+    chatSocket.on('conversation:deleted', ({ conversationId }) => {
+      console.log('🔔 Conversation deleted:', conversationId);
+      
+      // Remove from conversations list in real-time
+      setAllConversations(prev => {
+        const newSections = prev.map(section => ({
+          ...section,
+          items: section.items.filter(c => c._id !== conversationId)
+        }));
+        
+        // Update ref
+        allConversationsRef.current = newSections;
+        return newSections;
+      });
+      
+      // If this was the selected conversation, clear selection
+      if (selected && selected._id === conversationId) {
+        setSelected(null);
+        selectedRef.current = null;
+        setMessages([]);
+      }
+      
+      // Remove from message cache
+      setMessagesCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[conversationId];
+        
+        // Update localStorage
+        try {
+          localStorage.setItem('messagesCache', JSON.stringify(newCache));
+        } catch (error) {
+          console.error('Error updating localStorage cache:', error);
+        }
+        
+        messagesCacheRef.current = newCache;
+        return newCache;
+      });
+      
+      // Refresh unread count in header
+      if (refreshUnreadCount) refreshUnreadCount();
+    });
+
     return () => {
       chatSocket.off('chat:new');
       chatSocket.off('chat:edit');
@@ -576,6 +662,8 @@ export default function MessagesPage() {
       chatSocket.off('conversation:memberRemoved');
       chatSocket.off('conversation:adminAdded');
       chatSocket.off('conversation:adminRemoved');
+      chatSocket.off('conversation:created');
+      chatSocket.off('conversation:deleted');
     };
   }, [chatSocket.socket, user.id]);
 
@@ -831,19 +919,12 @@ export default function MessagesPage() {
     try {
       await conversationAPI.deleteConversation(conv._id);
       
-      // Remove from conversations list
-      setAllConversations(prev => prev.map(section => ({
-        ...section,
-        items: section.items.filter(c => c._id !== conv._id)
-      })));
-      
-      // If this was the selected conversation, clear selection
-      if (selected && selected._id === conv._id) {
-        setSelected(null);
-        setMessages([]);
+      // Note: Real-time update will be handled by 'conversation:deleted' socket event
+      // Emit socket event to notify other clients
+      if (chatSocket.socket) {
+        chatSocket.socket.emit('conversation:delete', { conversationId: conv._id });
       }
-      // Refresh unread count in header
-      if (refreshUnreadCount) refreshUnreadCount();
+      
       setNotification({
         message: 'Conversation deleted successfully!'
       });
@@ -858,18 +939,11 @@ export default function MessagesPage() {
   };
 
   const handleConversationCreated = (newConversation) => {
-    // Add to conversations list
-    setAllConversations(prev => {
-      const newSections = [...prev];
-      const sectionIndex = newSections.findIndex(s => s.section === 
-        (newConversation.type === 'dm' ? 'Direct Messages' : 
-         newConversation.type === 'group' ? 'Groups' : 'Communities'));
-      
-      if (sectionIndex !== -1) {
-        newSections[sectionIndex].items.push(newConversation);
-      }
-      return newSections;
-    });
+    // Note: Real-time update will be handled by 'conversation:created' socket event
+    // Emit socket event to notify other clients
+    if (chatSocket.socket) {
+      chatSocket.socket.emit('conversation:create', newConversation);
+    }
     
     // Select the new conversation
     handleSelect(newConversation);
@@ -903,19 +977,12 @@ export default function MessagesPage() {
   };
 
   const handleConversationDeleted = (conversationId) => {
-    // Remove from conversations list
-    setAllConversations(prev => prev.map(section => ({
-      ...section,
-      items: section.items.filter(c => c._id !== conversationId)
-    })));
-    
-    // If this was the selected conversation, clear selection
-    if (selected && selected._id === conversationId) {
-      setSelected(null);
-      setMessages([]);
+    // Note: Real-time update will be handled by 'conversation:deleted' socket event
+    // Emit socket event to notify other clients
+    if (chatSocket.socket) {
+      chatSocket.socket.emit('conversation:delete', { conversationId });
     }
-    // Refresh unread count in header
-    if (refreshUnreadCount) refreshUnreadCount();
+    
     setNotification({
       message: 'Conversation deleted successfully!'
     });
@@ -931,11 +998,16 @@ export default function MessagesPage() {
       
       const newConversation = response.data.conversation;
       
-      // Refresh conversations list
-      await fetchConversations();
+      // Note: Real-time update will be handled by 'conversation:created' socket event
+      // No need to call fetchConversations() anymore
       
       // Select the new conversation
       handleSelect(newConversation);
+      
+      // Emit socket event to notify other clients
+      if (chatSocket.socket) {
+        chatSocket.socket.emit('conversation:create', newConversation);
+      }
       
       setNotification({
         message: response.data.message || 'Conversation created successfully!'
