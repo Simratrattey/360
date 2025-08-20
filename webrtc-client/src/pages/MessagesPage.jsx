@@ -334,34 +334,7 @@ export default function MessagesPage() {
     }
   }, [selected]);
 
-  // Simplified: Always reload messages when switching conversations
-  // This ensures messages are always up-to-date and eliminates cache sync issues
-  useEffect(() => {
-    if (selected && selected._id) {
-      console.log(`🔄 Reloading messages for conversation ${selected._id}`);
-      setMessagesLoading(true);
-      
-      messageAPI.getMessages(selected._id)
-        .then(res => {
-          const freshMessages = res.data.messages || [];
-          console.log(`✅ Loaded ${freshMessages.length} fresh messages`);
-          setMessages(freshMessages);
-          
-          // Update cache with fresh data
-          setMessagesCache(prev => ({
-            ...prev,
-            [selected._id]: freshMessages
-          }));
-        })
-        .catch(error => {
-          console.error('Error reloading messages:', error);
-          setMessages([]);
-        })
-        .finally(() => {
-          setMessagesLoading(false);
-        });
-    }
-  }, [selected?._id]);
+  // REMOVED: This duplicate useEffect was causing race conditions and message loss
 
   // Real-time event listeners
   useEffect(() => {
@@ -420,22 +393,26 @@ export default function MessagesPage() {
         console.log(`✅ Updated displayed messages for active conversation`);
       }
       
-      // 2. ALWAYS UPDATE SIDEBAR (for all conversations)
+      // 2. SMART SIDEBAR UPDATE - Use incremental updates instead of full refresh
       console.log(`🔄 UPDATING SIDEBAR for conversation ${conversationId}`);
       
-      // Force sidebar update by refreshing entire conversation list
-      fetchConversations().then(() => {
-        console.log(`✅ SIDEBAR REFRESHED - conversation list updated from server`);
-        
-        // Additional force update after a brief delay to ensure server has processed the message
-        setTimeout(() => {
-          fetchConversations().then(() => {
-            console.log(`✅ DOUBLE REFRESH completed for extra reliability`);
-          });
-        }, 200);
-      }).catch(error => {
-        console.error(`❌ Failed to refresh sidebar:`, error);
-      });
+      // Use the existing moveConversationToTop function for instant local update
+      moveConversationToTop(
+        conversationId,
+        {
+          text: msg.text,
+          file: msg.file,
+          createdAt: msg.createdAt || new Date().toISOString(),
+          senderName: msg.senderName || (msg.sender && msg.sender.fullName) || 'Unknown'
+        },
+        msg.createdAt || new Date().toISOString(),
+        isFromOtherUser // increment unread count only for messages from others
+      );
+      
+      // Single lightweight refresh after delay to sync with server (no auto-selection during this)
+      setTimeout(() => {
+        fetchConversations();
+      }, 500);
       
       // 3. UPDATE UNREAD COUNT IN HEADER
       if (refreshUnreadCount) {
