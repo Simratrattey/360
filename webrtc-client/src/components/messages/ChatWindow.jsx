@@ -98,10 +98,32 @@ export default function ChatWindow({
               </div>
               <div className="space-y-2 sm:space-y-4">
                 {msgs.map((msg, index) => {
+                  // Check if this is a system message
+                  const isSystemMessage = msg.type === 'system' || msg.isSystemMessage || msg.senderId === 'system';
+                  
                   // Check if this message is a search result
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
                   const isCurrentSearchResult = searchResults.length > 0 && 
                     searchResults[currentSearchResult]?._id === msg._id;
+                  
+                  // Render system notifications differently
+                  if (isSystemMessage) {
+                    return (
+                      <div 
+                        key={msg._id || msg.id}
+                        id={`message-${msg._id || msg.id}`}
+                        className="flex justify-center my-4"
+                      >
+                        <div className={`px-4 py-2 rounded-full text-sm font-medium shadow-sm border max-w-md text-center ${
+                          msg.isDeletionNotice 
+                            ? 'bg-red-50 text-red-700 border-red-200' 
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    );
+                  }
                   
                   return (
                     <div 
@@ -144,7 +166,7 @@ export default function ChatWindow({
                       />
                     </div>
                   );
-                })}
+                })
               </div>
             </div>
           ))}

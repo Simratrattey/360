@@ -4,19 +4,28 @@
  * When POST /conversations is called (conversation creation):
  *   1. Backend should emit to all members: 'conversation:created'
  *      Payload: { ...conversationObject, members: [...], createdBy: userId }
- *   2. Backend should automatically send a system message to the new conversation:
- *      { text: "🎉 [conversationName] was created!", type: "system", isSystemMessage: true }
+ *   2. Backend should automatically send system notifications as chat messages:
+ *      - Group creation: { text: "🎉 [conversationName] was created!", type: "system", 
+ *                         isSystemMessage: true, senderId: "system" }
+ * 
+ * When POST /conversations/:id/members is called (member addition):
+ *   1. Backend should emit to all members: 'conversation:memberAdded'
+ *   2. Backend should send system notification:
+ *      { text: "👋 [memberName] was added to the group", type: "system", 
+ *        isSystemMessage: true, senderId: "system" }
  * 
  * When DELETE /conversations/:id is called (conversation deletion):
  *   1. Backend should emit to all members: 'conversation:deleted' 
  *      Payload: { conversationId, deletedBy: userId, conversationName, conversationType }
- *   2. For non-deleters, backend should send a system message:
+ *   2. For non-deleters, backend should send system message:
  *      { text: "🚨 This group no longer exists. You can delete this conversation.", 
- *        type: "system", isSystemMessage: true, isDeletionNotice: true }
+ *        type: "system", isSystemMessage: true, isDeletionNotice: true, senderId: "system" }
  * 
+ * System messages appear as small centered notifications in the chat, not as user messages.
  * This ensures:
- * - Creator sees group creation message
+ * - Creator sees group creation notification
  * - All members see group appear in real-time  
+ * - Member additions are announced in chat
  * - Deleter sees immediate removal
  * - Others see deletion notice and can dismiss when ready
  */
@@ -1169,18 +1178,8 @@ export default function MessagesPage() {
     // Select the new conversation
     handleSelect(newConversation);
     
-    // Send system message for group/community creation
-    if (newConversation.type !== 'dm' && chatSocket.sendMessage) {
-      const systemMessage = {
-        conversationId: newConversation._id,
-        text: `🎉 ${newConversation.name || 'Group'} was created!`,
-        type: 'system',
-        isSystemMessage: true
-      };
-      
-      console.log('📝 Sending group creation system message:', systemMessage);
-      chatSocket.sendMessage(systemMessage);
-    }
+    // System notifications will be handled by the backend automatically
+    // No need to manually send messages from the client
     
     // Backend should emit 'conversation:created' event to all members automatically
     // TODO: Remove this test code once backend is emitting proper events
@@ -1192,6 +1191,42 @@ export default function MessagesPage() {
           chatSocket.socket.emit('conversation:created', newConversation);
         }
       }, 100);
+      
+      // Simulate system message for group creation (testing display)
+      if (newConversation.type !== 'dm') {
+        setTimeout(() => {
+          const systemMessage = {
+            _id: `creation-${newConversation._id}-${Date.now()}`,
+            conversationId: newConversation._id,
+            text: `🎉 ${newConversation.name || 'Group'} was created!`,
+            type: 'system',
+            isSystemMessage: true,
+            createdAt: new Date().toISOString(),
+            senderId: 'system'
+          };
+          
+          // Add to message cache for display
+          setMessagesCache(prev => {
+            const conversationMessages = prev[newConversation._id] || [];
+            const updatedMessages = [systemMessage, ...conversationMessages];
+            const newCache = { ...prev, [newConversation._id]: updatedMessages };
+            
+            try {
+              localStorage.setItem('messagesCache', JSON.stringify(newCache));
+            } catch (error) {
+              console.error('Error updating localStorage cache:', error);
+            }
+            
+            messagesCacheRef.current = newCache;
+            return newCache;
+          });
+          
+          // If this conversation is currently selected, update the messages
+          if (selected && selected._id === newConversation._id) {
+            setMessages(prev => [systemMessage, ...prev]);
+          }
+        }, 200);
+      }
     }
     
     // Refresh unread count in header
@@ -1327,18 +1362,8 @@ export default function MessagesPage() {
       // Select the new conversation
       handleSelect(newConversation);
       
-      // Send system message for group/community creation (not for DMs)
-      if (newConversation.type !== 'dm' && chatSocket.sendMessage) {
-        const systemMessage = {
-          conversationId: newConversation._id,
-          text: `🎉 ${newConversation.name || 'Group'} was created!`,
-          type: 'system',
-          isSystemMessage: true
-        };
-        
-        console.log('📝 Sending group creation system message:', systemMessage);
-        chatSocket.sendMessage(systemMessage);
-      }
+      // System notifications will be handled by the backend automatically
+      // No need to manually send messages from the client
       
       // Backend should emit 'conversation:created' event to all members automatically
       // TODO: Remove this test code once backend is emitting proper events
@@ -1350,6 +1375,42 @@ export default function MessagesPage() {
             chatSocket.socket.emit('conversation:created', newConversation);
           }
         }, 100);
+        
+        // Simulate system message for group creation (testing display)
+        if (newConversation.type !== 'dm') {
+          setTimeout(() => {
+            const systemMessage = {
+              _id: `creation-${newConversation._id}-${Date.now()}`,
+              conversationId: newConversation._id,
+              text: `🎉 ${newConversation.name || 'Group'} was created!`,
+              type: 'system',
+              isSystemMessage: true,
+              createdAt: new Date().toISOString(),
+              senderId: 'system'
+            };
+            
+            // Add to message cache for display
+            setMessagesCache(prev => {
+              const conversationMessages = prev[newConversation._id] || [];
+              const updatedMessages = [systemMessage, ...conversationMessages];
+              const newCache = { ...prev, [newConversation._id]: updatedMessages };
+              
+              try {
+                localStorage.setItem('messagesCache', JSON.stringify(newCache));
+              } catch (error) {
+                console.error('Error updating localStorage cache:', error);
+              }
+              
+              messagesCacheRef.current = newCache;
+              return newCache;
+            });
+            
+            // If this conversation is currently selected, update the messages
+            if (selected && selected._id === newConversation._id) {
+              setMessages(prev => [systemMessage, ...prev]);
+            }
+          }, 200);
+        }
       }
       
       // Refresh unread count in header
