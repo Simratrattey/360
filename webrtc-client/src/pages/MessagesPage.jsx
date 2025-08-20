@@ -1,3 +1,17 @@
+/*
+ * BACKEND SOCKET EVENTS REQUIRED FOR REAL-TIME CONVERSATION UPDATES:
+ * 
+ * When POST /conversations is called (conversation creation):
+ *   Backend should emit to all members: 'conversation:created'
+ *   Payload: { ...conversationObject, members: [...], createdBy: userId }
+ * 
+ * When DELETE /conversations/:id is called (conversation deletion):
+ *   Backend should emit to all members: 'conversation:deleted' 
+ *   Payload: { conversationId, deletedBy: userId, conversationName }
+ * 
+ * This ensures all participants see conversation changes in real-time across all devices.
+ */
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { User, Users, Hash, Plus, Search, MoreVertical, Settings, Star, Trash2, Send, Paperclip, Smile, MessageCircle, X, Check } from 'lucide-react';
 import SidebarConversation from '../components/messages/SidebarConversation';
@@ -567,7 +581,7 @@ export default function MessagesPage() {
 
     // Real-time conversation creation/deletion events
     chatSocket.on('conversation:created', (newConversation) => {
-      console.log('🔔 New conversation created:', newConversation);
+      console.log('🔔 New conversation created (received via socket):', newConversation);
       
       // Check if current user is a member of this conversation
       const userId = user?.id;
@@ -576,6 +590,8 @@ export default function MessagesPage() {
       );
       
       if (isMember) {
+        console.log('🔔 Adding conversation to sidebar for user:', userId);
+        
         // Add to conversations list in real-time
         setAllConversations(prev => {
           const newSections = [...prev];
@@ -590,9 +606,14 @@ export default function MessagesPage() {
             );
             
             if (existingIndex === -1) {
+              console.log(`🔔 Adding conversation ${newConversation._id} to ${sectionName} section`);
               // Add to the beginning of the list for newest first
               newSections[sectionIndex].items.unshift(newConversation);
+            } else {
+              console.log(`🔔 Conversation ${newConversation._id} already exists, skipping duplicate`);
             }
+          } else {
+            console.warn(`🔔 Section ${sectionName} not found for conversation type ${newConversation.type}`);
           }
           
           return newSections;
@@ -604,13 +625,24 @@ export default function MessagesPage() {
           return prev;
         });
         
+        // Show notification for non-creator users
+        const isCreator = newConversation.createdBy === userId;
+        if (!isCreator) {
+          setNotification({
+            message: `You were added to ${newConversation.name || 'a new conversation'}!`
+          });
+          setTimeout(() => setNotification(null), 3000);
+        }
+        
         // Refresh unread count in header
         if (refreshUnreadCount) refreshUnreadCount();
+      } else {
+        console.log('🔔 User is not a member of this conversation, ignoring');
       }
     });
 
-    chatSocket.on('conversation:deleted', ({ conversationId }) => {
-      console.log('🔔 Conversation deleted:', conversationId);
+    chatSocket.on('conversation:deleted', ({ conversationId, deletedBy, conversationName }) => {
+      console.log('🔔 Conversation deleted (received via socket):', { conversationId, deletedBy, conversationName });
       
       // Remove from conversations list in real-time
       setAllConversations(prev => {
@@ -626,6 +658,7 @@ export default function MessagesPage() {
       
       // If this was the selected conversation, clear selection
       if (selected && selected._id === conversationId) {
+        console.log('🔔 Clearing selected conversation as it was deleted');
         setSelected(null);
         selectedRef.current = null;
         setMessages([]);
@@ -646,6 +679,15 @@ export default function MessagesPage() {
         messagesCacheRef.current = newCache;
         return newCache;
       });
+      
+      // Show notification for non-deleter users
+      const isDeleter = deletedBy === user?.id;
+      if (!isDeleter) {
+        setNotification({
+          message: `${conversationName || 'A conversation'} was deleted`
+        });
+        setTimeout(() => setNotification(null), 3000);
+      }
       
       // Refresh unread count in header
       if (refreshUnreadCount) refreshUnreadCount();
@@ -954,9 +996,20 @@ export default function MessagesPage() {
         return newCache;
       });
       
-      // Emit socket event to notify other clients (for when backend supports it)
-      if (chatSocket.socket) {
-        chatSocket.socket.emit('conversation:delete', { conversationId: conv._id });
+      // Backend should emit 'conversation:deleted' event to all members automatically
+      // TODO: Remove this test code once backend is emitting proper events
+      if (process.env.NODE_ENV === 'development') {
+        // Simulate backend event for testing
+        setTimeout(() => {
+          console.log('🔔 [SIMULATION] Emitting test conversation:deleted event');
+          if (chatSocket.socket) {
+            chatSocket.socket.emit('conversation:deleted', { 
+              conversationId: conv._id, 
+              deletedBy: user?.id, 
+              conversationName: conv.name 
+            });
+          }
+        }, 100);
       }
       
       // Refresh unread count in header
@@ -1007,9 +1060,16 @@ export default function MessagesPage() {
     // Select the new conversation
     handleSelect(newConversation);
     
-    // Emit socket event to notify other clients (for when backend supports it)
-    if (chatSocket.socket) {
-      chatSocket.socket.emit('conversation:create', newConversation);
+    // Backend should emit 'conversation:created' event to all members automatically
+    // TODO: Remove this test code once backend is emitting proper events
+    if (process.env.NODE_ENV === 'development') {
+      // Simulate backend event for testing
+      setTimeout(() => {
+        console.log('🔔 [SIMULATION] Emitting test conversation:created event');
+        if (chatSocket.socket) {
+          chatSocket.socket.emit('conversation:created', newConversation);
+        }
+      }, 100);
     }
     
     // Refresh unread count in header
@@ -1079,9 +1139,20 @@ export default function MessagesPage() {
       return newCache;
     });
     
-    // Emit socket event to notify other clients (for when backend supports it)
-    if (chatSocket.socket) {
-      chatSocket.socket.emit('conversation:delete', { conversationId });
+    // Backend should emit 'conversation:deleted' event to all members automatically
+    // TODO: Remove this test code once backend is emitting proper events
+    if (process.env.NODE_ENV === 'development') {
+      // Simulate backend event for testing  
+      setTimeout(() => {
+        console.log('🔔 [SIMULATION] Emitting test conversation:deleted event');
+        if (chatSocket.socket) {
+          chatSocket.socket.emit('conversation:deleted', { 
+            conversationId, 
+            deletedBy: user?.id, 
+            conversationName: 'Test Conversation' 
+          });
+        }
+      }, 100);
     }
     
     // Refresh unread count in header
@@ -1133,9 +1204,16 @@ export default function MessagesPage() {
       // Select the new conversation
       handleSelect(newConversation);
       
-      // Emit socket event to notify other clients (for when backend supports it)
-      if (chatSocket.socket) {
-        chatSocket.socket.emit('conversation:create', newConversation);
+      // Backend should emit 'conversation:created' event to all members automatically
+      // TODO: Remove this test code once backend is emitting proper events
+      if (process.env.NODE_ENV === 'development') {
+        // Simulate backend event for testing
+        setTimeout(() => {
+          console.log('🔔 [SIMULATION] Emitting test conversation:created event');
+          if (chatSocket.socket) {
+            chatSocket.socket.emit('conversation:created', newConversation);
+          }
+        }, 100);
       }
       
       // Refresh unread count in header

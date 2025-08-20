@@ -137,6 +137,19 @@ export function ChatSocketProvider({ children }) {
       console.log('🔔 Received chat:read event:', data);
     });
 
+    // Debug: Listen for conversation events
+    s.on('conversation:created', (data) => {
+      console.log('🔔 [DEBUG] Received conversation:created event:', data);
+    });
+    
+    s.on('conversation:deleted', (data) => {
+      console.log('🔔 [DEBUG] Received conversation:deleted event:', data);
+    });
+    
+    s.on('conversation:updated', (data) => {
+      console.log('🔔 [DEBUG] Received conversation:updated event:', data);
+    });
+
     // Message status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
       setMessageStatus(prev => {
