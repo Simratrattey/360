@@ -186,6 +186,9 @@ export default function MessagesPage() {
   const [reactionInProgress, setReactionInProgress] = useState(false);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [starredMessages, setStarredMessages] = useState([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [messageOffset, setMessageOffset] = useState(0);
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('draftMessages');
@@ -390,6 +393,9 @@ export default function MessagesPage() {
     if (!selected?._id) {
       setMessages([]);
       setMessagesLoading(false);
+      setMessageOffset(0);
+      setHasMoreMessages(true);
+      setLoadingMore(false);
       return;
     }
     
@@ -400,16 +406,20 @@ export default function MessagesPage() {
     if (cachedMessages && cachedMessages.length > 0) {
       setMessages(cachedMessages);
       setMessagesLoading(false);
+      setMessageOffset(cachedMessages.length);
+      setHasMoreMessages(cachedMessages.length >= 50); // Assume more if we have full batch
       chatSocket.joinConversation(convId);
     } else {
       // No cache - show loading and fetch from server
       setMessages([]);
       setMessagesLoading(true);
       
-      messageAPI.getMessages(convId)
+      messageAPI.getMessages(convId, { limit: 50 })
         .then(res => {
           const serverMessages = res.data.messages || [];
           setMessages(serverMessages);
+          setMessageOffset(serverMessages.length);
+          setHasMoreMessages(serverMessages.length === 50); // If we got full batch, there might be more
           
           // Update cache if we don't have newer real-time messages
           setMessagesCache(prev => {
@@ -1290,6 +1300,42 @@ export default function MessagesPage() {
     });
   };
 
+  // Load more messages function for infinite scroll
+  const handleLoadMoreMessages = async () => {
+    if (!selected?._id || loadingMore || !hasMoreMessages) return;
+    
+    setLoadingMore(true);
+    
+    try {
+      const response = await messageAPI.getMessages(selected._id, {
+        limit: 50,
+        skip: messageOffset
+      });
+      
+      const olderMessages = response.data.messages || [];
+      
+      if (olderMessages.length > 0) {
+        // Prepend older messages to existing messages
+        setMessages(prev => [...olderMessages, ...prev]);
+        setMessageOffset(prev => prev + olderMessages.length);
+        setHasMoreMessages(olderMessages.length === 50);
+        
+        // Update cache
+        setMessagesCache(prev => ({
+          ...prev,
+          [selected._id]: [...olderMessages, ...(prev[selected._id] || [])]
+        }));
+      } else {
+        setHasMoreMessages(false);
+      }
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+      setHasMoreMessages(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const handleConversationCreated = async (newConversation) => {
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
@@ -1923,6 +1969,9 @@ export default function MessagesPage() {
               onStar={handleStarMessage}
               pinnedMessages={pinnedMessages}
               starredMessages={starredMessages}
+              onLoadMore={handleLoadMoreMessages}
+              hasMoreMessages={hasMoreMessages}
+              loadingMore={loadingMore}
             />
           )}
 

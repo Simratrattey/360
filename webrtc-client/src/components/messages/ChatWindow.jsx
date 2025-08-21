@@ -71,15 +71,109 @@ export default function ChatWindow({
   onStar,
   pinnedMessages = [],
   starredMessages = [],
+  onLoadMore,
+  hasMoreMessages = false,
+  loadingMore = false,
 }) {
   const chatRef = useRef(null);
+  const lastScrollHeight = useRef(0);
+  const isScrollingToBottom = useRef(false);
+  const lastScrollTop = useRef(0);
+  const isUserScrolling = useRef(false);
+  const scrollTimeoutRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
 
+  // Enhanced scroll management with performance optimizations
   useEffect(() => {
-    if (chatRef.current && shouldAutoScroll) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    if (!chatRef.current) return;
+    
+    const chatElement = chatRef.current;
+    const currentScrollHeight = chatElement.scrollHeight;
+    const previousScrollHeight = lastScrollHeight.current;
+    
+    if (shouldAutoScroll && !isUserScrolling.current) {
+      // Smooth scroll to bottom for new messages
+      isScrollingToBottom.current = true;
+      
+      // Use CSS scroll-behavior for smooth native scrolling
+      chatElement.style.scrollBehavior = 'smooth';
+      chatElement.scrollTop = chatElement.scrollHeight;
+      
+      // Reset after scrolling completes
+      setTimeout(() => {
+        if (chatElement) {
+          chatElement.style.scrollBehavior = 'auto';
+        }
+        isScrollingToBottom.current = false;
+      }, 500);
+      
+    } else if (previousScrollHeight > 0 && currentScrollHeight > previousScrollHeight) {
+      // When loading previous messages, maintain scroll position without animation
+      const heightDifference = currentScrollHeight - previousScrollHeight;
+      const currentScrollTop = chatElement.scrollTop;
+      
+      // Use RAF for smooth position update
+      requestAnimationFrame(() => {
+        if (chatElement && !isScrollingToBottom.current) {
+          chatElement.style.scrollBehavior = 'auto';
+          chatElement.scrollTop = currentScrollTop + heightDifference;
+        }
+      });
     }
+    
+    lastScrollHeight.current = currentScrollHeight;
   }, [messages, typing, shouldAutoScroll]);
+  
+  // Enhanced scroll detection with infinite loading
+  useEffect(() => {
+    const chatElement = chatRef.current;
+    if (!chatElement) return;
+    
+    let scrollThrottleTimer = null;
+    
+    const handleScroll = () => {
+      // Throttle scroll events for better performance
+      if (scrollThrottleTimer) return;
+      
+      scrollThrottleTimer = setTimeout(() => {
+        scrollThrottleTimer = null;
+        
+        // Detect if user is actively scrolling
+        isUserScrolling.current = true;
+        
+        // Check for infinite scroll - load more when near top
+        if (chatElement.scrollTop < 100 && hasMoreMessages && !loadingMore && onLoadMore) {
+          console.log('Loading more messages...');
+          onLoadMore();
+        }
+        
+        // Clear existing timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        
+        // Set timeout to detect when scrolling stops
+        scrollTimeoutRef.current = setTimeout(() => {
+          isUserScrolling.current = false;
+        }, 150);
+        
+        lastScrollTop.current = chatElement.scrollTop;
+      }, 16); // ~60fps throttling
+    };
+    
+    // Use passive listeners for better performance
+    chatElement.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      chatElement.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      if (scrollThrottleTimer) {
+        clearTimeout(scrollThrottleTimer);
+      }
+    };
+  }, [hasMoreMessages, loadingMore, onLoadMore]);
 
   const isLoading = loading;
 
@@ -102,14 +196,24 @@ export default function ChatWindow({
   return (
     <div
       ref={chatRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative smooth-scroll"
     >
+      {/* Loading more messages indicator */}
+      {loadingMore && (
+        <div className="flex justify-center py-4">
+          <div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full shadow-md border border-gray-200">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-gray-600 font-medium">Loading older messages...</span>
+          </div>
+        </div>
+      )}
+      
       {isLoading ? (
         <div className="flex h-full items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 w-full">
+        <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 w-full message-container">
           {Object.entries(grouped).map(([date, msgs]) => (
             <div key={date} className="space-y-3 sm:space-y-6">
               {/* Date separator - Modern elegant */}

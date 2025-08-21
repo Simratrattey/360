@@ -570,7 +570,9 @@ function MessageBubble({
   }, [reactionGroups, currentUserId]);
 
   return (
-    <div className={`flex flex-col items-${isOwn ? 'end' : 'start'} mb-2 sm:mb-4 group relative`}>
+    <div 
+      className={`flex flex-col items-${isOwn ? 'end' : 'start'} mb-2 sm:mb-4 group relative message-bubble`}
+    >
       {/* Emoji reactions below the bubble, on opposite side for mobile */}
       {Object.keys(reactionGroups).length > 0 && (
         <div className={`flex flex-wrap items-center gap-1 mt-1 ${isOwn ? 'justify-start sm:justify-end' : 'justify-end sm:justify-start'} order-2`}>
