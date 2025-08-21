@@ -518,10 +518,11 @@ export default function MessagesPage() {
       );
       
       // 4. DELAYED SYNC WITH SERVER (avoid race conditions)
-      setTimeout(() => {
-        fetchConversations();
-        if (refreshUnreadCount) refreshUnreadCount();
-      }, 500);
+      // TEMPORARILY DISABLED to test if this causes duplication
+      // setTimeout(() => {
+      //   fetchConversations();
+      //   if (refreshUnreadCount) refreshUnreadCount();
+      // }, 500);
       
       // 5. BROWSER NOTIFICATION (only for others' messages)
       if (!isMyMessage && window.Notification && Notification.permission === 'granted') {
