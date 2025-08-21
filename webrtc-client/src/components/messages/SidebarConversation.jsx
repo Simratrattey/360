@@ -98,12 +98,12 @@ export default function SidebarConversation({
   
   return (
     <div
-      className={`group relative mx-1 md:mx-2 mb-1 p-3 md:p-4 rounded-xl cursor-pointer transition-all duration-300 ${
+      className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-xl cursor-pointer transition-all duration-300 ${
         conv.isDeleted
-          ? 'bg-red-50/50 border border-red-200 opacity-80'
+          ? 'bg-red-50 bg-opacity-50 border border-red-200 opacity-80'
           : isActive 
             ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
-            : 'hover:bg-white/60 border border-transparent hover:border-gray-200/50 hover:shadow-md backdrop-blur-sm'
+            : 'hover:bg-white hover:bg-opacity-60 border border-transparent hover:border-gray-200 hover:border-opacity-50 hover:shadow-md backdrop-blur-sm'
       }`}
       onClick={onSelect}
     >
@@ -114,15 +114,15 @@ export default function SidebarConversation({
             <img 
               src={conv.avatar} 
               alt={displayName} 
-              className={`h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-md ring-1 ring-white/50 ${conv.isDeleted ? 'grayscale' : ''}`} 
+              className={`h-9 w-9 md:h-10 md:w-10 rounded-full object-cover shadow-md ring-1 ring-white ring-opacity-50 ${conv.isDeleted ? 'grayscale' : ''}`} 
             />
           ) : (
-            <div className={`h-10 w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-md ${
+            <div className={`h-9 w-9 md:h-10 md:w-10 rounded-full flex items-center justify-center text-white font-medium text-xs shadow-md ${
               conv.isDeleted 
                 ? 'bg-gray-400' 
                 : `bg-gradient-to-br ${typeConfig.gradient}`
             }`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-4 w-4 md:h-5 md:w-5" />}
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-3 w-3 md:h-4 md:w-4" />}
             </div>
           )}
           
@@ -151,7 +151,7 @@ export default function SidebarConversation({
         {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className={`font-semibold truncate text-sm md:text-base flex items-center ${
+            <h3 className={`font-medium truncate text-xs md:text-sm flex items-center ${
               conv.isDeleted 
                 ? 'text-gray-500 line-through' 
                 : isActive 
@@ -161,28 +161,28 @@ export default function SidebarConversation({
               {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
               {/* Unread badge */}
               {conv?.unread > 0 && !conv.isDeleted && (
-                <span className="ml-2 inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] px-1 shadow-sm">
+                <span className="ml-1.5 inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[16px] h-[16px] px-1 shadow-sm">
                   {conv.unread > 99 ? '99+' : conv.unread}
                 </span>
               )}
               {/* Deleted indicator */}
               {conv.isDeleted && (
-                <span className="ml-2 inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-2 py-0.5 shadow-sm">
+                <span className="ml-1.5 inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-1.5 py-0.5 shadow-sm">
                   Deleted
                 </span>
               )}
             </h3>
-            {/* Last message preview - Modern minimalist */}
+            {/* Last message preview - Compact */}
             {conv?.lastMessage && (
-              <div className="mt-1">
-                <p className="text-xs md:text-sm text-gray-500 truncate">
+              <div className="mt-0.5">
+                <p className="text-xs text-gray-500 truncate">
                   {/* Sender name for groups */}
                   {conv.type !== 'dm' && conv.lastMessage.senderName && (
                     <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
                   )}
                   {conv.lastMessage.text ? (
-                    conv.lastMessage.text.length > 35 ? 
-                      conv.lastMessage.text.substring(0, 35) + '...' : 
+                    conv.lastMessage.text.length > 40 ? 
+                      conv.lastMessage.text.substring(0, 40) + '...' : 
                       conv.lastMessage.text
                   ) : conv.lastMessage.file ? (
                     <span className="italic flex items-center">
@@ -205,18 +205,18 @@ export default function SidebarConversation({
             )}
           </div>
           <div className="flex items-center space-x-0.5 ml-1">
-            {/* Star button - Smaller */}
+            {/* Star button - Compact */}
             <button 
               onClick={e => { e.stopPropagation(); onStar(); }} 
-              className={`p-0.5 md:p-1 rounded-full transition-all duration-200 ${
+              className={`p-1 rounded-full transition-all duration-200 ${
                 starred 
                   ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' 
                   : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'
               }`}
             >
-              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-3.5 md:w-3.5" />
+              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3" />
             </button>
-            {/* Delete/Dismiss button - Different behavior for deleted conversations */}
+            {/* Delete/Dismiss button - Compact */}
             {(canDelete || conv.isDeleted) && (
               <button 
                 onClick={e => { 
@@ -229,14 +229,14 @@ export default function SidebarConversation({
                     setShowDeleteConfirm(true);
                   }
                 }} 
-                className={`p-0.5 md:p-1 rounded-full transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-110 ${
+                className={`p-1 rounded-full transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-105 ${
                   conv.isDeleted 
                     ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50 active:bg-orange-100' 
                     : 'text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100'
                 }`}
                 title={conv.isDeleted ? "Dismiss deleted conversation" : "Delete conversation"}
               >
-                <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
+                <Trash2 className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -248,83 +248,46 @@ export default function SidebarConversation({
         <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
-      {/* Enhanced delete confirmation modal with fixed UI */}
       {showDeleteConfirm && (
-        <>
-          {/* Backdrop - Higher z-index */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+            className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
             onClick={() => setShowDeleteConfirm(false)}
           />
-          {/* Modal - Highest z-index */}
-          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 pointer-events-none">
-            <div 
-              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 pointer-events-auto transform transition-all duration-300 scale-100 opacity-100 border border-gray-200"
-              style={{
-                animation: 'modalSlideIn 0.3s ease-out',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-              }}
-            >
-              <div className="flex flex-col items-center text-center">
-                {/* Icon */}
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                  <Trash2 className="h-8 w-8 text-red-500" />
-                </div>
-                
-                {/* Title */}
-                <h3 className="text-lg font-bold mb-2 text-gray-900">
-                  Delete Conversation?
-                </h3>
-                
-                {/* Description */}
-                <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                  Are you sure you want to delete{' '}
-                  <span className="font-semibold text-gray-800">
-                    {displayName}
-                  </span>
-                  ? This action cannot be undone and all messages will be permanently lost.
-                </p>
-                
-                {/* Buttons */}
-                <div className="flex gap-3 w-full">
-                  <button
-                    className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-600 active:bg-red-700 shadow-lg hover:shadow-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(false); 
-                      onDelete(); 
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
+          <div 
+            className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <Trash2 className="h-6 w-6 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2 text-gray-900">
+                Delete Conversation?
+              </h3>
+              <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                Delete conversation with <span className="font-medium text-gray-800">{displayName}</span>? This cannot be undone.
+              </p>
+              <div className="flex gap-3 w-full">
+                <button
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors duration-150"
+                  onClick={() => setShowDeleteConfirm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 shadow-md hover:shadow-lg transition-all duration-150"
+                  onClick={() => {
+                    setShowDeleteConfirm(false); 
+                    onDelete(); 
+                  }}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           </div>
-          
-          {/* CSS for modal animation */}
-          <style jsx>{`
-            @keyframes modalSlideIn {
-              from {
-                opacity: 0;
-                transform: scale(0.9) translateY(-10px);
-              }
-              to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-              }
-            }
-          `}</style>
-        </>
+        </div>
       )}
     </div>
   );

@@ -556,44 +556,6 @@ function MessageBubble({
         </div>
       )}
       <div className={`flex ${isOwn ? 'justify-end sm:justify-end' : 'justify-start sm:justify-start'} w-full relative`}>
-        {/* Reactions button outside bubble - right side for other users */}
-        {!isOwn && (
-          <div className="hidden sm:flex items-center ml-2">
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId);
-              }}
-              className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
-              tabIndex={-1}
-              data-emoji-trigger="true"
-            >
-              <Smile className="h-5 w-5 text-gray-400" />
-            </button>
-            {showEmojiPicker === messageId && (
-              <div className="emoji-picker absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
-                {emojiList.map(emoji => {
-                  const userHasThisReaction = hasUserReacted(emoji);
-                  return (
-                    <button
-                      key={emoji}
-                      className={`text-base sm:text-xl cursor-pointer hover:scale-110 transition-all duration-200 p-1 sm:p-1.5 rounded-lg ${
-                        userHasThisReaction 
-                          ? 'bg-blue-100 border-2 border-blue-300' 
-                          : 'hover:bg-gray-100'
-                      }`}
-                      onClick={(e) => handleReactionClick(emoji, e)}
-                      title={userHasThisReaction ? 'Remove reaction' : 'Add reaction'}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
         <div className={`max-w-[75%] sm:max-w-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-2xl relative shadow-sm ${
           isOwn
             ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
@@ -769,6 +731,7 @@ function MessageBubble({
             </>
           )}
         </div>
+        
         {/* Reactions button for own messages - left side */}
         {isOwn && (
           <div className="hidden sm:flex items-center mr-2 order-first">
@@ -786,6 +749,45 @@ function MessageBubble({
             </button>
             {showEmojiPicker === messageId && (
               <div className="emoji-picker absolute left-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-2 sm:p-3 flex flex-wrap gap-1 sm:gap-2 mb-2 min-w-[180px] sm:min-w-[220px] animate-in fade-in duration-200">
+                {emojiList.map(emoji => {
+                  const userHasThisReaction = hasUserReacted(emoji);
+                  return (
+                    <button
+                      key={emoji}
+                      className={`text-base sm:text-xl cursor-pointer hover:scale-110 transition-all duration-200 p-1 sm:p-1.5 rounded-lg ${
+                        userHasThisReaction 
+                          ? 'bg-blue-100 border-2 border-blue-300' 
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={(e) => handleReactionClick(emoji, e)}
+                      title={userHasThisReaction ? 'Remove reaction' : 'Add reaction'}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Reactions button for received messages - right side */}
+        {!isOwn && (
+          <div className="hidden sm:flex items-center ml-2">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowEmojiPicker(showEmojiPicker === messageId ? false : messageId);
+              }}
+              className={`p-1 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100 hover:bg-gray-100 focus:opacity-100 focus:bg-gray-100`}
+              tabIndex={-1}
+              data-emoji-trigger="true"
+            >
+              <Smile className="h-5 w-5 text-gray-400" />
+            </button>
+            {showEmojiPicker === messageId && (
+              <div className="emoji-picker absolute right-0 bottom-full z-20 bg-white border border-gray-200 rounded-xl shadow-xl p-3 flex flex-wrap gap-2 mb-2 min-w-[220px] animate-in fade-in duration-200">
                 {emojiList.map(emoji => {
                   const userHasThisReaction = hasUserReacted(emoji);
                   return (
