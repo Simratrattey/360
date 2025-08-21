@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
 import DOMPurify from 'dompurify';
@@ -55,7 +56,9 @@ function MessageBubble({
   // Click outside handler to close dropdown and emoji picker
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      // Check if click is outside dropdown (accounting for portal)
+      if (showDropdown && dropdownRef.current && !dropdownRef.current.contains(event.target) && 
+          dropdownButtonRef.current && !dropdownButtonRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
       
@@ -76,12 +79,12 @@ function MessageBubble({
     };
   }, [showDropdown, showEmojiPicker, messageId, setShowEmojiPicker]);
 
-  // Calculate position when dropdown opens (disabled for now)
-  // useEffect(() => {
-  //   if (showDropdown && dropdownButtonRef.current) {
-  //     calculateDropdownPosition();
-  //   }
-  // }, [showDropdown]);
+  // Calculate position when dropdown opens
+  useEffect(() => {
+    if (showDropdown && dropdownButtonRef.current) {
+      calculateDropdownPosition();
+    }
+  }, [showDropdown]);
 
   // Reset image states when message changes
   useEffect(() => {
@@ -780,8 +783,12 @@ function MessageBubble({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('Dropdown button clicked, current showDropdown:', showDropdown);
-                      setShowDropdown(!showDropdown);
+                      if (!showDropdown) {
+                        calculateDropdownPosition();
+                        setShowDropdown(true);
+                      } else {
+                        setShowDropdown(false);
+                      }
                     }}
                     title="More options"
                   >
@@ -789,8 +796,15 @@ function MessageBubble({
                   </button>
                   
                   {/* Enhanced dropdown menu with modern messaging features */}
-                  {showDropdown && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px] max-w-[200px] animate-in fade-in duration-200 backdrop-blur-sm max-h-80 overflow-y-auto">
+                  {showDropdown && createPortal(
+                    <div 
+                      className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px] max-w-[200px] animate-in fade-in duration-200 backdrop-blur-sm max-h-80 overflow-y-auto"
+                      style={{
+                        top: `${dropdownPosition.top}px`,
+                        left: `${dropdownPosition.left}px`,
+                      }}
+                      ref={dropdownRef}
+                    >
                       {/* Reply option - available for all messages */}
                       <button 
                         className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
@@ -894,7 +908,8 @@ function MessageBubble({
                           <span className="font-medium">Delete</span>
                         </button>
                       )}
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               </div>
