@@ -309,10 +309,42 @@ export default function MessagesPage() {
         return dateB - dateA;
       };
       
+      // COMPREHENSIVE DUPLICATE REMOVAL: Clean duplicates from API data
+      const deduplicateConversations = (conversations) => {
+        const idMap = new Map();
+        const nameMap = new Map();
+        
+        return conversations.filter((conv, index) => {
+          // Remove ID duplicates
+          if (idMap.has(conv._id)) {
+            console.log(`🧹 API DEDUP: Removing ID duplicate ${conv._id} (${conv.name}) at index ${index}`);
+            return false;
+          }
+          idMap.set(conv._id, true);
+          
+          // Remove name duplicates for communities
+          if (conv.type === 'community' && conv.name) {
+            if (nameMap.has(conv.name)) {
+              console.log(`🧹 API DEDUP: Removing name duplicate ${conv._id} (${conv.name}) at index ${index}`);
+              return false;
+            }
+            nameMap.set(conv.name, true);
+          }
+          
+          return true;
+        });
+      };
+      
+      const dmConversations = deduplicateConversations(conversations.filter(c => c.type === 'dm')).sort(sortByLastMessage);
+      const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
+      const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
+      
+      console.log(`🧹 API DEDUP: Final counts - DMs: ${dmConversations.length}, Groups: ${groupConversations.length}, Communities: ${communityConversations.length}`);
+      
       const newSections = [
-        { section: 'Direct Messages', icon: User, items: conversations.filter(c => c.type === 'dm').sort(sortByLastMessage) },
-        { section: 'Groups', icon: Users, items: conversations.filter(c => c.type === 'group').sort(sortByLastMessage) },
-        { section: 'Communities', icon: Hash, items: conversations.filter(c => c.type === 'community').sort(sortByLastMessage) },
+        { section: 'Direct Messages', icon: User, items: dmConversations },
+        { section: 'Groups', icon: Users, items: groupConversations },
+        { section: 'Communities', icon: Hash, items: communityConversations },
       ];
       
       console.log(`🌐 FETCH [${newCount}]: Setting new sections:`, newSections.map(section => ({
@@ -1271,32 +1303,67 @@ export default function MessagesPage() {
         console.log(`📊 LOCAL: Current items in ${sectionName} before addition:`, 
           newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
         
-        // Enhanced duplicate check - check by ID AND by name for communities
-        const existingIndex = newSections[sectionIndex].items.findIndex(item => {
-          if (item._id === newConversation._id) return true;
-          // For communities, also check by name to prevent name-based duplicates
-          if (newConversation.type === 'community' && item.name === newConversation.name) {
-            console.warn(`🔔 LOCAL: Found community with same name: ${item.name}, potential duplicate`);
-            return true;
+        // COMPREHENSIVE DUPLICATE REMOVAL: Always clean existing duplicates first
+        console.log(`🧹 DEDUPLICATING: Cleaning existing duplicates in ${sectionName} section`);
+        
+        // Step 1: Remove all existing duplicates from the section
+        const idMap = new Map();
+        const nameMap = new Map();
+        
+        const cleanedItems = newSections[sectionIndex].items.filter((item, index) => {
+          // Track ID duplicates
+          if (idMap.has(item._id)) {
+            console.log(`🧹 REMOVING ID DUPLICATE: ${item._id} (${item.name}) at index ${index}`);
+            return false;
           }
-          return false;
+          idMap.set(item._id, true);
+          
+          // Track name duplicates for communities
+          if (item.type === 'community' && item.name) {
+            if (nameMap.has(item.name)) {
+              console.log(`🧹 REMOVING NAME DUPLICATE: ${item._id} (${item.name}) at index ${index}`);
+              return false;
+            }
+            nameMap.set(item.name, true);
+          }
+          
+          return true;
         });
         
-        console.log(`📊 LOCAL: Duplicate check result - existingIndex: ${existingIndex}`);
+        console.log(`📊 LOCAL: After cleaning, ${sectionName} has ${cleanedItems.length} items (removed ${newSections[sectionIndex].items.length - cleanedItems.length} duplicates)`);
         
-        if (existingIndex === -1) {
+        // Step 2: Check if new conversation would be a duplicate
+        const wouldBeDuplicateId = idMap.has(newConversation._id);
+        const wouldBeDuplicateName = newConversation.type === 'community' && newConversation.name && nameMap.has(newConversation.name);
+        
+        console.log(`📊 LOCAL: New conversation duplicate check - ID: ${wouldBeDuplicateId}, Name: ${wouldBeDuplicateName}`);
+        
+        if (!wouldBeDuplicateId && !wouldBeDuplicateName) {
           console.log(`🔔 LOCAL: Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
-          // Create new items array to avoid mutation
+          
+          // Create new items array with forced React re-render triggers
+          const newConversationWithTimestamp = {
+            ...newConversation,
+            _lastUpdated: Date.now(),
+            _forceRender: Math.random()
+          };
+          
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
-            items: [newConversation, ...newSections[sectionIndex].items]
+            items: [newConversationWithTimestamp, ...cleanedItems],
+            _lastUpdated: Date.now() // Force section re-render
           };
           
           // LOG THE STATE AFTER ADDITION
           console.log(`📊 LOCAL: After addition, ${sectionName} section has ${newSections[sectionIndex].items.length} items:`, 
             newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
         } else {
-          console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
+          console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) would be duplicate in ${sectionName}, using cleaned items only`);
+          newSections[sectionIndex] = {
+            ...newSections[sectionIndex],
+            items: cleanedItems,
+            _lastUpdated: Date.now() // Force section re-render
+          };
         }
       }
       
@@ -1659,10 +1726,10 @@ export default function MessagesPage() {
                       <section.icon className="h-3 w-3 mr-2" />
                       {section.section}
                     </div>
-                    {section.items.map(conv => {
+                    {section.items.map((conv, index) => {
                       return (
                         <SidebarConversation
-                          key={conv._id}
+                          key={`${conv._id}-${conv.name}-${index}-${conv._lastUpdated || 0}`}
                           conv={conv}
                           isActive={selected && selected._id === conv._id}
                           onSelect={() => handleSelect(conv)}
