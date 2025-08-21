@@ -15,18 +15,18 @@ function isSystemMessage(msg) {
   
   // Check common system message text patterns
   if (msg.text) {
-    const systemPatterns = [
-      /was created/i,
-      /was added/i,
-      /was removed/i,
-      /joined the/i,
-      /left the/i,
-      /no longer exists/i,
-      /created this group/i,
-      /added.*to.*group/i
+    const text = msg.text.toLowerCase();
+    const systemKeywords = [
+      'was created',
+      'was added', 
+      'was removed',
+      'joined the',
+      'left the',
+      'no longer exists',
+      'created this group'
     ];
     
-    return systemPatterns.some(pattern => pattern.test(msg.text));
+    return systemKeywords.some(keyword => text.includes(keyword));
   }
   
   return false;
@@ -44,10 +44,6 @@ function groupMessagesByDate(messages) {
 
 export default function ChatWindow({
   messages = [],
-  /**
-   * Indicates whether the parent component is currently fetching messages.
-   * When true, a spinner will be rendered instead of the message list.
-   */
   loading = false,
   currentUserId,
   conversationType,
@@ -67,35 +63,26 @@ export default function ChatWindow({
   typing = {},
   messageStatus,
   onlineUsers = [],
-  /**
-   * Controls whether to auto-scroll to bottom. Set to false when edit/reply actions are active.
-   */
   shouldAutoScroll = true,
-  // Search functionality
   searchResults = [],
   currentSearchResult = 0,
   searchFilters = null,
 }) {
-  // Ref used to scroll to bottom on new messages
   const chatRef = useRef(null);
-  // Group messages by date; safe to pass an empty array
   const grouped = groupMessagesByDate(messages);
 
-  // Scroll to bottom whenever messages or typing users change, but only if shouldAutoScroll is true
   useEffect(() => {
     if (chatRef.current && shouldAutoScroll) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [messages, typing, shouldAutoScroll]);
 
-  // Use the passed-in loading prop to determine if messages are being fetched
   const isLoading = loading;
 
-  // Determine typing users excluding the current user
   const typingUsers = Object.keys(typing || {}).filter(
     userId => typing[userId] && userId !== currentUserId,
   );
-  // Resolve user names for typing indicator; handle onlineUsers as Map or Array
+  
   const typingNames = typingUsers
     .map(uid => {
       let user = null;
@@ -129,39 +116,38 @@ export default function ChatWindow({
               </div>
               <div className="space-y-2 sm:space-y-4">
                 {msgs.map((msg, index) => {
-                  // Use utility function for system message detection
                   const isSystemMsg = isSystemMessage(msg);
                   
-                  // Debug logging for system message detection
                   if (isSystemMsg) {
                     console.log('🔔 Detected system message:', {
                       type: msg.type,
                       isSystemMessage: msg.isSystemMessage,
                       senderId: msg.senderId,
                       sender: msg.sender,
-                      text: msg.text,
-                      fullMessage: msg
+                      text: msg.text
                     });
                   }
                   
-                  // Check if this message is a search result
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
                   const isCurrentSearchResult = searchResults.length > 0 && 
                     searchResults[currentSearchResult]?._id === msg._id;
                   
-                  // Render system notifications differently
                   if (isSystemMsg) {
+                    const isDeletionNotice = msg.isDeletionNotice || (msg.text && msg.text.includes('no longer exists'));
+                    
                     return (
                       <div 
                         key={msg._id || msg.id}
                         id={`message-${msg._id || msg.id}`}
                         className="flex justify-center my-4"
                       >
-                        <div className={`px-3 py-1.5 rounded-lg text-xs font-normal max-w-xs text-center ${
-                          msg.isDeletionNotice || (msg.text && msg.text.includes('no longer exists'))
-                            ? 'bg-red-100/70 text-red-700' 
-                            : 'bg-yellow-100/70 text-yellow-800'
-                        }`}>
+                        <div 
+                          className={`px-3 py-1.5 rounded-lg text-xs font-normal max-w-xs text-center ${
+                            isDeletionNotice
+                              ? 'bg-red-100 bg-opacity-70 text-red-700' 
+                              : 'bg-yellow-100 bg-opacity-70 text-yellow-800'
+                          }`}
+                        >
                           {msg.text}
                         </div>
                       </div>
@@ -209,7 +195,7 @@ export default function ChatWindow({
                       />
                     </div>
                   );
-                })
+                })}
               </div>
             </div>
           ))}
