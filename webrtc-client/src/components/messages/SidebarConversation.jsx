@@ -98,12 +98,12 @@ export default function SidebarConversation({
   
   return (
     <div
-      className={`group relative mx-0 mb-0 p-3 cursor-pointer transition-all duration-200 border-b border-gray-100 last:border-b-0 ${
+      className={`group relative mx-1 md:mx-2 mb-1 p-3 md:p-4 rounded-xl cursor-pointer transition-all duration-300 ${
         conv.isDeleted
-          ? 'bg-red-50 opacity-75'
+          ? 'bg-red-50/50 border border-red-200 opacity-80'
           : isActive 
-            ? 'bg-green-50 border-l-4 border-l-green-500' 
-            : 'hover:bg-gray-50 active:bg-gray-100'
+            ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
+            : 'hover:bg-white/60 border border-transparent hover:border-gray-200/50 hover:shadow-md backdrop-blur-sm'
       }`}
       onClick={onSelect}
     >
@@ -114,36 +114,36 @@ export default function SidebarConversation({
             <img 
               src={conv.avatar} 
               alt={displayName} 
-              className={`h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-lg ${conv.isDeleted ? 'grayscale' : ''}`} 
+              className={`h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-md ring-1 ring-white/50 ${conv.isDeleted ? 'grayscale' : ''}`} 
             />
           ) : (
-            <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg ring-2 ring-white ${
+            <div className={`h-10 w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-md ${
               conv.isDeleted 
                 ? 'bg-gray-400' 
                 : `bg-gradient-to-br ${typeConfig.gradient}`
             }`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-5 w-5" />}
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-4 w-4 md:h-5 md:w-5" />}
             </div>
           )}
           
           {/* Online status indicator for DMs */}
           {conv.type === 'dm' && otherUser && onlineUsers.has && onlineUsers.has(otherUser._id) && (
-            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-white shadow-sm" />
+            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
           )}
           
           {/* Type indicator for groups/communities */}
           {conv.type !== 'dm' && (
-            <div className={`absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
-              <typeConfig.icon className="h-2.5 w-2.5 text-white" />
+            <div className={`absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-sm`}>
+              <typeConfig.icon className="h-2 w-2 text-white" />
             </div>
           )}
 
-          {/* Unread indicator - WhatsApp style */}
+          {/* Unread indicator - Modern minimalist */}
           {conv?.unread > 0 && (
-            <span className="absolute -top-1 -left-1 h-5 w-5 rounded-full bg-green-500 border-2 border-white shadow-lg z-10 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">
-                {conv.unread > 9 ? '9+' : conv.unread}
-              </span>
+            <span className="absolute -top-1 -left-1 h-4 w-4 rounded-full bg-blue-500 border-2 border-white shadow-sm z-10 flex items-center justify-center">
+              {conv.unread > 9 && (
+                <span className="text-xs font-bold text-white">9+</span>
+              )}
             </span>
           )}
         </div>
@@ -151,45 +151,41 @@ export default function SidebarConversation({
         {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between min-w-0">
-              <h3 className={`font-medium truncate text-base ${
-                conv.isDeleted 
-                  ? 'text-gray-500 line-through' 
-                  : isActive 
-                    ? 'text-gray-900' 
-                    : 'text-gray-900'
-              }`}>
-                {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
-              </h3>
-              
-              {/* Timestamp - WhatsApp style */}
-              {conv.lastMessageAt && (
-                <span className={`text-xs ml-2 flex-shrink-0 ${
-                  conv?.unread > 0 ? 'text-green-600 font-medium' : 'text-gray-500'
-                }`}>
-                  {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
-                    ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                  }
+            <h3 className={`font-semibold truncate text-sm md:text-base flex items-center ${
+              conv.isDeleted 
+                ? 'text-gray-500 line-through' 
+                : isActive 
+                  ? 'text-gray-900' 
+                  : 'text-gray-800'
+            }`}>
+              {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
+              {/* Unread badge */}
+              {conv?.unread > 0 && !conv.isDeleted && (
+                <span className="ml-2 inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] px-1 shadow-sm">
+                  {conv.unread > 99 ? '99+' : conv.unread}
                 </span>
               )}
-            </div>
-            {/* Last message preview - WhatsApp style */}
+              {/* Deleted indicator */}
+              {conv.isDeleted && (
+                <span className="ml-2 inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-2 py-0.5 shadow-sm">
+                  Deleted
+                </span>
+              )}
+            </h3>
+            {/* Last message preview - Modern minimalist */}
             {conv?.lastMessage && (
-              <div className="mt-1 flex items-center justify-between">
-                <p className={`text-sm truncate flex-1 pr-2 ${
-                  conv?.unread > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'
-                }`}>
+              <div className="mt-1">
+                <p className="text-xs md:text-sm text-gray-500 truncate">
                   {/* Sender name for groups */}
                   {conv.type !== 'dm' && conv.lastMessage.senderName && (
-                    <span className="text-green-600 font-medium">{conv.lastMessage.senderName}: </span>
+                    <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
                   )}
                   {conv.lastMessage.text ? (
-                    conv.lastMessage.text.length > 30 ? 
-                      conv.lastMessage.text.substring(0, 30) + '...' : 
+                    conv.lastMessage.text.length > 35 ? 
+                      conv.lastMessage.text.substring(0, 35) + '...' : 
                       conv.lastMessage.text
                   ) : conv.lastMessage.file ? (
-                    <span className="flex items-center">
+                    <span className="italic flex items-center">
                       <span className="mr-1">📎</span>
                       {conv.lastMessage.file.name || 'File'}
                     </span>
@@ -197,39 +193,13 @@ export default function SidebarConversation({
                     <span className="italic">No messages yet</span>
                   )}
                 </p>
-                
-                {/* Unread count badge */}
-                {conv?.unread > 0 && !conv.isDeleted && (
-                  <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 shadow-sm ml-2">
-                    {conv.unread > 99 ? '99+' : conv.unread}
-                  </span>
-                )}
-                
-                {/* Check marks for message status */}
-                {conv.lastMessage && conv.lastMessage.senderId === currentUserId && (
-                  <div className="ml-1 flex-shrink-0">
-                    {conv.lastMessage.status === 'read' ? (
-                      <div className="text-blue-500">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                          <path d="M12.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-1-1a1 1 0 011.414-1.414l.293.293 7.293-7.293a1 1 0 011.414 0z"/>
-                        </svg>
-                      </div>
-                    ) : conv.lastMessage.status === 'delivered' ? (
-                      <div className="text-gray-400">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                          <path d="M12.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-1-1a1 1 0 011.414-1.414l.293.293 7.293-7.293a1 1 0 011.414 0z"/>
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="text-gray-300">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                        </svg>
-                      </div>
-                    )}
-                  </div>
+                {conv.lastMessageAt && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
+                      ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                    }
+                  </p>
                 )}
               </div>
             )}
