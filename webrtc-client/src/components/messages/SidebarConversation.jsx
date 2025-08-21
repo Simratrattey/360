@@ -232,43 +232,82 @@ export default function SidebarConversation({
         <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
-      {/* Enhanced delete confirmation dialog with better UX */}
+      {/* Enhanced delete confirmation modal with fixed UI */}
       {showDeleteConfirm && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in-0 duration-200"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowDeleteConfirm(false);
-            }
-          }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-sm w-full flex flex-col items-center animate-in zoom-in-95 fade-in-0 duration-200">
-            <div className="w-12 h-12 md:w-16 md:h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <Trash2 className="h-6 w-6 md:h-8 md:w-8 text-red-500" />
-            </div>
-            <h3 className="text-base md:text-lg font-bold mb-2 text-gray-900 text-center">Delete Conversation?</h3>
-            <p className="text-sm md:text-base text-gray-600 mb-6 text-center leading-relaxed">
-              Are you sure you want to delete <span className="font-semibold text-gray-800">{displayName}</span>? This action cannot be undone and all messages will be permanently lost.
-            </p>
-            <div className="flex gap-3 md:gap-4 w-full">
-              <button
-                className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 font-medium text-sm md:text-base transition-colors duration-150"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 active:from-red-700 active:to-pink-700 shadow-lg hover:shadow-xl transition-all duration-150 text-sm md:text-base"
-                onClick={() => { 
-                  setShowDeleteConfirm(false); 
-                  onDelete(); 
-                }}
-              >
-                Delete
-              </button>
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm transition-opacity duration-200"
+            onClick={() => setShowDeleteConfirm(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 pointer-events-none">
+            <div 
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 pointer-events-auto transform transition-all duration-200 scale-100 opacity-100"
+              style={{
+                animation: 'modalSlideIn 0.2s ease-out'
+              }}
+            >
+              <div className="flex flex-col items-center text-center">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                  <Trash2 className="h-8 w-8 text-red-500" />
+                </div>
+                
+                {/* Title */}
+                <h3 className="text-lg font-bold mb-2 text-gray-900">
+                  Delete Conversation?
+                </h3>
+                
+                {/* Description */}
+                <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                  Are you sure you want to delete{' '}
+                  <span className="font-semibold text-gray-800">
+                    {displayName}
+                  </span>
+                  ? This action cannot be undone and all messages will be permanently lost.
+                </p>
+                
+                {/* Buttons */}
+                <div className="flex gap-3 w-full">
+                  <button
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300 font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteConfirm(false);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 text-white font-semibold hover:bg-red-600 active:bg-red-700 shadow-lg hover:shadow-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteConfirm(false); 
+                      onDelete(); 
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+          
+          {/* CSS for modal animation */}
+          <style jsx>{`
+            @keyframes modalSlideIn {
+              from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-10px);
+              }
+              to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+              }
+            }
+          `}</style>
+        </>
       )}
     </div>
   );

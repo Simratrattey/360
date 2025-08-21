@@ -1,6 +1,37 @@
 import React, { useEffect, useRef } from 'react';
 import MessageBubble from './MessageBubble';
 
+// Utility function to detect system messages
+function isSystemMessage(msg) {
+  // Check explicit system message properties
+  if (msg.type === 'system' || msg.isSystemMessage === true || msg.senderId === 'system') {
+    return true;
+  }
+  
+  // Check if sender is system (various formats)
+  if (msg.sender === 'system' || (msg.sender && msg.sender._id === 'system')) {
+    return true;
+  }
+  
+  // Check common system message text patterns
+  if (msg.text) {
+    const systemPatterns = [
+      /was created/i,
+      /was added/i,
+      /was removed/i,
+      /joined the/i,
+      /left the/i,
+      /no longer exists/i,
+      /created this group/i,
+      /added.*to.*group/i
+    ];
+    
+    return systemPatterns.some(pattern => pattern.test(msg.text));
+  }
+  
+  return false;
+}
+
 function groupMessagesByDate(messages) {
   if (!messages || !Array.isArray(messages)) return {};
   return messages.reduce((acc, msg) => {
@@ -98,8 +129,20 @@ export default function ChatWindow({
               </div>
               <div className="space-y-2 sm:space-y-4">
                 {msgs.map((msg, index) => {
-                  // Check if this is a system message
-                  const isSystemMessage = msg.type === 'system' || msg.isSystemMessage || msg.senderId === 'system';
+                  // Use utility function for system message detection
+                  const isSystemMsg = isSystemMessage(msg);
+                  
+                  // Debug logging for system message detection
+                  if (isSystemMsg) {
+                    console.log('🔔 Detected system message:', {
+                      type: msg.type,
+                      isSystemMessage: msg.isSystemMessage,
+                      senderId: msg.senderId,
+                      sender: msg.sender,
+                      text: msg.text,
+                      fullMessage: msg
+                    });
+                  }
                   
                   // Check if this message is a search result
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
@@ -107,17 +150,17 @@ export default function ChatWindow({
                     searchResults[currentSearchResult]?._id === msg._id;
                   
                   // Render system notifications differently
-                  if (isSystemMessage) {
+                  if (isSystemMsg) {
                     return (
                       <div 
                         key={msg._id || msg.id}
                         id={`message-${msg._id || msg.id}`}
                         className="flex justify-center my-4"
                       >
-                        <div className={`px-4 py-2 rounded-full text-sm font-medium shadow-sm border max-w-md text-center ${
-                          msg.isDeletionNotice 
-                            ? 'bg-red-50 text-red-700 border-red-200' 
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        <div className={`px-3 py-1.5 rounded-lg text-xs font-normal max-w-xs text-center ${
+                          msg.isDeletionNotice || (msg.text && msg.text.includes('no longer exists'))
+                            ? 'bg-red-100/70 text-red-700' 
+                            : 'bg-yellow-100/70 text-yellow-800'
                         }`}>
                           {msg.text}
                         </div>
