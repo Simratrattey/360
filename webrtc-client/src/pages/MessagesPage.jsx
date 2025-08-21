@@ -1226,15 +1226,18 @@ export default function MessagesPage() {
   };
 
   // Client-side search fallback function
-  const performClientSideSearch = (searchQuery, searchFilters) => {
-    if (!messages || !searchQuery) return [];
+  const performClientSideSearch = (searchQuery, searchFilters = {}) => {
+    if (!messages || !searchQuery || !Array.isArray(messages)) return [];
     
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return [];
     
     return messages.filter(msg => {
-      // Basic text search
-      const textMatch = msg.text && msg.text.toLowerCase().includes(query);
-      const fileNameMatch = msg.file && msg.file.name && msg.file.name.toLowerCase().includes(query);
+      if (!msg) return false;
+      
+      // Basic text search - more robust
+      const textMatch = msg.text && typeof msg.text === 'string' && msg.text.toLowerCase().includes(query);
+      const fileNameMatch = msg.file && msg.file.name && typeof msg.file.name === 'string' && msg.file.name.toLowerCase().includes(query);
       
       if (!textMatch && !fileNameMatch) return false;
       
@@ -1245,19 +1248,34 @@ export default function MessagesPage() {
         if (searchFilters.type === 'image' && (!msg.file || !msg.file.type?.startsWith('image/'))) return false;
       }
       
-      // Filter by sender
+      // Filter by sender - more robust
       if (searchFilters.sender && searchFilters.sender !== 'all') {
-        const senderId = msg.senderId || (typeof msg.sender === 'string' ? msg.sender : msg.sender?._id);
+        let senderId = null;
+        
+        // Handle different sender ID formats
+        if (msg.senderId) {
+          senderId = msg.senderId;
+        } else if (typeof msg.sender === 'string') {
+          senderId = msg.sender;
+        } else if (msg.sender && typeof msg.sender === 'object' && msg.sender._id) {
+          senderId = msg.sender._id;
+        }
+        
         if (searchFilters.sender === 'me') {
-          if (senderId !== user?.id) return false;
+          if (!user?.id || senderId !== user.id) return false;
         } else if (senderId !== searchFilters.sender) {
           return false;
         }
       }
       
-      // Filter by date range
+      // Filter by date range - safer date handling
       if (searchFilters.dateRange && searchFilters.dateRange !== 'all') {
-        const msgDate = new Date(msg.createdAt || msg.timestamp);
+        const timestamp = msg.createdAt || msg.timestamp;
+        if (!timestamp) return true; // Don't filter if no timestamp
+        
+        const msgDate = new Date(timestamp);
+        if (isNaN(msgDate.getTime())) return true; // Don't filter if invalid date
+        
         const now = new Date();
         
         switch (searchFilters.dateRange) {
@@ -1656,8 +1674,10 @@ export default function MessagesPage() {
         }
       }
       
-      console.log('Search params:', searchParams);
-      const response = await messageAPI.searchMessages(selected._id, searchParams);
+      // For now, skip API and go directly to client-side search due to server issues
+      // When API is fixed, replace this with:
+      // const response = await messageAPI.searchMessages(selected._id, searchParams);
+      throw new Error('Using client-side search');
       
       const results = response.data.messages || [];
       setSearchResults(results);
@@ -1666,29 +1686,24 @@ export default function MessagesPage() {
     } catch (error) {
       console.error('Search error:', error);
       
-      // If the API search fails, fall back to client-side search
-      if (error.response?.status === 500 || error.response?.status === 404 || error.code === 'ERR_BAD_RESPONSE') {
-        console.log('API search failed, falling back to client-side search');
-        const clientResults = performClientSideSearch(query.trim(), filters);
-        setSearchResults(clientResults);
-        setTotalSearchResults(clientResults.length);
-        setCurrentSearchResult(0);
-        
-        // Show notification about fallback
+      // Always fall back to client-side search for now since API has issues
+      console.log('API search failed, falling back to client-side search');
+      const clientResults = performClientSideSearch(query.trim(), filters);
+      setSearchResults(clientResults);
+      setTotalSearchResults(clientResults.length);
+      setCurrentSearchResult(0);
+      
+      // Show notification about results
+      if (clientResults.length > 0) {
         setNotification({
-          message: `Search completed (${clientResults.length} results found using local search)`
+          message: `Found ${clientResults.length} result${clientResults.length !== 1 ? 's' : ''} for "${query.trim()}"`
         });
-        setTimeout(() => setNotification(null), 3000);
       } else {
-        setSearchResults([]);
-        setTotalSearchResults(0);
-        
-        // Show error notification
         setNotification({
-          message: 'Search failed. Please try again.'
+          message: `No results found for "${query.trim()}"`
         });
-        setTimeout(() => setNotification(null), 3000);
       }
+      setTimeout(() => setNotification(null), 3000);
     } finally {
       setIsSearching(false);
     }

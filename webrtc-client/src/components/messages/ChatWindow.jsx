@@ -143,7 +143,6 @@ export default function ChatWindow({
         
         // Check for infinite scroll - load more when near top
         if (chatElement.scrollTop < 100 && hasMoreMessages && !loadingMore && onLoadMore) {
-          console.log('Loading more messages...');
           onLoadMore();
         }
         
@@ -227,13 +226,7 @@ export default function ChatWindow({
                   const isSystemMsg = isSystemMessage(msg);
                   
                   if (isSystemMsg) {
-                    console.log('🔔 Detected system message:', {
-                      type: msg.type,
-                      isSystemMessage: msg.isSystemMessage,
-                      senderId: msg.senderId,
-                      sender: msg.sender,
-                      text: msg.text
-                    });
+                    // System message detected - render as centered notification
                   }
                   
                   const isSearchResult = searchResults.some(result => result._id === msg._id);

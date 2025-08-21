@@ -277,11 +277,8 @@ function MessageBubble({
 
   const renderFilePreview = () => {
     if (!msg.file) {
-      console.log('[MessageBubble] No file object in message');
       return null;
     }
-
-    console.log('[MessageBubble] File object:', msg.file);
 
     const fileIcon = getFileIcon(msg.file.category || 'other', msg.file.type);
     const fileSize = formatFileSize(msg.file.size || 0);
@@ -293,7 +290,6 @@ function MessageBubble({
     const previewUrl = getPreviewUrl(msg.file);
     const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
 
-    console.log('[MessageBubble] Final URLs - fileUrl:', fileUrl, 'previewUrl:', previewUrl);
 
     // If we don't have a valid URL, show error state
     if (!fileUrl) {
@@ -324,17 +320,14 @@ function MessageBubble({
                 src={previewUrl || fileUrl}
                 alt={msg.file.name}
                 onError={(e) => {
-                  console.error('[MessageBubble] Image failed to load:', e.target.src);
                   setImgError(true);
                   setImgLoading(false);
                 }}
                 onLoad={() => {
-                  console.log('[MessageBubble] Image loaded successfully');
                   setImgError(false);
                   setImgLoading(false);
                 }}
                 onLoadStart={() => {
-                  console.log('[MessageBubble] Image loading started');
                   setImgLoading(true);
                   setImgError(false);
                 }}
