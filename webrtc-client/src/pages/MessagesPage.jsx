@@ -286,10 +286,21 @@ export default function MessagesPage() {
     }
   }, [allConversations, isMobile]);
 
+  const [fetchConversationsCallCount, setFetchConversationsCallCount] = useState(0);
+  
   const fetchConversations = async () => {
+    const newCount = fetchConversationsCallCount + 1;
+    setFetchConversationsCallCount(newCount);
+    
+    console.log(`🌐 FETCH [${newCount}]: fetchConversations called`);
+    console.trace('🌐 FETCH: Call stack for fetchConversations');
+    
     try {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
+      
+      console.log(`🌐 FETCH [${newCount}]: Retrieved ${conversations.length} conversations from API:`, 
+        conversations.map(c => ({ id: c._id, name: c.name, type: c.type })));
       
       // Sort conversations by lastMessageAt within each type (backend already sorts overall, but we maintain per-section sorting)
       const sortByLastMessage = (a, b) => {
@@ -298,11 +309,19 @@ export default function MessagesPage() {
         return dateB - dateA;
       };
       
-      setAllConversations([
+      const newSections = [
         { section: 'Direct Messages', icon: User, items: conversations.filter(c => c.type === 'dm').sort(sortByLastMessage) },
         { section: 'Groups', icon: Users, items: conversations.filter(c => c.type === 'group').sort(sortByLastMessage) },
         { section: 'Communities', icon: Hash, items: conversations.filter(c => c.type === 'community').sort(sortByLastMessage) },
-      ]);
+      ];
+      
+      console.log(`🌐 FETCH [${newCount}]: Setting new sections:`, newSections.map(section => ({
+        section: section.section,
+        itemCount: section.items.length,
+        items: section.items.map(item => ({ id: item._id, name: item.name }))
+      })));
+      
+      setAllConversations(newSections);
 
       // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
       // We limit the number of conversations prefetched per section to avoid overwhelming the server.
@@ -861,9 +880,37 @@ export default function MessagesPage() {
       ).join(',')}`
     ).join('|');
     
-    console.log(`🔍 useMemo recomputing filteredConversations for ${allConversations.length} sections`);
+    console.log(`🔍 RENDER: useMemo recomputing filteredConversations for ${allConversations.length} sections`);
+    
+    // DETAILED DEBUGGING: Check for duplicates in each section BEFORE filtering
+    const duplicateAnalysis = allConversations.map(section => {
+      const idCounts = {};
+      const nameCounts = {};
+      section.items.forEach(item => {
+        idCounts[item._id] = (idCounts[item._id] || 0) + 1;
+        if (item.name) {
+          nameCounts[item.name] = (nameCounts[item.name] || 0) + 1;
+        }
+      });
+      
+      const duplicateIds = Object.entries(idCounts).filter(([id, count]) => count > 1);
+      const duplicateNames = Object.entries(nameCounts).filter(([name, count]) => count > 1);
+      
+      return {
+        section: section.section,
+        totalItems: section.items.length,
+        duplicateIds,
+        duplicateNames,
+        items: section.items.map(item => ({ id: item._id, name: item.name }))
+      };
+    });
+    
+    console.log(`🔍 RENDER: Duplicate analysis before filtering:`, duplicateAnalysis);
     
     return allConversations.map(section => {
+      console.log(`🔍 RENDER: Processing section "${section.section}" with ${section.items.length} items:`, 
+        section.items.map(item => ({ id: item._id, name: item.name })));
+      
       const filteredItems = section.items.filter(conv => {
         try {
           const displayName = getConversationDisplayName(conv, user?.id);
@@ -1197,14 +1244,32 @@ export default function MessagesPage() {
     console.log('🔔 LOCAL: Current user ID:', user?.id);
     console.log('🔔 LOCAL: Conversation type:', newConversation.type);
     
+    // LOG THE STATE BEFORE UPDATE
+    console.log(`📊 LOCAL: BEFORE UPDATE - all sections:`, allConversations.map(section => ({
+      section: section.section,
+      itemCount: section.items.length,
+      items: section.items.map(item => ({ id: item._id, name: item.name }))
+    })));
+    
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
+      console.log(`📊 LOCAL: setState callback - prev state:`, prev.map(section => ({
+        section: section.section,
+        itemCount: section.items.length,
+        items: section.items.map(item => ({ id: item._id, name: item.name }))
+      })));
+      
       const newSections = [...prev];
       const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
                          newConversation.type === 'group' ? 'Groups' : 'Communities';
       const sectionIndex = newSections.findIndex(s => s.section === sectionName);
       
+      console.log(`📊 LOCAL: Target section "${sectionName}" found at index ${sectionIndex}`);
+      
       if (sectionIndex !== -1) {
+        console.log(`📊 LOCAL: Current items in ${sectionName} before addition:`, 
+          newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
+        
         // Enhanced duplicate check - check by ID AND by name for communities
         const existingIndex = newSections[sectionIndex].items.findIndex(item => {
           if (item._id === newConversation._id) return true;
@@ -1216,6 +1281,8 @@ export default function MessagesPage() {
           return false;
         });
         
+        console.log(`📊 LOCAL: Duplicate check result - existingIndex: ${existingIndex}`);
+        
         if (existingIndex === -1) {
           console.log(`🔔 LOCAL: Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
           // Create new items array to avoid mutation
@@ -1223,10 +1290,20 @@ export default function MessagesPage() {
             ...newSections[sectionIndex],
             items: [newConversation, ...newSections[sectionIndex].items]
           };
+          
+          // LOG THE STATE AFTER ADDITION
+          console.log(`📊 LOCAL: After addition, ${sectionName} section has ${newSections[sectionIndex].items.length} items:`, 
+            newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
         } else {
           console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
         }
       }
+      
+      console.log(`📊 LOCAL: Final new state being returned:`, newSections.map(section => ({
+        section: section.section,
+        itemCount: section.items.length,
+        items: section.items.map(item => ({ id: item._id, name: item.name }))
+      })));
       
       return newSections;
     });
