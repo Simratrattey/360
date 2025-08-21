@@ -1216,11 +1216,6 @@ export default function MessagesPage() {
   };
 
   // Message action handlers
-  const handleForwardMessage = (message) => {
-    console.log('Forwarding message:', message);
-    // TODO: Implement message forwarding logic
-  };
-
   const handlePinMessage = (messageId) => {
     setPinnedMessages(prev => {
       if (prev.includes(messageId)) {
@@ -1239,16 +1234,6 @@ export default function MessagesPage() {
         return [...prev, messageId];
       }
     });
-  };
-
-  const handleShowMessageInfo = (message) => {
-    console.log('Showing message info:', message);
-    // TODO: Implement message info modal
-  };
-
-  const handleSelectMessage = (messageId) => {
-    console.log('Selecting message:', messageId);
-    // TODO: Implement message selection for bulk operations
   };
 
   const handleConversationCreated = async (newConversation) => {
@@ -1825,11 +1810,8 @@ export default function MessagesPage() {
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
               searchFilters={searchFilters}
-              onForward={handleForwardMessage}
               onPin={handlePinMessage}
               onStar={handleStarMessage}
-              onShowInfo={handleShowMessageInfo}
-              onSelect={handleSelectMessage}
               pinnedMessages={pinnedMessages}
               starredMessages={starredMessages}
             />

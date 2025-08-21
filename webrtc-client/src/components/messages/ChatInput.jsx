@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Mic, Camera, Image as ImageIcon, FileText } from 'lucide-react';
+import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Camera, Image as ImageIcon, FileText } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
-import VoiceRecorder from './VoiceRecorder';
 
 export default function ChatInput({
   input,
@@ -24,7 +23,6 @@ export default function ChatInput({
   const textareaRef = useRef(null);
   const [mentionDropdown, setMentionDropdown] = useState({ open: false, query: '', start: 0 });
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const attachmentMenuRef = useRef(null);
 
@@ -81,22 +79,6 @@ export default function ChatInput({
     onSend();
   };
 
-  const handleVoiceSend = (voiceData) => {
-    setShowVoiceRecorder(false);
-    // Handle voice message send
-    if (onFileChange) {
-      const event = {
-        target: {
-          files: [voiceData.file]
-        }
-      };
-      onFileChange(event);
-      // Auto-send voice message
-      setTimeout(() => {
-        handleSend();
-      }, 100);
-    }
-  };
 
   const handleAttachmentSelect = (type) => {
     setShowAttachmentMenu(false);
@@ -230,16 +212,6 @@ export default function ChatInput({
 
   return (
     <div className="p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
-      {/* Voice recorder */}
-      {showVoiceRecorder && (
-        <div className="mb-4">
-          <VoiceRecorder
-            onSend={handleVoiceSend}
-            onCancel={() => setShowVoiceRecorder(false)}
-          />
-        </div>
-      )}
-      
       {/* File error message */}
       {fileError && (
         <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
@@ -351,19 +323,6 @@ export default function ChatInput({
                 <span>Documents</span>
               </button>
               
-              <div className="border-t border-gray-100 my-1"></div>
-              
-              <button
-                onClick={() => {
-                  setShowAttachmentMenu(false);
-                  setShowVoiceRecorder(true);
-                }}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
-              >
-                <Mic className="h-4 w-4 text-purple-500" />
-                <span>Voice Message</span>
-              </button>
-              
               <button
                 onClick={() => handleAttachmentSelect('any')}
                 className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
@@ -436,46 +395,31 @@ export default function ChatInput({
           )}
         </div>
 
-        {/* Send button or Voice button */}
-        {input.trim() || uploadFile ? (
-          <button
-            onClick={handleSend}
-            disabled={(!input.trim() && !uploadFile) || isSending}
-            className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
-          >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
-            
-            {/* Upload progress indicator for files */}
-            {isSending && uploadFile && uploadProgress > 0 && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            )}
-          </button>
-        ) : (
-          <button
-            onClick={() => setShowVoiceRecorder(true)}
-            disabled={isSending}
-            className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
-            title="Record voice message"
-          >
-            <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
-        )}
+        {/* Send button */}
+        <button
+          onClick={handleSend}
+          disabled={(!input.trim() && !uploadFile) || isSending}
+          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
+        >
+          {isSending ? (
+            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+          )}
+          
+          {/* Upload progress indicator for files */}
+          {isSending && uploadFile && uploadProgress > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+        </button>
       </div>
 
       {/* Helper text */}
       <div className="mt-1 sm:mt-2 text-center">
         <p className="text-xs text-gray-500 px-2">
-          {showVoiceRecorder ? (
-            'Recording voice message - Click the microphone to start'
-          ) : (
-            'Press Enter to send, Shift+Enter for new line • Max file size: 50MB'
-          )}
+          Press Enter to send, Shift+Enter for new line • Max file size: 50MB
         </p>
       </div>
     </div>

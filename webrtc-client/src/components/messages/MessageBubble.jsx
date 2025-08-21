@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Forward, Pin, Star, Info, ExternalLink } from 'lucide-react';
+import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
@@ -28,14 +28,10 @@ function MessageBubble({
   onlineUsers,
   currentUserId,
   searchFilters,
-  onForward,
   onPin,
   onStar,
-  onShowInfo,
-  onSelect,
   isPinned = false,
   isStarred = false,
-  isSelected = false,
 }) {
   const messageId = msg._id || msg.id;
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -45,7 +41,6 @@ function MessageBubble({
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const dropdownRef = useRef(null);
   
@@ -193,11 +188,6 @@ function MessageBubble({
     }
   };
 
-  const handleForwardMessage = () => {
-    setShowForwardDialog(true);
-    setShowDropdown(false);
-  };
-
   const handlePinMessage = () => {
     // Pin/unpin message functionality
     if (onPin) onPin(messageId);
@@ -207,12 +197,6 @@ function MessageBubble({
   const handleStarMessage = () => {
     // Star/unstar message functionality
     if (onStar) onStar(messageId);
-    setShowDropdown(false);
-  };
-
-  const handleMessageInfo = () => {
-    // Show message info (delivery status, timestamp, etc.)
-    if (onShowInfo) onShowInfo(msg);
     setShowDropdown(false);
   };
 
@@ -727,29 +711,6 @@ function MessageBubble({
                   </span>
                 </div>
               )}
-              
-              {/* Voice message indicator */}
-              {msg.file && msg.file.type && msg.file.type.startsWith('audio/') && (
-                <div className="flex items-center space-x-2 mt-2">
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: 8 }, (_, i) => (
-                      <div
-                        key={i}
-                        className={`w-1 rounded-full transition-all duration-200 ${
-                          isOwn ? 'bg-blue-100' : 'bg-gray-400'
-                        }`}
-                        style={{
-                          height: `${Math.random() * 12 + 8}px`,
-                          animationDelay: `${i * 0.1}s`
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <span className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                    Voice Message
-                  </span>
-                </div>
-              )}
 
               {/* Edited indicator */}
               {msg.edited && (
@@ -816,15 +777,6 @@ function MessageBubble({
                         </button>
                       )}
                       
-                      {/* Forward option - available for all messages */}
-                      <button 
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
-                        onClick={handleForwardMessage}
-                      >
-                        <Forward className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Forward</span>
-                      </button>
-                      
                       {/* Star/Unstar option */}
                       <button 
                         className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
@@ -843,15 +795,6 @@ function MessageBubble({
                         <span className="font-medium">{isPinned ? 'Unpin' : 'Pin'}</span>
                       </button>
                       
-                      {/* Message info option */}
-                      <button 
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
-                        onClick={handleMessageInfo}
-                      >
-                        <Info className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Message Info</span>
-                      </button>
-                      
                       {/* Open file in new tab - only for files */}
                       {msg.file && (
                         <button 
@@ -867,18 +810,6 @@ function MessageBubble({
                         </button>
                       )}
                       
-                      {/* Select message option */}
-                      <button 
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
-                        onClick={() => {
-                          // Handle message selection for bulk operations
-                          if (onSelect) onSelect(messageId);
-                          setShowDropdown(false);
-                        }}
-                      >
-                        <Check className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Select</span>
-                      </button>
                       
                       <div className="border-t border-gray-100 my-1"></div>
                       
@@ -1057,68 +988,6 @@ function MessageBubble({
         </div>
       )}
       
-      {/* Forward message dialog */}
-      {showForwardDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Forward Message</h3>
-              <button
-                onClick={() => setShowForwardDialog(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-            
-            {/* Message preview */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
-              <div className="text-sm text-gray-600 mb-1">Forwarding:</div>
-              {msg.text && (
-                <div className="text-sm text-gray-800 font-medium">
-                  {msg.text.length > 100 ? msg.text.substring(0, 100) + '...' : msg.text}
-                </div>
-              )}
-              {msg.file && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <span>📎</span>
-                  <span>{msg.file.name}</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="text-sm text-gray-600 mb-4">
-              Select conversations to forward this message to:
-            </div>
-            
-            {/* This would be populated with available conversations */}
-            <div className="max-h-60 overflow-y-auto mb-4">
-              <div className="text-sm text-gray-500 text-center py-8">
-                Conversation selection would be implemented here
-              </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium"
-                onClick={() => setShowForwardDialog(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600"
-                onClick={() => {
-                  // Handle forward logic
-                  if (onForward) onForward(msg);
-                  setShowForwardDialog(false);
-                }}
-              >
-                Forward
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Status indicators for pinned/starred messages */}
       {(isPinned || isStarred) && (
