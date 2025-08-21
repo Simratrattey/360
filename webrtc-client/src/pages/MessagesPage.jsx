@@ -184,6 +184,14 @@ export default function MessagesPage() {
   const [totalSearchResults, setTotalSearchResults] = useState(0);
   const [searchFilters, setSearchFilters] = useState(null);
   const [reactionInProgress, setReactionInProgress] = useState(false);
+  const [draftMessages, setDraftMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('draftMessages');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   /**
    * Move a conversation to the top of its section in the sidebar.
@@ -1008,6 +1016,82 @@ export default function MessagesPage() {
     // Optionally: persist star via API
   };
 
+  const handlePin = (convId) => {
+    setAllConversations(prev => {
+      const newSections = [...prev];
+      const sectionIndex = 0; // Unified structure
+      
+      if (sectionIndex < newSections.length) {
+        const items = [...newSections[sectionIndex].items];
+        const convIndex = items.findIndex(c => c._id === convId);
+        
+        if (convIndex !== -1) {
+          items[convIndex] = {
+            ...items[convIndex],
+            isPinned: !items[convIndex].isPinned
+          };
+          
+          // Sort so pinned conversations appear at the top
+          const sortedItems = items.sort((a, b) => {
+            if (a.isPinned && !b.isPinned) return -1;
+            if (!a.isPinned && b.isPinned) return 1;
+            
+            // Within pinned/unpinned groups, sort by last message time
+            const dateA = new Date(a.lastMessageAt || a.createdAt);
+            const dateB = new Date(b.lastMessageAt || b.createdAt);
+            return dateB - dateA;
+          });
+          
+          newSections[sectionIndex] = {
+            ...newSections[sectionIndex],
+            items: sortedItems
+          };
+        }
+      }
+      
+      return newSections;
+    });
+  };
+
+  const handleMute = (convId) => {
+    setAllConversations(prev => {
+      const newSections = [...prev];
+      const sectionIndex = 0; // Unified structure
+      
+      if (sectionIndex < newSections.length) {
+        const items = [...newSections[sectionIndex].items];
+        const convIndex = items.findIndex(c => c._id === convId);
+        
+        if (convIndex !== -1) {
+          items[convIndex] = {
+            ...items[convIndex],
+            isMuted: !items[convIndex].isMuted
+          };
+          
+          newSections[sectionIndex] = {
+            ...newSections[sectionIndex],
+            items
+          };
+        }
+      }
+      
+      return newSections;
+    });
+  };
+
+  const saveDraftMessage = (conversationId, text) => {
+    setDraftMessages(prev => {
+      const updated = { ...prev };
+      if (text.trim()) {
+        updated[conversationId] = text;
+      } else {
+        delete updated[conversationId];
+      }
+      localStorage.setItem('draftMessages', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleDismissDeletedConversation = (conversationId) => {
     console.log('🗑️ Dismissing deleted conversation:', conversationId);
     
@@ -1534,11 +1618,15 @@ export default function MessagesPage() {
                   isActive={selected && selected._id === conv._id}
                   onSelect={() => handleSelect(conv)}
                   onStar={() => handleStar(conv._id)}
+                  onPin={() => handlePin(conv._id)}
+                  onMute={() => handleMute(conv._id)}
                   onDelete={() => handleDeleteConversation(conv)}
                   onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
                   starred={starred.includes(conv._id)}
                   getInitials={getInitials}
                   currentUserId={user?.id}
+                  typing={typing[conv._id] || {}}
+                  draftMessage={draftMessages[conv._id]}
                   canDelete={
                     !conv.isDeleted && (
                       conv.type === 'dm' || 

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Paperclip, Smile, X, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Mic, Camera, Image as ImageIcon, FileText } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
+import VoiceRecorder from './VoiceRecorder';
 
 export default function ChatInput({
   input,
@@ -23,6 +24,9 @@ export default function ChatInput({
   const textareaRef = useRef(null);
   const [mentionDropdown, setMentionDropdown] = useState({ open: false, query: '', start: 0 });
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const attachmentMenuRef = useRef(null);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -77,6 +81,54 @@ export default function ChatInput({
     onSend();
   };
 
+  const handleVoiceSend = (voiceData) => {
+    setShowVoiceRecorder(false);
+    // Handle voice message send
+    if (onFileChange) {
+      const event = {
+        target: {
+          files: [voiceData.file]
+        }
+      };
+      onFileChange(event);
+      // Auto-send voice message
+      setTimeout(() => {
+        handleSend();
+      }, 100);
+    }
+  };
+
+  const handleAttachmentSelect = (type) => {
+    setShowAttachmentMenu(false);
+    
+    // Create file input with appropriate accept types
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.style.display = 'none';
+    
+    switch (type) {
+      case 'image':
+        input.accept = 'image/*';
+        break;
+      case 'video':
+        input.accept = 'video/*';
+        break;
+      case 'document':
+        input.accept = '.pdf,.doc,.docx,.txt,.rtf';
+        break;
+      default:
+        input.accept = '*/*';
+    }
+    
+    input.onchange = (e) => {
+      handleFileChange(e);
+      document.body.removeChild(input);
+    };
+    
+    document.body.appendChild(input);
+    input.click();
+  };
+
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
@@ -84,6 +136,23 @@ export default function ChatInput({
       }
     };
   }, []);
+
+  // Close attachment menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target)) {
+        setShowAttachmentMenu(false);
+      }
+    };
+
+    if (showAttachmentMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAttachmentMenu]);
 
   // Insert emoji at cursor position (emoji-mart v5+)
   const handleEmojiSelect = (emoji) => {
@@ -144,6 +213,16 @@ export default function ChatInput({
 
   return (
     <div className="p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
+      {/* Voice recorder */}
+      {showVoiceRecorder && (
+        <div className="mb-4">
+          <VoiceRecorder
+            onSend={handleVoiceSend}
+            onCancel={() => setShowVoiceRecorder(false)}
+          />
+        </div>
+      )}
+      
       {/* File error message */}
       {fileError && (
         <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
@@ -213,21 +292,71 @@ export default function ChatInput({
 
       {/* Input area */}
       <div className="flex items-end space-x-2 sm:space-x-3 relative">
-        {/* File upload button */}
-        <label className={`cursor-pointer p-2 sm:p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
-          isSending 
-            ? 'bg-gray-300 cursor-not-allowed transform-none' 
-            : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 hover:shadow-xl hover:scale-105'
-        }`} title="Upload any file type (max 50MB)">
-          <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
-          <input 
-            type="file" 
-            className="hidden" 
-            onChange={handleFileChange}
-            accept="*/*"
+        {/* Enhanced attachment menu */}
+        <div className="relative" ref={attachmentMenuRef}>
+          <button
+            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
             disabled={isSending}
-          />
-        </label>
+            className={`cursor-pointer p-2 sm:p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
+              isSending 
+                ? 'bg-gray-300 cursor-not-allowed transform-none' 
+                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 hover:shadow-xl hover:scale-105'
+            }`}
+            title="Attach files or record voice"
+          >
+            <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
+          </button>
+          
+          {/* Attachment menu */}
+          {showAttachmentMenu && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-2 min-w-[180px] z-50">
+              <button
+                onClick={() => handleAttachmentSelect('image')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <ImageIcon className="h-4 w-4 text-green-500" />
+                <span>Photos</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('video')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <Camera className="h-4 w-4 text-red-500" />
+                <span>Videos</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('document')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <FileText className="h-4 w-4 text-blue-500" />
+                <span>Documents</span>
+              </button>
+              
+              <div className="border-t border-gray-100 my-1"></div>
+              
+              <button
+                onClick={() => {
+                  setShowAttachmentMenu(false);
+                  setShowVoiceRecorder(true);
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <Mic className="h-4 w-4 text-purple-500" />
+                <span>Voice Message</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('any')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <Paperclip className="h-4 w-4 text-gray-500" />
+                <span>Any File</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Text input */}
         <div className="flex-1 relative">
@@ -290,31 +419,46 @@ export default function ChatInput({
           )}
         </div>
 
-        {/* Send button */}
-        <button
-          onClick={handleSend}
-          disabled={(!input.trim() && !uploadFile) || isSending}
-          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
-        >
-          {isSending ? (
-            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
-          )}
-          
-          {/* Upload progress indicator for files */}
-          {isSending && uploadFile && uploadProgress > 0 && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-        </button>
+        {/* Send button or Voice button */}
+        {input.trim() || uploadFile ? (
+          <button
+            onClick={handleSend}
+            disabled={(!input.trim() && !uploadFile) || isSending}
+            className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
+          >
+            {isSending ? (
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+            )}
+            
+            {/* Upload progress indicator for files */}
+            {isSending && uploadFile && uploadProgress > 0 && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowVoiceRecorder(true)}
+            disabled={isSending}
+            className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+            title="Record voice message"
+          >
+            <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
+          </button>
+        )}
       </div>
 
       {/* Helper text */}
       <div className="mt-1 sm:mt-2 text-center">
         <p className="text-xs text-gray-500 px-2">
-          Press Enter to send, Shift+Enter for new line • Max file size: 50MB
+          {showVoiceRecorder ? (
+            'Recording voice message - Click the microphone to start'
+          ) : (
+            'Press Enter to send, Shift+Enter for new line • Max file size: 50MB'
+          )}
         </p>
       </div>
     </div>

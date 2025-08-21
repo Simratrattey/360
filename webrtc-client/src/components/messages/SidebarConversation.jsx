@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, MessageCircle, Users, Hash } from 'lucide-react';
+import { Star, MessageCircle, Users, Hash, Pin, VolumeX, Edit3, Check, CheckCheck } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
 
 function getConversationDisplayName(conversation, currentUserId) {
@@ -48,6 +48,10 @@ export default function SidebarConversation({
   starred,
   getInitials,
   currentUserId,
+  onPin,
+  onMute,
+  typing = {},
+  draftMessage,
 }) {
   const { onlineUsers } = useChatSocket();
   
@@ -92,6 +96,72 @@ export default function SidebarConversation({
 
   const typeConfig = getTypeConfig(conv.type);
   
+  // Helper functions for modern messaging features
+  const getMessageStatusIcon = () => {
+    if (!conv.lastMessage || conv.lastMessage.senderId !== currentUserId) return null;
+    
+    const status = conv.lastMessage.status || 'sent';
+    switch (status) {
+      case 'sending':
+        return <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />;
+      case 'sent':
+        return <Check className="w-3 h-3 text-gray-400" />;
+      case 'delivered':
+        return <CheckCheck className="w-3 h-3 text-gray-400" />;
+      case 'read':
+        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTypingIndicator = () => {
+    const typingUsers = Object.entries(typing)
+      .filter(([userId, isTyping]) => isTyping && userId !== currentUserId)
+      .map(([userId]) => {
+        // Get user name from conversation members
+        const user = conv.members?.find(m => m._id === userId);
+        return user?.fullName || user?.username || 'Someone';
+      });
+
+    if (typingUsers.length === 0) return null;
+    
+    const displayText = typingUsers.length === 1 
+      ? `${typingUsers[0]} is typing...`
+      : typingUsers.length === 2
+      ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+      : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`;
+
+    return (
+      <div className="flex items-center text-xs text-blue-600">
+        <div className="flex space-x-1 mr-2">
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce"></div>
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+        </div>
+        <span className="font-medium">{displayText}</span>
+      </div>
+    );
+  };
+
+  const getLastActiveTime = () => {
+    if (!conv.lastMessageAt) return null;
+    
+    const date = new Date(conv.lastMessageAt);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInMinutes < 1) return 'now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    if (diffInHours < 24) return `${diffInHours}h`;
+    if (diffInDays < 7) return `${diffInDays}d`;
+    
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
   return (
     <div
       className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-xl cursor-pointer transition-all duration-300 ${
@@ -147,61 +217,115 @@ export default function SidebarConversation({
         {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className={`font-medium truncate text-xs md:text-sm flex items-center ${
-              conv.isDeleted 
-                ? 'text-gray-500 line-through' 
-                : isActive 
-                  ? 'text-gray-900' 
-                  : 'text-gray-800'
-            }`}>
-              {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
-              {/* Unread badge */}
-              {conv?.unread > 0 && !conv.isDeleted && (
-                <span className="ml-1.5 inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[16px] h-[16px] px-1 shadow-sm">
-                  {conv.unread > 99 ? '99+' : conv.unread}
-                </span>
-              )}
-              {/* Deleted indicator */}
-              {conv.isDeleted && (
-                <span className="ml-1.5 inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-1.5 py-0.5 shadow-sm">
-                  Deleted
-                </span>
-              )}
-            </h3>
-            {/* Last message preview - Compact */}
-            {conv?.lastMessage && (
-              <div className="mt-0.5">
-                <p className="text-xs text-gray-500 truncate">
-                  {/* Sender name for groups */}
-                  {conv.type !== 'dm' && conv.lastMessage.senderName && (
-                    <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
+            <div className="flex items-center justify-between">
+              <h3 className={`font-medium truncate text-xs md:text-sm flex items-center ${
+                conv.isDeleted 
+                  ? 'text-gray-500 line-through' 
+                  : isActive 
+                    ? 'text-gray-900' 
+                    : 'text-gray-800'
+              }`}>
+                {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
+                
+                {/* Status indicators */}
+                <div className="flex items-center ml-1.5 space-x-1">
+                  {/* Pinned indicator */}
+                  {conv.isPinned && (
+                    <Pin className="w-3 h-3 text-blue-500" />
                   )}
-                  {conv.lastMessage.text ? (
-                    conv.lastMessage.text.length > 40 ? 
-                      conv.lastMessage.text.substring(0, 40) + '...' : 
-                      conv.lastMessage.text
-                  ) : conv.lastMessage.file ? (
-                    <span className="italic flex items-center">
-                      <span className="mr-1">📎</span>
-                      {conv.lastMessage.file.name || 'File'}
+                  {/* Muted indicator */}
+                  {conv.isMuted && (
+                    <VolumeX className="w-3 h-3 text-gray-400" />
+                  )}
+                  {/* Unread badge */}
+                  {conv?.unread > 0 && !conv.isDeleted && (
+                    <span className="inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[16px] h-[16px] px-1 shadow-sm">
+                      {conv.unread > 99 ? '99+' : conv.unread}
                     </span>
-                  ) : (
-                    <span className="italic">No messages yet</span>
                   )}
-                </p>
-                {conv.lastMessageAt && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
-                      ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                    }
-                  </p>
-                )}
+                  {/* Deleted indicator */}
+                  {conv.isDeleted && (
+                    <span className="inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-1.5 py-0.5 shadow-sm">
+                      Deleted
+                    </span>
+                  )}
+                </div>
+              </h3>
+              
+              {/* Time and message status */}
+              <div className="flex items-center space-x-1 ml-2">
+                {getMessageStatusIcon()}
+                <span className="text-xs text-gray-400">{getLastActiveTime()}</span>
               </div>
-            )}
+            </div>
+            {/* Status indicators: typing, draft, or last message */}
+            <div className="mt-0.5">
+              {getTypingIndicator() || (
+                draftMessage ? (
+                  <p className="text-xs text-red-600 truncate flex items-center">
+                    <Edit3 className="w-3 h-3 mr-1" />
+                    <span className="font-medium">Draft:</span>
+                    <span className="ml-1">{draftMessage.length > 35 ? draftMessage.substring(0, 35) + '...' : draftMessage}</span>
+                  </p>
+                ) : conv?.lastMessage ? (
+                  <p className="text-xs text-gray-500 truncate">
+                    {/* Sender name for groups */}
+                    {conv.type !== 'dm' && conv.lastMessage.senderName && (
+                      <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
+                    )}
+                    {conv.lastMessage.text ? (
+                      conv.lastMessage.text.length > 35 ? 
+                        conv.lastMessage.text.substring(0, 35) + '...' : 
+                        conv.lastMessage.text
+                    ) : conv.lastMessage.file ? (
+                      <span className="italic flex items-center">
+                        <span className="mr-1">📎</span>
+                        {conv.lastMessage.file.name || 'File'}
+                      </span>
+                    ) : (
+                      <span className="italic">No messages yet</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">No messages yet</p>
+                )
+              )}
+            </div>
           </div>
-          <div className="flex items-center space-x-0.5 ml-1">
-            {/* Star button - Compact */}
+          <div className="flex items-center space-x-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Pin button */}
+            <button 
+              onClick={e => { 
+                e.stopPropagation(); 
+                if (onPin) onPin(); 
+              }} 
+              className={`p-1 rounded-full transition-all duration-200 ${
+                conv.isPinned 
+                  ? 'text-blue-500 bg-blue-50 hover:bg-blue-100' 
+                  : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+              }`}
+              title={conv.isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            >
+              <Pin className="h-3 w-3" />
+            </button>
+            
+            {/* Mute button */}
+            <button 
+              onClick={e => { 
+                e.stopPropagation(); 
+                if (onMute) onMute(); 
+              }} 
+              className={`p-1 rounded-full transition-all duration-200 ${
+                conv.isMuted 
+                  ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              }`}
+              title={conv.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+            >
+              <VolumeX className="h-3 w-3" />
+            </button>
+            
+            {/* Star button */}
             <button 
               onClick={e => { e.stopPropagation(); onStar(); }} 
               className={`p-1 rounded-full transition-all duration-200 ${
@@ -209,6 +333,7 @@ export default function SidebarConversation({
                   ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' 
                   : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'
               }`}
+              title={starred ? 'Unstar conversation' : 'Star conversation'}
             >
               <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3" />
             </button>
