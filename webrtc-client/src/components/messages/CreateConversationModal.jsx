@@ -103,16 +103,20 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
         conversationData.description = communityDescription.trim();
       }
 
+      console.log('🔄 API: Sending conversation creation request:', conversationData);
       const response = await API.post('/conversations', conversationData);
+      console.log('✅ API: Received conversation creation response:', response.data);
       
       // Check if this is an existing DM being returned
       if (response.data.message && response.data.message.includes('already exists')) {
         // Existing DM found, just select it
+        console.log('📋 API: Existing DM found, selecting it');
         onConversationCreated(response.data.conversation);
         handleClose();
         return;
       }
       
+      console.log('🎯 API: Calling onConversationCreated with:', response.data.conversation);
       onConversationCreated(response.data.conversation);
       handleClose();
     } catch (error) {

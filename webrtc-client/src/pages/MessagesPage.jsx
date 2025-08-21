@@ -602,11 +602,25 @@ export default function MessagesPage() {
     });
 
     // Real-time conversation creation/deletion events
+    let conversationCreatedEventCount = 0;
     chatSocket.on('conversation:created', (newConversation) => {
-      console.log('🔔 New conversation created (received via socket):', newConversation);
+      conversationCreatedEventCount++;
+      console.log(`🔔 [${conversationCreatedEventCount}] New conversation created (received via socket):`, newConversation);
       
       // Check if current user should see this conversation
       const userId = user?.id;
+      
+      // DETAILED LOGGING FOR DEBUGGING
+      console.log('🔍 CREATOR DEBUG:', {
+        conversationType: newConversation.type,
+        currentUserId: userId,
+        currentUserIdType: typeof userId,
+        createdBy: newConversation.createdBy,
+        createdByType: typeof newConversation.createdBy,
+        createdByObjectId: typeof newConversation.createdBy === 'object' ? newConversation.createdBy?._id : null,
+        members: newConversation.members,
+        membersLength: newConversation.members?.length
+      });
       
       // For communities: visible to all users (no membership check)
       // For groups/DMs: require explicit membership
@@ -618,6 +632,18 @@ export default function MessagesPage() {
       // Check if current user is the creator
       const isCreator = newConversation.createdBy === userId || 
                        (typeof newConversation.createdBy === 'object' && newConversation.createdBy?._id === userId);
+      
+      console.log('🔍 DECISION:', {
+        shouldShowConversation,
+        isCreator,
+        willAdd: shouldShowConversation && !isCreator
+      });
+      
+      // TEMPORARY DEBUG: Skip socket handling for communities to test if this is the source of duplication
+      if (newConversation.type === 'community') {
+        console.log('🚫 TEMPORARILY SKIPPING socket handling for community to test duplication source');
+        return;
+      }
       
       if (shouldShowConversation && !isCreator) {
         // Only add for non-creators (creators already added it locally)
@@ -1161,8 +1187,15 @@ export default function MessagesPage() {
     }
   };
 
+  const [localCreationCallCount, setLocalCreationCallCount] = useState(0);
+  
   const handleConversationCreated = async (newConversation) => {
-    console.log('🔔 Handling locally created conversation:', newConversation);
+    const newCount = localCreationCallCount + 1;
+    setLocalCreationCallCount(newCount);
+    
+    console.log(`🔔 LOCAL [${newCount}]: Handling locally created conversation:`, newConversation);
+    console.log('🔔 LOCAL: Current user ID:', user?.id);
+    console.log('🔔 LOCAL: Conversation type:', newConversation.type);
     
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
