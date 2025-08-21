@@ -98,7 +98,10 @@ export default function ChatWindow({
   return (
     <div
       ref={chatRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-[#efeae2] relative"
+      style={{
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4d4d8' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+      }}
     >
       {isLoading ? (
         <div className="flex h-full items-center justify-center">
@@ -108,10 +111,10 @@ export default function ChatWindow({
         <div className="p-3 sm:p-6 space-y-4 sm:space-y-8 w-full">
           {Object.entries(grouped).map(([date, msgs]) => (
             <div key={date} className="space-y-3 sm:space-y-6">
-              {/* Date separator */}
-              <div className="flex items-center justify-center my-8">
-                <div className="bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-gray-200">
-                  <span className="text-sm font-bold text-gray-700 tracking-wide">{date}</span>
+              {/* Date separator - WhatsApp style */}
+              <div className="flex items-center justify-center my-6">
+                <div className="bg-white/90 backdrop-blur-sm px-4 py-2 rounded-lg shadow-sm border border-gray-200">
+                  <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">{date}</span>
                 </div>
               </div>
               <div className="space-y-2 sm:space-y-4">
@@ -139,13 +142,13 @@ export default function ChatWindow({
                       <div 
                         key={msg._id || msg.id}
                         id={`message-${msg._id || msg.id}`}
-                        className="flex justify-center my-4"
+                        className="flex justify-center my-3"
                       >
                         <div 
-                          className={`px-3 py-1.5 rounded-lg text-xs font-normal max-w-xs text-center ${
+                          className={`px-3 py-1.5 rounded-full text-xs font-normal max-w-xs text-center shadow-sm ${
                             isDeletionNotice
-                              ? 'bg-red-100 bg-opacity-70 text-red-700' 
-                              : 'bg-yellow-100 bg-opacity-70 text-yellow-800'
+                              ? 'bg-red-100 text-red-600 border border-red-200' 
+                              : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                           }`}
                         >
                           {msg.text}
@@ -199,40 +202,46 @@ export default function ChatWindow({
               </div>
             </div>
           ))}
-          {/* Typing indicator */}
+          {/* Typing indicator - WhatsApp style */}
           {typingUsers.length > 0 && (
-            <div className="flex items-center space-x-4 p-6 bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200 max-w-xs animate-in slide-in-from-bottom-4 duration-300">
-              <div className="flex space-x-1">
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce"></div>
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="flex justify-start px-4 pb-4">
+              <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 shadow-sm border border-gray-200 max-w-xs animate-in slide-in-from-bottom-2 duration-200">
+                <div className="flex items-center space-x-3">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {typingNames.length === 1
+                      ? `${typingNames[0]} is typing...`
+                      : typingNames.length === 2
+                      ? `${typingNames[0]} and ${typingNames[1]} are typing...`
+                      : typingNames.length > 2
+                      ? `${typingNames.slice(0, 2).join(', ')} and ${typingNames.length - 2} others are typing...`
+                      : ''}
+                  </span>
+                </div>
               </div>
-              <span className="text-sm text-gray-700 font-medium">
-                {typingNames.length === 1
-                  ? `${typingNames[0]} is typing...`
-                  : typingNames.length === 2
-                  ? `${typingNames[0]} and ${typingNames[1]} are typing...`
-                  : typingNames.length > 2
-                  ? `${typingNames.slice(0, 2).join(', ')} and ${typingNames.length - 2} others are typing...`
-                  : ''}
-              </span>
             </div>
           )}
-          {/* Empty state */}
+          {/* Empty state - WhatsApp style */}
           {Object.keys(grouped).length === 0 && (
-            <div className="text-center py-16">
-              <div className="p-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-2xl">
-                <svg className="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center py-20 px-8">
+              <div className="p-8 rounded-full bg-green-100 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                <svg className="h-12 w-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">No messages yet</h3>
-              <p className="text-gray-600">Start the conversation by sending a message!</p>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">No messages here yet...</h3>
+              <p className="text-gray-500 text-sm leading-relaxed max-w-sm mx-auto">
+                Send a message below to start the conversation. All messages are private and encrypted.
+              </p>
             </div>
           )}
         </div>

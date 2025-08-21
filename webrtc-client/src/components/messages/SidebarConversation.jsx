@@ -98,12 +98,12 @@ export default function SidebarConversation({
   
   return (
     <div
-      className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+      className={`group relative mx-0 mb-0 p-3 cursor-pointer transition-all duration-200 border-b border-gray-100 last:border-b-0 ${
         conv.isDeleted
-          ? 'bg-red-50 border border-red-200 opacity-75'
+          ? 'bg-red-50 opacity-75'
           : isActive 
-            ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-md transform scale-[1.01]` 
-            : 'hover:bg-gray-50 border border-transparent hover:border-gray-200 hover:shadow-sm'
+            ? 'bg-green-50 border-l-4 border-l-green-500' 
+            : 'hover:bg-gray-50 active:bg-gray-100'
       }`}
       onClick={onSelect}
     >
@@ -111,79 +111,125 @@ export default function SidebarConversation({
         {/* Avatar/Icon - Smaller size for better space utilization */}
         <div className="relative flex-shrink-0">
           {conv?.avatar ? (
-            <img src={conv.avatar} alt={displayName} className={`h-8 w-8 md:h-10 md:w-10 rounded-full object-cover shadow-sm ${conv.isDeleted ? 'grayscale' : ''}`} />
+            <img 
+              src={conv.avatar} 
+              alt={displayName} 
+              className={`h-12 w-12 rounded-full object-cover ring-2 ring-white shadow-lg ${conv.isDeleted ? 'grayscale' : ''}`} 
+            />
           ) : (
-            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-sm ${
+            <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg ring-2 ring-white ${
               conv.isDeleted 
                 ? 'bg-gray-400' 
-                : `bg-gradient-to-r ${typeConfig.gradient}`
+                : `bg-gradient-to-br ${typeConfig.gradient}`
             }`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-3 w-3 md:h-4 md:w-4" />}
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-5 w-5" />}
             </div>
           )}
           
-          {/* Type indicator for groups/communities - Smaller */}
+          {/* Online status indicator for DMs */}
+          {conv.type === 'dm' && otherUser && onlineUsers.has && onlineUsers.has(otherUser._id) && (
+            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-white shadow-sm" />
+          )}
+          
+          {/* Type indicator for groups/communities */}
           {conv.type !== 'dm' && (
-            <div className={`absolute -top-0.5 -right-0.5 h-3 w-3 md:h-4 md:w-4 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border border-white shadow-sm`}>
-              <typeConfig.icon className="h-1.5 w-1.5 md:h-2 md:w-2 text-white" />
+            <div className={`absolute -top-0.5 -right-0.5 h-5 w-5 rounded-full bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
+              <typeConfig.icon className="h-2.5 w-2.5 text-white" />
             </div>
           )}
 
-          {/* Blue dot for unread messages - Smaller */}
+          {/* Unread indicator - WhatsApp style */}
           {conv?.unread > 0 && (
-            <span className="absolute -top-0.5 -left-0.5 h-2 w-2 md:h-2.5 md:w-2.5 rounded-full bg-blue-500 border border-white shadow-sm z-10"></span>
+            <span className="absolute -top-1 -left-1 h-5 w-5 rounded-full bg-green-500 border-2 border-white shadow-lg z-10 flex items-center justify-center">
+              <span className="text-xs font-bold text-white">
+                {conv.unread > 9 ? '9+' : conv.unread}
+              </span>
+            </span>
           )}
         </div>
 
         {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <h3 className={`font-medium truncate text-sm flex items-center ${
-              conv.isDeleted 
-                ? 'text-gray-500 line-through' 
-                : isActive 
-                  ? 'text-gray-900' 
-                  : 'text-gray-800'
-            }`}>
-              {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
-              {/* Notification badge - Smaller and more compact */}
-              {conv?.unread > 0 && !conv.isDeleted && (
-                <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 md:w-5 md:h-5 shadow-sm border border-white">
-                  {conv.unread > 99 ? '99+' : conv.unread}
+            <div className="flex items-center justify-between min-w-0">
+              <h3 className={`font-medium truncate text-base ${
+                conv.isDeleted 
+                  ? 'text-gray-500 line-through' 
+                  : isActive 
+                    ? 'text-gray-900' 
+                    : 'text-gray-900'
+              }`}>
+                {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
+              </h3>
+              
+              {/* Timestamp - WhatsApp style */}
+              {conv.lastMessageAt && (
+                <span className={`text-xs ml-2 flex-shrink-0 ${
+                  conv?.unread > 0 ? 'text-green-600 font-medium' : 'text-gray-500'
+                }`}>
+                  {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
+                    ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
+                  }
                 </span>
               )}
-              {/* Deleted indicator */}
-              {conv.isDeleted && (
-                <span className="ml-1.5 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 shadow-sm">
-                  Deleted
-                </span>
-              )}
-            </h3>
-            {/* Last message preview */}
+            </div>
+            {/* Last message preview - WhatsApp style */}
             {conv?.lastMessage && (
-              <div className="mt-0.5">
-                <p className="text-xs text-gray-500 truncate">
-                  {/* Only show sender name for group/community conversations, not for direct messages */}
+              <div className="mt-1 flex items-center justify-between">
+                <p className={`text-sm truncate flex-1 pr-2 ${
+                  conv?.unread > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'
+                }`}>
+                  {/* Sender name for groups */}
                   {conv.type !== 'dm' && conv.lastMessage.senderName && (
-                    <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
+                    <span className="text-green-600 font-medium">{conv.lastMessage.senderName}: </span>
                   )}
                   {conv.lastMessage.text ? (
-                    conv.lastMessage.text.length > 25 ? 
-                      conv.lastMessage.text.substring(0, 25) + '...' : 
+                    conv.lastMessage.text.length > 30 ? 
+                      conv.lastMessage.text.substring(0, 30) + '...' : 
                       conv.lastMessage.text
                   ) : conv.lastMessage.file ? (
-                    <span className="italic">📎 {conv.lastMessage.file.name || 'File'}</span>
+                    <span className="flex items-center">
+                      <span className="mr-1">📎</span>
+                      {conv.lastMessage.file.name || 'File'}
+                    </span>
                   ) : (
                     <span className="italic">No messages yet</span>
                   )}
                 </p>
-                {conv.lastMessageAt && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(conv.lastMessageAt).toLocaleDateString() === new Date().toLocaleDateString() 
-                      ? new Date(conv.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                    }
-                  </p>
+                
+                {/* Unread count badge */}
+                {conv?.unread > 0 && !conv.isDeleted && (
+                  <span className="bg-green-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 shadow-sm ml-2">
+                    {conv.unread > 99 ? '99+' : conv.unread}
+                  </span>
+                )}
+                
+                {/* Check marks for message status */}
+                {conv.lastMessage && conv.lastMessage.senderId === currentUserId && (
+                  <div className="ml-1 flex-shrink-0">
+                    {conv.lastMessage.status === 'read' ? (
+                      <div className="text-blue-500">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                          <path d="M12.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-1-1a1 1 0 011.414-1.414l.293.293 7.293-7.293a1 1 0 011.414 0z"/>
+                        </svg>
+                      </div>
+                    ) : conv.lastMessage.status === 'delivered' ? (
+                      <div className="text-gray-400">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                          <path d="M12.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-1-1a1 1 0 011.414-1.414l.293.293 7.293-7.293a1 1 0 011.414 0z"/>
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="text-gray-300">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -235,17 +281,18 @@ export default function SidebarConversation({
       {/* Enhanced delete confirmation modal with fixed UI */}
       {showDeleteConfirm && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop - Higher z-index */}
           <div 
-            className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm transition-opacity duration-200"
+            className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm transition-opacity duration-300"
             onClick={() => setShowDeleteConfirm(false)}
           />
-          {/* Modal */}
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 pointer-events-none">
+          {/* Modal - Highest z-index */}
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 pointer-events-none">
             <div 
-              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 pointer-events-auto transform transition-all duration-200 scale-100 opacity-100"
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 pointer-events-auto transform transition-all duration-300 scale-100 opacity-100 border border-gray-200"
               style={{
-                animation: 'modalSlideIn 0.2s ease-out'
+                animation: 'modalSlideIn 0.3s ease-out',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
               }}
             >
               <div className="flex flex-col items-center text-center">
