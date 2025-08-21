@@ -67,31 +67,21 @@ function MessageBubble({
       }
     };
 
-    const handleResize = () => {
-      if (showDropdown) {
-        calculateDropdownPosition();
-      }
-    };
-
     if (showDropdown || showEmojiPicker === messageId) {
       document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('resize', handleResize);
-      window.addEventListener('scroll', handleResize);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleResize);
     };
   }, [showDropdown, showEmojiPicker, messageId, setShowEmojiPicker]);
 
-  // Calculate position when dropdown opens
-  useEffect(() => {
-    if (showDropdown && dropdownButtonRef.current) {
-      calculateDropdownPosition();
-    }
-  }, [showDropdown]);
+  // Calculate position when dropdown opens (disabled for now)
+  // useEffect(() => {
+  //   if (showDropdown && dropdownButtonRef.current) {
+  //     calculateDropdownPosition();
+  //   }
+  // }, [showDropdown]);
 
   // Reset image states when message changes
   useEffect(() => {
@@ -787,16 +777,11 @@ function MessageBubble({
                         ? 'bg-blue-500 bg-opacity-20 hover:bg-blue-500 hover:bg-opacity-30 text-blue-100' 
                         : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
                     }`}
-                    onClick={() => {
-                      if (!showDropdown) {
-                        // Use setTimeout to ensure DOM is updated before calculating position
-                        setShowDropdown(true);
-                        setTimeout(() => {
-                          calculateDropdownPosition();
-                        }, 0);
-                      } else {
-                        setShowDropdown(false);
-                      }
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Dropdown button clicked, current showDropdown:', showDropdown);
+                      setShowDropdown(!showDropdown);
                     }}
                     title="More options"
                   >
@@ -805,24 +790,7 @@ function MessageBubble({
                   
                   {/* Enhanced dropdown menu with modern messaging features */}
                   {showDropdown && (
-                    <div 
-                      className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px] max-w-[200px] animate-in fade-in duration-200 backdrop-blur-sm" 
-                      style={{
-                        top: `${dropdownPosition.top}px`,
-                        left: `${dropdownPosition.left}px`,
-                        maxHeight: '80vh',
-                        overflowY: 'auto'
-                      }}
-                    >
-                      {/* Small arrow indicator */}
-                      <div 
-                        className="absolute w-2 h-2 bg-white border-l border-t border-gray-200 transform rotate-45"
-                        style={{
-                          top: dropdownPosition.placement.includes('top') ? 'calc(100% - 1px)' : '-4px',
-                          right: dropdownPosition.placement.includes('right') ? '12px' : 'auto',
-                          left: dropdownPosition.placement.includes('left') ? '12px' : 'auto',
-                        }}
-                      />
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px] max-w-[200px] animate-in fade-in duration-200 backdrop-blur-sm max-h-80 overflow-y-auto">
                       {/* Reply option - available for all messages */}
                       <button 
                         className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
