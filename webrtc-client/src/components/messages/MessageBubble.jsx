@@ -42,7 +42,7 @@ function MessageBubble({
   const [imgLoading, setImgLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, placement: 'bottom-right' });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 100, left: 100, placement: 'bottom-right' });
   const dropdownRef = useRef(null);
   const dropdownButtonRef = useRef(null);
   
@@ -85,6 +85,13 @@ function MessageBubble({
       window.removeEventListener('scroll', handleResize);
     };
   }, [showDropdown, showEmojiPicker, messageId, setShowEmojiPicker]);
+
+  // Calculate position when dropdown opens
+  useEffect(() => {
+    if (showDropdown && dropdownButtonRef.current) {
+      calculateDropdownPosition();
+    }
+  }, [showDropdown]);
 
   // Reset image states when message changes
   useEffect(() => {
@@ -782,9 +789,14 @@ function MessageBubble({
                     }`}
                     onClick={() => {
                       if (!showDropdown) {
-                        calculateDropdownPosition();
+                        // Use setTimeout to ensure DOM is updated before calculating position
+                        setShowDropdown(true);
+                        setTimeout(() => {
+                          calculateDropdownPosition();
+                        }, 0);
+                      } else {
+                        setShowDropdown(false);
                       }
-                      setShowDropdown(!showDropdown);
                     }}
                     title="More options"
                   >
