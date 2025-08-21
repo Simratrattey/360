@@ -1215,6 +1215,60 @@ export default function MessagesPage() {
     }
   };
 
+  // Client-side search fallback function
+  const performClientSideSearch = (searchQuery, searchFilters) => {
+    if (!messages || !searchQuery) return [];
+    
+    const query = searchQuery.toLowerCase();
+    
+    return messages.filter(msg => {
+      // Basic text search
+      const textMatch = msg.text && msg.text.toLowerCase().includes(query);
+      const fileNameMatch = msg.file && msg.file.name && msg.file.name.toLowerCase().includes(query);
+      
+      if (!textMatch && !fileNameMatch) return false;
+      
+      // Filter by type
+      if (searchFilters.type && searchFilters.type !== 'all') {
+        if (searchFilters.type === 'text' && msg.file) return false;
+        if (searchFilters.type === 'file' && !msg.file) return false;
+        if (searchFilters.type === 'image' && (!msg.file || !msg.file.type?.startsWith('image/'))) return false;
+      }
+      
+      // Filter by sender
+      if (searchFilters.sender && searchFilters.sender !== 'all') {
+        const senderId = msg.senderId || (typeof msg.sender === 'string' ? msg.sender : msg.sender?._id);
+        if (searchFilters.sender === 'me') {
+          if (senderId !== user?.id) return false;
+        } else if (senderId !== searchFilters.sender) {
+          return false;
+        }
+      }
+      
+      // Filter by date range
+      if (searchFilters.dateRange && searchFilters.dateRange !== 'all') {
+        const msgDate = new Date(msg.createdAt || msg.timestamp);
+        const now = new Date();
+        
+        switch (searchFilters.dateRange) {
+          case 'today':
+            if (msgDate.toDateString() !== now.toDateString()) return false;
+            break;
+          case 'week':
+            const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (msgDate < weekAgo) return false;
+            break;
+          case 'month':
+            const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            if (msgDate < monthAgo) return false;
+            break;
+        }
+      }
+      
+      return true;
+    }).slice(0, 50); // Limit results
+  };
+
   // Message action handlers
   const handlePinMessage = (messageId) => {
     setPinnedMessages(prev => {
@@ -1512,19 +1566,52 @@ export default function MessagesPage() {
 
   // Search functionality
   const handleSearch = async (query, filters) => {
-    if (!selected || !query.trim()) return;
+    if (!selected || !query.trim()) {
+      console.warn('Search cancelled: no conversation selected or empty query');
+      return;
+    }
+    
+    if (!selected._id) {
+      console.error('Search cancelled: conversation ID is missing');
+      setNotification({ message: 'Unable to search: conversation ID missing' });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
     
     setIsSearching(true);
     setSearchFilters(filters);
     
     try {
-      const response = await messageAPI.searchMessages(selected._id, {
+      // Process and validate filters before sending to API
+      const searchParams = {
         query: query.trim(),
-        type: filters.type,
-        sender: filters.sender,
-        dateRange: filters.dateRange,
         limit: 50
-      });
+      };
+      
+      // Only add valid filter parameters
+      if (filters.type && filters.type !== 'all') {
+        searchParams.type = filters.type;
+      }
+      
+      if (filters.dateRange && filters.dateRange !== 'all') {
+        searchParams.dateRange = filters.dateRange;
+      }
+      
+      // Handle sender filter carefully
+      if (filters.sender && filters.sender !== 'all') {
+        if (filters.sender === 'me') {
+          if (user?.id) {
+            searchParams.sender = user.id;
+          } else {
+            console.warn('Cannot filter by "me": user ID not available');
+          }
+        } else {
+          searchParams.sender = filters.sender;
+        }
+      }
+      
+      console.log('Search params:', searchParams);
+      const response = await messageAPI.searchMessages(selected._id, searchParams);
       
       const results = response.data.messages || [];
       setSearchResults(results);
@@ -1532,8 +1619,30 @@ export default function MessagesPage() {
       setCurrentSearchResult(0);
     } catch (error) {
       console.error('Search error:', error);
-      setSearchResults([]);
-      setTotalSearchResults(0);
+      
+      // If the API search fails, fall back to client-side search
+      if (error.response?.status === 500 || error.response?.status === 404 || error.code === 'ERR_BAD_RESPONSE') {
+        console.log('API search failed, falling back to client-side search');
+        const clientResults = performClientSideSearch(query.trim(), filters);
+        setSearchResults(clientResults);
+        setTotalSearchResults(clientResults.length);
+        setCurrentSearchResult(0);
+        
+        // Show notification about fallback
+        setNotification({
+          message: `Search completed (${clientResults.length} results found using local search)`
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        setSearchResults([]);
+        setTotalSearchResults(0);
+        
+        // Show error notification
+        setNotification({
+          message: 'Search failed. Please try again.'
+        });
+        setTimeout(() => setNotification(null), 3000);
+      }
     } finally {
       setIsSearching(false);
     }
