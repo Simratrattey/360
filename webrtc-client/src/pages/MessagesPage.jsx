@@ -197,33 +197,46 @@ export default function MessagesPage() {
    */
   const moveConversationToTop = useCallback((convId, lastMessage, time, incrementUnread = false) => {
     setAllConversations(prevSections => {
-      const newSections = prevSections.map(section => {
+      const newSections = [...prevSections];
+      // With unified structure, we work with the first (and only) section
+      const sectionIndex = 0;
+      
+      if (sectionIndex < newSections.length) {
+        const section = newSections[sectionIndex];
         const idx = section.items.findIndex(c => c._id === convId);
-        if (idx === -1) return section;
-
-        const newItems = [...section.items];
-        const [convItem] = newItems.splice(idx, 1);
         
-        const oldUnread = convItem.unread || 0;
-        const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
+        if (idx !== -1) {
+          const newItems = [...section.items];
+          const [convItem] = newItems.splice(idx, 1);
+          
+          const oldUnread = convItem.unread || 0;
+          const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
 
-        const updatedConv = {
-          ...convItem,
-          lastMessage: { 
-            ...lastMessage,
-            _forceUpdate: Date.now()
-          },
-          lastMessageAt: time,
-          unread: newUnread,
-          _lastUpdated: Date.now()
-        };
+          const updatedConv = {
+            ...convItem,
+            lastMessage: { 
+              ...lastMessage,
+              _forceUpdate: Date.now()
+            },
+            lastMessageAt: time,
+            unread: newUnread,
+            _lastUpdated: Date.now()
+          };
 
-        return {
-          ...section,
-          items: [updatedConv, ...newItems],
-          _lastUpdated: Date.now()
-        };
-      });
+          // Re-sort all items by most recent activity after updating
+          const allItemsUpdated = [updatedConv, ...newItems].sort((a, b) => {
+            const dateA = new Date(a.lastMessageAt || a.createdAt);
+            const dateB = new Date(b.lastMessageAt || b.createdAt);
+            return dateB - dateA;
+          });
+
+          newSections[sectionIndex] = {
+            ...section,
+            items: allItemsUpdated,
+            _lastUpdated: Date.now()
+          };
+        }
+      }
 
       return newSections;
     });
@@ -313,13 +326,16 @@ export default function MessagesPage() {
       const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
       const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
       
-      const newSections = [
-        { section: 'Direct Messages', icon: User, items: dmConversations },
-        { section: 'Groups', icon: Users, items: groupConversations },
-        { section: 'Communities', icon: Hash, items: communityConversations },
+      // Combine all conversations into a single unified list, sorted by most recent
+      const allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
+        .sort(sortByLastMessage);
+      
+      // Use a single section for all conversations
+      const unifiedSection = [
+        { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
       ];
       
-      setAllConversations(newSections);
+      setAllConversations(unifiedSection);
 
       // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
       // We limit the number of conversations prefetched per section to avoid overwhelming the server.
@@ -601,11 +617,10 @@ export default function MessagesPage() {
         // Add to conversations list in real-time
         setAllConversations(prev => {
           const newSections = [...prev];
-          const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
-                             newConversation.type === 'group' ? 'Groups' : 'Communities';
-          const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+          // With unified structure, we always use the first (and only) section
+          const sectionIndex = 0;
           
-          if (sectionIndex !== -1) {
+          if (sectionIndex < newSections.length) {
             // Check for duplicates
             const existingIndex = newSections[sectionIndex].items.findIndex(item => {
               if (item._id === newConversation._id) return true;
@@ -616,9 +631,17 @@ export default function MessagesPage() {
             });
             
             if (existingIndex === -1) {
+              // Add to top and re-sort by most recent activity
+              const updatedItems = [newConversation, ...newSections[sectionIndex].items]
+                .sort((a, b) => {
+                  const dateA = new Date(a.lastMessageAt || a.createdAt);
+                  const dateB = new Date(b.lastMessageAt || b.createdAt);
+                  return dateB - dateA;
+                });
+              
               newSections[sectionIndex] = {
                 ...newSections[sectionIndex],
-                items: [newConversation, ...newSections[sectionIndex].items]
+                items: updatedItems
               };
             }
           }
@@ -1114,11 +1137,10 @@ export default function MessagesPage() {
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
       const newSections = [...prev];
-      const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
-                         newConversation.type === 'group' ? 'Groups' : 'Communities';
-      const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+      // With unified structure, we always use the first (and only) section
+      const sectionIndex = 0;
       
-      if (sectionIndex !== -1) {
+      if (sectionIndex < newSections.length) {
         // Remove all existing duplicates from the section
         const idMap = new Map();
         const nameMap = new Map();
@@ -1152,9 +1174,12 @@ export default function MessagesPage() {
             _forceRender: Math.random()
           };
           
+          // Add to the top of the unified list (most recent first)
+          const updatedItems = [newConversationWithTimestamp, ...cleanedItems];
+          
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
-            items: [newConversationWithTimestamp, ...cleanedItems],
+            items: updatedItems,
             _lastUpdated: Date.now()
           };
         } else {
@@ -1277,21 +1302,27 @@ export default function MessagesPage() {
       // Immediate local update - don't wait for socket events
       setAllConversations(prev => {
         const newSections = [...prev];
-        const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
-                           newConversation.type === 'group' ? 'Groups' : 'Communities';
-        const sectionIndex = newSections.findIndex(s => s.section === sectionName);
+        // With unified structure, we always use the first (and only) section
+        const sectionIndex = 0;
         
-        if (sectionIndex !== -1) {
+        if (sectionIndex < newSections.length) {
           // Check if conversation already exists to prevent duplicates
           const existingIndex = newSections[sectionIndex].items.findIndex(
             item => item._id === newConversation._id
           );
           
           if (existingIndex === -1) {
-            // Create new items array to avoid mutation
+            // Add to top and re-sort by most recent activity
+            const updatedItems = [newConversation, ...newSections[sectionIndex].items]
+              .sort((a, b) => {
+                const dateA = new Date(a.lastMessageAt || a.createdAt);
+                const dateB = new Date(b.lastMessageAt || b.createdAt);
+                return dateB - dateA;
+              });
+            
             newSections[sectionIndex] = {
               ...newSections[sectionIndex],
-              items: [newConversation, ...newSections[sectionIndex].items]
+              items: updatedItems
             };
           }
         }
@@ -1503,43 +1534,31 @@ export default function MessagesPage() {
             </div>
           </div>
 
-          {/* Conversations List - More compact spacing */}
+          {/* Conversations List - Unified without sections */}
           <div className="flex-1 overflow-y-auto py-1">
-            {(() => {
-              return filteredConversations.map(section => {
-                return (
-                  <div key={section.section} className="mb-2 md:mb-3">
-                    <div className="flex items-center px-3 md:px-4 py-1.5 md:py-2 text-gray-500 uppercase text-xs font-bold tracking-wider">
-                      <section.icon className="h-3 w-3 mr-2" />
-                      {section.section}
-                    </div>
-                    {section.items.map((conv, index) => {
-                      return (
-                        <SidebarConversation
-                          key={`${conv._id}-${conv.name}-${index}-${conv._lastUpdated || 0}`}
-                          conv={conv}
-                          isActive={selected && selected._id === conv._id}
-                          onSelect={() => handleSelect(conv)}
-                          onStar={() => handleStar(conv._id)}
-                          onDelete={() => handleDeleteConversation(conv)}
-                          onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
-                          starred={starred.includes(conv._id)}
-                          getInitials={getInitials}
-                          currentUserId={user?.id}
-                          canDelete={
-                            !conv.isDeleted && (
-                              conv.type === 'dm' || 
-                              (conv.type === 'group' && conv.admins?.includes(user?.id)) ||
-                              (conv.type === 'community' && conv.admins?.includes(user?.id))
-                            )
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              });
-            })()}
+            {filteredConversations.length > 0 && filteredConversations[0].items.map((conv, index) => {
+              return (
+                <SidebarConversation
+                  key={`${conv._id}-${conv.name}-${index}-${conv._lastUpdated || 0}`}
+                  conv={conv}
+                  isActive={selected && selected._id === conv._id}
+                  onSelect={() => handleSelect(conv)}
+                  onStar={() => handleStar(conv._id)}
+                  onDelete={() => handleDeleteConversation(conv)}
+                  onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
+                  starred={starred.includes(conv._id)}
+                  getInitials={getInitials}
+                  currentUserId={user?.id}
+                  canDelete={
+                    !conv.isDeleted && (
+                      conv.type === 'dm' || 
+                      (conv.type === 'group' && conv.admins?.includes(user?.id)) ||
+                      (conv.type === 'community' && conv.admins?.includes(user?.id))
+                    )
+                  }
+                />
+              );
+            })}
           </div>
         </div>
       )}
