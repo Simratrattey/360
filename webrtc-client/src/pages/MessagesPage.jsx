@@ -196,48 +196,35 @@ export default function MessagesPage() {
    * @param {string} time - ISO timestamp of when the activity occurred.
    */
   const moveConversationToTop = useCallback((convId, lastMessage, time, incrementUnread = false) => {
-    console.log(`🔄 ATTEMPTING to move conversation ${convId} to top, incrementUnread: ${incrementUnread}`);
-    
     setAllConversations(prevSections => {
-      let convFound = false;
       const newSections = prevSections.map(section => {
         const idx = section.items.findIndex(c => c._id === convId);
         if (idx === -1) return section;
 
-        convFound = true;
         const newItems = [...section.items];
         const [convItem] = newItems.splice(idx, 1);
         
         const oldUnread = convItem.unread || 0;
         const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
 
-        // Force new object references to ensure React re-renders
         const updatedConv = {
           ...convItem,
           lastMessage: { 
             ...lastMessage,
-            _forceUpdate: Date.now() // Force update trigger
+            _forceUpdate: Date.now()
           },
           lastMessageAt: time,
           unread: newUnread,
-          _lastUpdated: Date.now() // Force conversation re-render
+          _lastUpdated: Date.now()
         };
 
-        console.log(`🔄 UPDATED conversation ${convId}: unread ${oldUnread} -> ${newUnread}, lastMessage: "${lastMessage.text}"`);
-
-        // Force new section object reference
         return {
           ...section,
           items: [updatedConv, ...newItems],
-          _lastUpdated: Date.now() // Force section re-render
+          _lastUpdated: Date.now()
         };
       });
 
-      if (convFound) {
-        console.log(`✅ SUCCESS: Moved conversation ${convId} to top with unread count update`);
-      } else {
-        console.log(`❌ FAILED: Conversation ${convId} not found in any section`);
-      }
       return newSections;
     });
   }, []);
@@ -286,38 +273,26 @@ export default function MessagesPage() {
     }
   }, [allConversations, isMobile]);
 
-  const [fetchConversationsCallCount, setFetchConversationsCallCount] = useState(0);
-  
   const fetchConversations = async () => {
-    const newCount = fetchConversationsCallCount + 1;
-    setFetchConversationsCallCount(newCount);
-    
-    console.log(`🌐 FETCH [${newCount}]: fetchConversations called`);
-    console.trace('🌐 FETCH: Call stack for fetchConversations');
-    
     try {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
       
-      console.log(`🌐 FETCH [${newCount}]: Retrieved ${conversations.length} conversations from API:`, 
-        conversations.map(c => ({ id: c._id, name: c.name, type: c.type })));
-      
-      // Sort conversations by lastMessageAt within each type (backend already sorts overall, but we maintain per-section sorting)
+      // Sort conversations by lastMessageAt within each type
       const sortByLastMessage = (a, b) => {
         const dateA = new Date(a.lastMessageAt || a.createdAt);
         const dateB = new Date(b.lastMessageAt || b.createdAt);
         return dateB - dateA;
       };
       
-      // COMPREHENSIVE DUPLICATE REMOVAL: Clean duplicates from API data
+      // Remove duplicates from API data
       const deduplicateConversations = (conversations) => {
         const idMap = new Map();
         const nameMap = new Map();
         
-        return conversations.filter((conv, index) => {
+        return conversations.filter((conv) => {
           // Remove ID duplicates
           if (idMap.has(conv._id)) {
-            console.log(`🧹 API DEDUP: Removing ID duplicate ${conv._id} (${conv.name}) at index ${index}`);
             return false;
           }
           idMap.set(conv._id, true);
@@ -325,7 +300,6 @@ export default function MessagesPage() {
           // Remove name duplicates for communities
           if (conv.type === 'community' && conv.name) {
             if (nameMap.has(conv.name)) {
-              console.log(`🧹 API DEDUP: Removing name duplicate ${conv._id} (${conv.name}) at index ${index}`);
               return false;
             }
             nameMap.set(conv.name, true);
@@ -339,19 +313,11 @@ export default function MessagesPage() {
       const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
       const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
       
-      console.log(`🧹 API DEDUP: Final counts - DMs: ${dmConversations.length}, Groups: ${groupConversations.length}, Communities: ${communityConversations.length}`);
-      
       const newSections = [
         { section: 'Direct Messages', icon: User, items: dmConversations },
         { section: 'Groups', icon: Users, items: groupConversations },
         { section: 'Communities', icon: Hash, items: communityConversations },
       ];
-      
-      console.log(`🌐 FETCH [${newCount}]: Setting new sections:`, newSections.map(section => ({
-        section: section.section,
-        itemCount: section.items.length,
-        items: section.items.map(item => ({ id: item._id, name: item.name }))
-      })));
       
       setAllConversations(newSections);
 
@@ -367,31 +333,25 @@ export default function MessagesPage() {
         // Only prefetch if NO cache exists at all (empty or undefined)
         const existingCache = messagesCache[conv._id];
         if (!existingCache || existingCache.length === 0) {
-          console.log(`🔄 Prefetching messages for conversation ${conv._id} (no cache exists)`);
           messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
             .then(res => {
               const msgs = res.data?.messages || res.data || [];
-              // CRITICAL: Only update cache if it's still empty (avoid overwriting real-time messages)
+              // Only update cache if it's still empty (avoid overwriting real-time messages)
               setMessagesCache(prev => {
                 if (prev[conv._id] && prev[conv._id].length > 0) {
-                  console.log(`⚠️ Skipping prefetch cache update - real-time messages already present`);
                   return prev;
                 }
-                console.log(`💾 Prefetch: caching ${msgs.length} messages for ${conv._id}`);
                 return { ...prev, [conv._id]: msgs };
               });
             })
             .catch(err => {
               console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
             });
-        } else {
-          console.log(`⚡ Skipping prefetch for ${conv._id} - already has ${existingCache.length} cached messages`);
         }
       });
       
-      // WHATSAPP-STYLE: Auto-select only on very first load when no conversation ever selected
+      // Auto-select only on very first load when no conversation ever selected
       if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
-        console.log('🏠 FIRST LOAD: Auto-selecting first conversation');
         handleSelect(conversations[0]);
       }
     } catch (error) {
@@ -408,50 +368,37 @@ export default function MessagesPage() {
     }
     
     const convId = selected._id;
-    console.log(`🔄 WHATSAPP-STYLE: Opening conversation ${convId}`);
     
-    // First, immediately show cached messages (WhatsApp instant loading)
+    // First, immediately show cached messages for instant loading
     const cachedMessages = messagesCache[convId];
     if (cachedMessages && cachedMessages.length > 0) {
-      console.log(`⚡ INSTANT LOAD: ${cachedMessages.length} cached messages for ${convId}`);
-      console.log(`⚡ Messages:`, cachedMessages.map(m => ({id: m._id, text: m.text?.substring(0, 30), from: m.senderName})));
       setMessages(cachedMessages);
       setMessagesLoading(false);
-      
-      // Join socket room immediately for real-time updates
       chatSocket.joinConversation(convId);
     } else {
       // No cache - show loading and fetch from server
-      console.log(`🌐 LOADING: Fetching messages for conversation ${convId}`);
       setMessages([]);
       setMessagesLoading(true);
       
       messageAPI.getMessages(convId)
         .then(res => {
           const serverMessages = res.data.messages || [];
-          console.log(`✅ LOADED: ${serverMessages.length} messages from server`);
-          
-          // Update display
           setMessages(serverMessages);
           
-          // SMART CACHE UPDATE: Only update cache if we don't have newer real-time messages
+          // Update cache if we don't have newer real-time messages
           setMessagesCache(prev => {
             const existingCache = prev[convId];
             if (existingCache && existingCache.length > serverMessages.length) {
-              console.log(`⚠️ Keeping existing cache with ${existingCache.length} messages (more than server's ${serverMessages.length})`);
               return prev;
             }
-            console.log(`💾 Updating cache with ${serverMessages.length} server messages`);
             return { ...prev, [convId]: serverMessages };
           });
           
-          // Join socket room after loading
           chatSocket.joinConversation(convId);
         })
         .catch(error => {
-          console.error('❌ Failed to load messages:', error);
+          console.error('Failed to load messages:', error);
           setMessages([]);
-          // Still join room even if loading failed
           chatSocket.joinConversation(convId);
         })
         .finally(() => {
@@ -472,24 +419,16 @@ export default function MessagesPage() {
     if (!chatSocket.socket) return;
     
     const handleNewMessage = (msg) => {
-      console.log('📨 WHATSAPP-STYLE MESSAGE HANDLER:', msg);
-      
       const conversationId = msg.conversationId || msg.conversation;
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log(`📋 Message: conv=${conversationId}, mine=${isMyMessage}, current=${isCurrentConversation}`);
-      
-      // 1. ALWAYS UPDATE MESSAGE CACHE (WhatsApp stores everything)
-      console.log(`📝 BEFORE CACHE UPDATE: Total conversations in cache: ${Object.keys(messagesCache).length}`);
-      console.log(`📝 Current cache for ${conversationId}:`, messagesCache[conversationId]?.length || 0, 'messages');
-      
+      // 1. Update message cache
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
         // Skip if message already exists
         if (convMessages.some(m => m._id === msg._id)) {
-          console.log(`⚠️ Message ${msg._id} already in cache - skipping`);
           return prev;
         }
         
@@ -497,7 +436,6 @@ export default function MessagesPage() {
         let cleanMessages = convMessages;
         if (isMyMessage) {
           cleanMessages = convMessages.filter(m => !m.pending && !m.sending);
-          console.log(`🧹 Cleaned ${convMessages.length - cleanMessages.length} optimistic messages`);
         }
         
         const newCache = [...cleanMessages, { ...msg, conversationId }];
@@ -507,16 +445,13 @@ export default function MessagesPage() {
           ? newCache.slice(-MAX_CACHED_MESSAGES)
           : newCache;
         
-        console.log(`💾 Caching message in conversation ${conversationId}`);
-        console.log(`💾 Cache now has ${limitedCache.length} messages for conversation ${conversationId}:`, limitedCache.map(m => ({id: m._id, text: m.text?.substring(0, 20)})));
-        
         return {
           ...prev,
           [conversationId]: limitedCache
         };
       });
       
-      // 2. UPDATE CURRENT CONVERSATION VIEW (if this is the active chat)
+      // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
           // For my messages, remove optimistic versions
@@ -528,15 +463,11 @@ export default function MessagesPage() {
           // Add if not already there
           if (filtered.some(m => m._id === msg._id)) return filtered;
           
-          console.log(`📱 Adding message to current conversation view`);
           return [...filtered, { ...msg, conversationId }];
         });
       }
       
-      // 3. ALWAYS UPDATE SIDEBAR (WhatsApp updates sidebar for ALL messages)
-      console.log(`📋 Updating sidebar for conversation ${conversationId}`);
-      
-      // Move conversation to top with latest message info
+      // 3. Update sidebar
       moveConversationToTop(
         conversationId,
         {
@@ -549,14 +480,7 @@ export default function MessagesPage() {
         !isMyMessage && !isCurrentConversation // increment unread only for others' messages when not in that conversation
       );
       
-      // 4. DELAYED SYNC WITH SERVER (avoid race conditions)
-      // TEMPORARILY DISABLED to test if this causes duplication
-      // setTimeout(() => {
-      //   fetchConversations();
-      //   if (refreshUnreadCount) refreshUnreadCount();
-      // }, 500);
-      
-      // 5. BROWSER NOTIFICATION (only for others' messages)
+      // 4. Browser notification (only for others' messages)
       if (!isMyMessage && window.Notification && Notification.permission === 'granted') {
         const title = msg.senderName || 'New Message';
         const body = msg.text || (msg.file ? 'Sent a file' : 'New message');
@@ -653,26 +577,9 @@ export default function MessagesPage() {
       // Removed fetchConversations() - socket events should handle updates
     });
 
-    // Real-time conversation creation/deletion events
-    let conversationCreatedEventCount = 0;
+    // Real-time conversation creation events
     chatSocket.on('conversation:created', (newConversation) => {
-      conversationCreatedEventCount++;
-      console.log(`🔔 [${conversationCreatedEventCount}] New conversation created (received via socket):`, newConversation);
-      
-      // Check if current user should see this conversation
       const userId = user?.id;
-      
-      // DETAILED LOGGING FOR DEBUGGING
-      console.log('🔍 CREATOR DEBUG:', {
-        conversationType: newConversation.type,
-        currentUserId: userId,
-        currentUserIdType: typeof userId,
-        createdBy: newConversation.createdBy,
-        createdByType: typeof newConversation.createdBy,
-        createdByObjectId: typeof newConversation.createdBy === 'object' ? newConversation.createdBy?._id : null,
-        members: newConversation.members,
-        membersLength: newConversation.members?.length
-      });
       
       // For communities: visible to all users (no membership check)
       // For groups/DMs: require explicit membership
@@ -685,23 +592,13 @@ export default function MessagesPage() {
       const isCreator = newConversation.createdBy === userId || 
                        (typeof newConversation.createdBy === 'object' && newConversation.createdBy?._id === userId);
       
-      console.log('🔍 DECISION:', {
-        shouldShowConversation,
-        isCreator,
-        willAdd: shouldShowConversation && !isCreator
-      });
-      
-      // TEMPORARY DEBUG: Skip socket handling for communities to test if this is the source of duplication
+      // Skip socket handling for communities to prevent duplication
       if (newConversation.type === 'community') {
-        console.log('🚫 TEMPORARILY SKIPPING socket handling for community to test duplication source');
         return;
       }
       
       if (shouldShowConversation && !isCreator) {
-        // Only add for non-creators (creators already added it locally)
-        console.log('🔔 Adding conversation to sidebar for non-creator user:', userId);
-        
-        // Add to conversations list in real-time with enhanced duplicate prevention
+        // Add to conversations list in real-time
         setAllConversations(prev => {
           const newSections = [...prev];
           const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
@@ -709,52 +606,36 @@ export default function MessagesPage() {
           const sectionIndex = newSections.findIndex(s => s.section === sectionName);
           
           if (sectionIndex !== -1) {
-            // Enhanced duplicate check - check by ID AND by name for communities
+            // Check for duplicates
             const existingIndex = newSections[sectionIndex].items.findIndex(item => {
               if (item._id === newConversation._id) return true;
-              // For communities, also check by name to prevent name-based duplicates
               if (newConversation.type === 'community' && item.name === newConversation.name) {
-                console.warn(`🔔 Found community with same name: ${item.name}, potential duplicate`);
                 return true;
               }
               return false;
             });
             
             if (existingIndex === -1) {
-              console.log(`🔔 Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
-              // Create new items array to avoid mutation
               newSections[sectionIndex] = {
                 ...newSections[sectionIndex],
                 items: [newConversation, ...newSections[sectionIndex].items]
               };
-            } else {
-              console.log(`🔔 Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
             }
-          } else {
-            console.warn(`🔔 Section ${sectionName} not found for conversation type ${newConversation.type}`);
           }
           
           return newSections;
         });
         
-        // Show notification for non-creator users
         setNotification({
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
         });
         setTimeout(() => setNotification(null), 3000);
         
-        // Refresh unread count in header
         if (refreshUnreadCount) refreshUnreadCount();
-      } else if (isCreator) {
-        console.log('🔔 User is the creator of this conversation, already added locally');
-      } else {
-        console.log('🔔 User is not a member of this conversation, ignoring');
       }
     });
 
     chatSocket.on('conversation:deleted', ({ conversationId, deletedBy, conversationName, conversationType }) => {
-      console.log('🔔 Conversation deleted (received via socket):', { conversationId, deletedBy, conversationName });
-      
       const isDeleter = deletedBy === user?.id;
       
       if (isDeleter) {
@@ -772,7 +653,6 @@ export default function MessagesPage() {
         
         // If this was the selected conversation, clear selection
         if (selected && selected._id === conversationId) {
-          console.log('🔔 Clearing selected conversation as it was deleted');
           setSelected(null);
           selectedRef.current = null;
           setMessages([]);
@@ -906,44 +786,7 @@ export default function MessagesPage() {
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
-    // Create a deep comparison key to force updates when conversation properties change
-    const conversationsKey = allConversations.map(section => 
-      `${section.section}-${section._lastUpdated || 0}-${section.items.map(conv => 
-        `${conv._id}-${conv.unread || 0}-${conv.lastMessageAt || ''}-${conv._lastUpdated || 0}`
-      ).join(',')}`
-    ).join('|');
-    
-    console.log(`🔍 RENDER: useMemo recomputing filteredConversations for ${allConversations.length} sections`);
-    
-    // DETAILED DEBUGGING: Check for duplicates in each section BEFORE filtering
-    const duplicateAnalysis = allConversations.map(section => {
-      const idCounts = {};
-      const nameCounts = {};
-      section.items.forEach(item => {
-        idCounts[item._id] = (idCounts[item._id] || 0) + 1;
-        if (item.name) {
-          nameCounts[item.name] = (nameCounts[item.name] || 0) + 1;
-        }
-      });
-      
-      const duplicateIds = Object.entries(idCounts).filter(([id, count]) => count > 1);
-      const duplicateNames = Object.entries(nameCounts).filter(([name, count]) => count > 1);
-      
-      return {
-        section: section.section,
-        totalItems: section.items.length,
-        duplicateIds,
-        duplicateNames,
-        items: section.items.map(item => ({ id: item._id, name: item.name }))
-      };
-    });
-    
-    console.log(`🔍 RENDER: Duplicate analysis before filtering:`, duplicateAnalysis);
-    
     return allConversations.map(section => {
-      console.log(`🔍 RENDER: Processing section "${section.section}" with ${section.items.length} items:`, 
-        section.items.map(item => ({ id: item._id, name: item.name })));
-      
       const filteredItems = section.items.filter(conv => {
         try {
           const displayName = getConversationDisplayName(conv, user?.id);
@@ -1267,53 +1110,22 @@ export default function MessagesPage() {
     }
   };
 
-  const [localCreationCallCount, setLocalCreationCallCount] = useState(0);
-  
   const handleConversationCreated = async (newConversation) => {
-    const newCount = localCreationCallCount + 1;
-    setLocalCreationCallCount(newCount);
-    
-    console.log(`🔔 LOCAL [${newCount}]: Handling locally created conversation:`, newConversation);
-    console.log('🔔 LOCAL: Current user ID:', user?.id);
-    console.log('🔔 LOCAL: Conversation type:', newConversation.type);
-    
-    // LOG THE STATE BEFORE UPDATE
-    console.log(`📊 LOCAL: BEFORE UPDATE - all sections:`, allConversations.map(section => ({
-      section: section.section,
-      itemCount: section.items.length,
-      items: section.items.map(item => ({ id: item._id, name: item.name }))
-    })));
-    
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
-      console.log(`📊 LOCAL: setState callback - prev state:`, prev.map(section => ({
-        section: section.section,
-        itemCount: section.items.length,
-        items: section.items.map(item => ({ id: item._id, name: item.name }))
-      })));
-      
       const newSections = [...prev];
       const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
                          newConversation.type === 'group' ? 'Groups' : 'Communities';
       const sectionIndex = newSections.findIndex(s => s.section === sectionName);
       
-      console.log(`📊 LOCAL: Target section "${sectionName}" found at index ${sectionIndex}`);
-      
       if (sectionIndex !== -1) {
-        console.log(`📊 LOCAL: Current items in ${sectionName} before addition:`, 
-          newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
-        
-        // COMPREHENSIVE DUPLICATE REMOVAL: Always clean existing duplicates first
-        console.log(`🧹 DEDUPLICATING: Cleaning existing duplicates in ${sectionName} section`);
-        
-        // Step 1: Remove all existing duplicates from the section
+        // Remove all existing duplicates from the section
         const idMap = new Map();
         const nameMap = new Map();
         
-        const cleanedItems = newSections[sectionIndex].items.filter((item, index) => {
+        const cleanedItems = newSections[sectionIndex].items.filter((item) => {
           // Track ID duplicates
           if (idMap.has(item._id)) {
-            console.log(`🧹 REMOVING ID DUPLICATE: ${item._id} (${item.name}) at index ${index}`);
             return false;
           }
           idMap.set(item._id, true);
@@ -1321,7 +1133,6 @@ export default function MessagesPage() {
           // Track name duplicates for communities
           if (item.type === 'community' && item.name) {
             if (nameMap.has(item.name)) {
-              console.log(`🧹 REMOVING NAME DUPLICATE: ${item._id} (${item.name}) at index ${index}`);
               return false;
             }
             nameMap.set(item.name, true);
@@ -1330,18 +1141,11 @@ export default function MessagesPage() {
           return true;
         });
         
-        console.log(`📊 LOCAL: After cleaning, ${sectionName} has ${cleanedItems.length} items (removed ${newSections[sectionIndex].items.length - cleanedItems.length} duplicates)`);
-        
-        // Step 2: Check if new conversation would be a duplicate
+        // Check if new conversation would be a duplicate
         const wouldBeDuplicateId = idMap.has(newConversation._id);
         const wouldBeDuplicateName = newConversation.type === 'community' && newConversation.name && nameMap.has(newConversation.name);
         
-        console.log(`📊 LOCAL: New conversation duplicate check - ID: ${wouldBeDuplicateId}, Name: ${wouldBeDuplicateName}`);
-        
         if (!wouldBeDuplicateId && !wouldBeDuplicateName) {
-          console.log(`🔔 LOCAL: Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
-          
-          // Create new items array with forced React re-render triggers
           const newConversationWithTimestamp = {
             ...newConversation,
             _lastUpdated: Date.now(),
@@ -1351,39 +1155,22 @@ export default function MessagesPage() {
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
             items: [newConversationWithTimestamp, ...cleanedItems],
-            _lastUpdated: Date.now() // Force section re-render
+            _lastUpdated: Date.now()
           };
-          
-          // LOG THE STATE AFTER ADDITION
-          console.log(`📊 LOCAL: After addition, ${sectionName} section has ${newSections[sectionIndex].items.length} items:`, 
-            newSections[sectionIndex].items.map(item => ({ id: item._id, name: item.name })));
         } else {
-          console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) would be duplicate in ${sectionName}, using cleaned items only`);
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
             items: cleanedItems,
-            _lastUpdated: Date.now() // Force section re-render
+            _lastUpdated: Date.now()
           };
         }
       }
-      
-      console.log(`📊 LOCAL: Final new state being returned:`, newSections.map(section => ({
-        section: section.section,
-        itemCount: section.items.length,
-        items: section.items.map(item => ({ id: item._id, name: item.name }))
-      })));
       
       return newSections;
     });
     
     // Select the new conversation
     handleSelect(newConversation);
-    
-    // System notifications will be handled by the backend automatically
-    // No need to manually send messages from the client
-    
-    // Backend will automatically emit 'conversation:created' event to all members
-    // and generate system messages when the API endpoint is called
     
     // Refresh unread count in header
     if (refreshUnreadCount) refreshUnreadCount();
