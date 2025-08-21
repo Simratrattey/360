@@ -653,8 +653,6 @@ export default function MessagesPage() {
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
         });
         setTimeout(() => setNotification(null), 3000);
-        
-        if (refreshUnreadCount) refreshUnreadCount();
       }
     });
 
@@ -788,7 +786,6 @@ export default function MessagesPage() {
       // Mark conversation as read on backend
       conversationAPI.markConversationAsRead(selected._id)
         .then(() => {
-          // Refresh unread count in header
           if (refreshUnreadCount) refreshUnreadCount();
           
           // Set unread to 0 for this conversation in the sidebar
@@ -856,7 +853,6 @@ export default function MessagesPage() {
     if (conv.unread > 0) {
       conversationAPI.markConversationAsRead(conv._id)
         .then(() => {
-          // Refresh unread count in header
           if (refreshUnreadCount) refreshUnreadCount();
           
           // Set unread to 0 for this conversation in the sidebar
@@ -1197,9 +1193,6 @@ export default function MessagesPage() {
     // Select the new conversation
     handleSelect(newConversation);
     
-    // Refresh unread count in header
-    if (refreshUnreadCount) refreshUnreadCount();
-    
     setNotification({
       message: 'Conversation created successfully!'
     });
@@ -1344,9 +1337,6 @@ export default function MessagesPage() {
       
       // Backend will automatically emit 'conversation:created' event to all members
       // and generate system messages when the API endpoint is called
-      
-      // Refresh unread count in header
-      if (refreshUnreadCount) refreshUnreadCount();
       
       setNotification({
         message: response.data.message || 'Conversation created successfully!'

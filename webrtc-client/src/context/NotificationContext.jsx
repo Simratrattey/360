@@ -213,12 +213,8 @@ export const NotificationProvider = ({ children }) => {
       return updated;
     });
     
-    // Update unread count
-    setUnreadCount(prev => {
-      const newCount = prev + 1;
-      localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, newCount.toString());
-      return newCount;
-    });
+    // Note: Unread count is managed by the Layout component through API calls
+    // to avoid double counting with the messages page unread logic
     
     // Show browser notification if applicable
     if (document.visibilityState === 'visible' && document.hasFocus()) {
