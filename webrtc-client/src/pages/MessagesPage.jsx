@@ -184,6 +184,8 @@ export default function MessagesPage() {
   const [totalSearchResults, setTotalSearchResults] = useState(0);
   const [searchFilters, setSearchFilters] = useState(null);
   const [reactionInProgress, setReactionInProgress] = useState(false);
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [starredMessages, setStarredMessages] = useState([]);
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('draftMessages');
@@ -1213,6 +1215,42 @@ export default function MessagesPage() {
     }
   };
 
+  // Message action handlers
+  const handleForwardMessage = (message) => {
+    console.log('Forwarding message:', message);
+    // TODO: Implement message forwarding logic
+  };
+
+  const handlePinMessage = (messageId) => {
+    setPinnedMessages(prev => {
+      if (prev.includes(messageId)) {
+        return prev.filter(id => id !== messageId);
+      } else {
+        return [...prev, messageId];
+      }
+    });
+  };
+
+  const handleStarMessage = (messageId) => {
+    setStarredMessages(prev => {
+      if (prev.includes(messageId)) {
+        return prev.filter(id => id !== messageId);
+      } else {
+        return [...prev, messageId];
+      }
+    });
+  };
+
+  const handleShowMessageInfo = (message) => {
+    console.log('Showing message info:', message);
+    // TODO: Implement message info modal
+  };
+
+  const handleSelectMessage = (messageId) => {
+    console.log('Selecting message:', messageId);
+    // TODO: Implement message selection for bulk operations
+  };
+
   const handleConversationCreated = async (newConversation) => {
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
@@ -1787,6 +1825,13 @@ export default function MessagesPage() {
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
               searchFilters={searchFilters}
+              onForward={handleForwardMessage}
+              onPin={handlePinMessage}
+              onStar={handleStarMessage}
+              onShowInfo={handleShowMessageInfo}
+              onSelect={handleSelectMessage}
+              pinnedMessages={pinnedMessages}
+              starredMessages={starredMessages}
             />
           )}
 

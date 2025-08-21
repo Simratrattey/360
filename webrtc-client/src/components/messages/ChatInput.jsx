@@ -122,11 +122,28 @@ export default function ChatInput({
     
     input.onchange = (e) => {
       handleFileChange(e);
-      document.body.removeChild(input);
+      // Clean up the input element
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
+    };
+    
+    input.oncancel = () => {
+      // Clean up if user cancels the file dialog
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
     };
     
     document.body.appendChild(input);
     input.click();
+    
+    // Fallback cleanup after a timeout
+    setTimeout(() => {
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
+    }, 10000);
   };
 
   useEffect(() => {

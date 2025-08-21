@@ -100,7 +100,20 @@ const VoiceRecorder = ({ onSend, onCancel, className = '' }) => {
       
     } catch (error) {
       console.error('Error starting recording:', error);
-      alert('Could not access microphone. Please check permissions.');
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Could not access microphone. ';
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow microphone access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No microphone found. Please connect a microphone.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage += 'Audio recording is not supported in this browser.';
+      } else {
+        errorMessage += 'Please check your microphone settings.';
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -124,20 +137,30 @@ const VoiceRecorder = ({ onSend, onCancel, className = '' }) => {
 
   const pauseRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      if (isPaused) {
-        mediaRecorderRef.current.resume();
-        setIsPaused(false);
-        // Resume timer
-        intervalRef.current = setInterval(() => {
-          setDuration(prev => prev + 0.1);
-        }, 100);
-      } else {
-        mediaRecorderRef.current.pause();
-        setIsPaused(true);
-        // Pause timer
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
+      try {
+        if (isPaused) {
+          if (typeof mediaRecorderRef.current.resume === 'function') {
+            mediaRecorderRef.current.resume();
+          }
+          setIsPaused(false);
+          // Resume timer
+          intervalRef.current = setInterval(() => {
+            setDuration(prev => prev + 0.1);
+          }, 100);
+        } else {
+          if (typeof mediaRecorderRef.current.pause === 'function') {
+            mediaRecorderRef.current.pause();
+          }
+          setIsPaused(true);
+          // Pause timer
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
         }
+      } catch (error) {
+        console.warn('Pause/resume not supported in this browser:', error);
+        // Fallback: stop recording instead of pausing
+        stopRecording();
       }
     }
   };
@@ -148,8 +171,14 @@ const VoiceRecorder = ({ onSend, onCancel, className = '' }) => {
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
-        audioRef.current.play();
-        setIsPlaying(true);
+        audioRef.current.play()
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch(error => {
+            console.error('Error playing audio:', error);
+            setIsPlaying(false);
+          });
       }
     }
   };

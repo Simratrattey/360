@@ -67,6 +67,13 @@ export default function ChatWindow({
   searchResults = [],
   currentSearchResult = 0,
   searchFilters = null,
+  onForward,
+  onPin,
+  onStar,
+  onShowInfo,
+  onSelect,
+  pinnedMessages = [],
+  starredMessages = [],
 }) {
   const chatRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
@@ -192,6 +199,13 @@ export default function ChatWindow({
                         onlineUsers={onlineUsers}
                         currentUserId={currentUserId}
                         searchFilters={searchFilters}
+                        onForward={onForward}
+                        onPin={onPin}
+                        onStar={onStar}
+                        onShowInfo={onShowInfo}
+                        onSelect={onSelect}
+                        isPinned={pinnedMessages.includes(msg._id || msg.id)}
+                        isStarred={starredMessages.includes(msg._id || msg.id)}
                       />
                     </div>
                   );

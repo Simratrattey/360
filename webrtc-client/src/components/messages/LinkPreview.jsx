@@ -53,7 +53,7 @@ const LinkPreview = ({ url, message }) => {
               favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
             });
             setLoading(false);
-          }, 1000);
+          }, 500); // Reduced delay for better UX
         } else {
           // Generic preview for unknown domains
           setTimeout(() => {
@@ -66,7 +66,7 @@ const LinkPreview = ({ url, message }) => {
               favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
             });
             setLoading(false);
-          }, 1000);
+          }, 500); // Reduced delay for better UX
         }
       } catch (err) {
         console.error('Error fetching link preview:', err);
@@ -156,8 +156,8 @@ const LinkPreview = ({ url, message }) => {
               </div>
             </div>
             
-            {/* Thumbnail */}
-            {preview.image && (
+            {/* Thumbnail - only show if we have a real image */}
+            {preview.image && !preview.image.includes('placeholder') && (
               <div className="flex-shrink-0">
                 <img
                   src={preview.image}
