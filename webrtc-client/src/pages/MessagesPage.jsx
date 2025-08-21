@@ -644,8 +644,11 @@ export default function MessagesPage() {
             
             if (existingIndex === -1) {
               console.log(`🔔 Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
-              // Add to the beginning of the list for newest first
-              newSections[sectionIndex].items.unshift(newConversation);
+              // Create new items array to avoid mutation
+              newSections[sectionIndex] = {
+                ...newSections[sectionIndex],
+                items: [newConversation, ...newSections[sectionIndex].items]
+              };
             } else {
               console.log(`🔔 Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
             }
@@ -1182,8 +1185,11 @@ export default function MessagesPage() {
         
         if (existingIndex === -1) {
           console.log(`🔔 LOCAL: Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
-          // Add to the beginning of the list for newest first
-          newSections[sectionIndex].items.unshift(newConversation);
+          // Create new items array to avoid mutation
+          newSections[sectionIndex] = {
+            ...newSections[sectionIndex],
+            items: [newConversation, ...newSections[sectionIndex].items]
+          };
         } else {
           console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
         }
@@ -1317,8 +1323,11 @@ export default function MessagesPage() {
           );
           
           if (existingIndex === -1) {
-            // Add to the beginning of the list for newest first
-            newSections[sectionIndex].items.unshift(newConversation);
+            // Create new items array to avoid mutation
+            newSections[sectionIndex] = {
+              ...newSections[sectionIndex],
+              items: [newConversation, ...newSections[sectionIndex].items]
+            };
           }
         }
         
@@ -1465,6 +1474,28 @@ export default function MessagesPage() {
       handleNavigateSearchResult('goto', newIndex);
     }
   };
+
+  // Debug helper for development
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.debugMessagesPage = {
+        conversations: allConversations,
+        cache: messagesCache,
+        selected,
+        user,
+        clearCache: () => {
+          console.log('🧹 Clearing all app cache...');
+          localStorage.removeItem('messagesCache');
+          localStorage.removeItem('chat_notifications');
+          localStorage.removeItem('unread_count');
+          localStorage.removeItem('chatSearchHistory');
+          sessionStorage.removeItem('app_errors');
+          console.log('✅ Cache cleared! Please refresh the page.');
+          window.location.reload();
+        }
+      };
+    }
+  });
 
   return (
     <div className="flex h-[100dvh] sm:h-[85vh] bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 sm:rounded-2xl shadow-2xl overflow-hidden border-0 sm:border border-gray-100">
