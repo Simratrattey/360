@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Trash2, MessageCircle, Users, Hash } from 'lucide-react';
+import { Star, MessageCircle, Users, Hash } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
 
 function getConversationDisplayName(conversation, currentUserId) {
@@ -45,15 +45,11 @@ export default function SidebarConversation({
   isActive,
   onSelect,
   onStar,
-  onDelete,
-  onDismissDeleted,
   starred,
   getInitials,
   currentUserId,
-  canDelete,
 }) {
   const { onlineUsers } = useChatSocket();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const displayName = getConversationDisplayName(conv, currentUserId);
   const initials = getInitials(displayName);
@@ -216,29 +212,6 @@ export default function SidebarConversation({
             >
               <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3" />
             </button>
-            {/* Delete/Dismiss button - Compact */}
-            {(canDelete || conv.isDeleted) && (
-              <button 
-                onClick={e => { 
-                  e.stopPropagation(); 
-                  if (conv.isDeleted) {
-                    // For deleted conversations, dismiss immediately
-                    onDismissDeleted && onDismissDeleted();
-                  } else {
-                    // For active conversations, show confirmation
-                    setShowDeleteConfirm(true);
-                  }
-                }} 
-                className={`p-1 rounded-full transition-all duration-200 md:opacity-0 md:group-hover:opacity-100 opacity-70 active:scale-95 hover:scale-105 ${
-                  conv.isDeleted 
-                    ? 'text-orange-500 hover:text-orange-600 hover:bg-orange-50 active:bg-orange-100' 
-                    : 'text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100'
-                }`}
-                title={conv.isDeleted ? "Dismiss deleted conversation" : "Delete conversation"}
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -248,47 +221,6 @@ export default function SidebarConversation({
         <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
-            onClick={() => setShowDeleteConfirm(false)}
-          />
-          <div 
-            className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex flex-col items-center text-center">
-              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                <Trash2 className="h-6 w-6 text-red-500" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                Delete Conversation?
-              </h3>
-              <p className="text-sm text-gray-600 mb-6 leading-relaxed">
-                Delete conversation with <span className="font-medium text-gray-800">{displayName}</span>? This cannot be undone.
-              </p>
-              <div className="flex gap-3 w-full">
-                <button
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium transition-colors duration-150"
-                  onClick={() => setShowDeleteConfirm(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 shadow-md hover:shadow-lg transition-all duration-150"
-                  onClick={() => {
-                    setShowDeleteConfirm(false); 
-                    onDelete(); 
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 
