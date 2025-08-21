@@ -574,7 +574,7 @@ export default function MessagesPage() {
       if (selected && selected._id === conversationId) {
         handleConversationUpdated();
       }
-      fetchConversations(); // Update sidebar
+      // Removed fetchConversations() - socket events should handle updates
     });
 
     chatSocket.on('conversation:memberRemoved', ({ conversationId, userId, removedBy }) => {
@@ -582,7 +582,7 @@ export default function MessagesPage() {
       if (selected && selected._id === conversationId) {
         handleConversationUpdated();
       }
-      fetchConversations(); // Update sidebar
+      // Removed fetchConversations() - socket events should handle updates
     });
 
     chatSocket.on('conversation:adminAdded', ({ conversationId, userId, adminId }) => {
@@ -590,7 +590,7 @@ export default function MessagesPage() {
       if (selected && selected._id === conversationId) {
         handleConversationUpdated();
       }
-      fetchConversations(); // Update sidebar
+      // Removed fetchConversations() - socket events should handle updates
     });
 
     chatSocket.on('conversation:adminRemoved', ({ conversationId, userId, adminId }) => {
@@ -598,23 +598,32 @@ export default function MessagesPage() {
       if (selected && selected._id === conversationId) {
         handleConversationUpdated();
       }
-      fetchConversations(); // Update sidebar
+      // Removed fetchConversations() - socket events should handle updates
     });
 
     // Real-time conversation creation/deletion events
     chatSocket.on('conversation:created', (newConversation) => {
       console.log('🔔 New conversation created (received via socket):', newConversation);
       
-      // Check if current user is a member of this conversation
+      // Check if current user should see this conversation
       const userId = user?.id;
-      const isMember = newConversation.members?.some(m => 
-        (typeof m === 'string' ? m : m._id) === userId
-      );
       
-      if (isMember) {
-        console.log('🔔 Adding conversation to sidebar for user:', userId);
+      // For communities: visible to all users (no membership check)
+      // For groups/DMs: require explicit membership
+      const shouldShowConversation = newConversation.type === 'community' || 
+                                    newConversation.members?.some(m => 
+                                      (typeof m === 'string' ? m : m._id) === userId
+                                    );
+      
+      // Check if current user is the creator
+      const isCreator = newConversation.createdBy === userId || 
+                       (typeof newConversation.createdBy === 'object' && newConversation.createdBy?._id === userId);
+      
+      if (shouldShowConversation && !isCreator) {
+        // Only add for non-creators (creators already added it locally)
+        console.log('🔔 Adding conversation to sidebar for non-creator user:', userId);
         
-        // Add to conversations list in real-time
+        // Add to conversations list in real-time with enhanced duplicate prevention
         setAllConversations(prev => {
           const newSections = [...prev];
           const sectionName = newConversation.type === 'dm' ? 'Direct Messages' : 
@@ -622,17 +631,23 @@ export default function MessagesPage() {
           const sectionIndex = newSections.findIndex(s => s.section === sectionName);
           
           if (sectionIndex !== -1) {
-            // Check if conversation already exists to prevent duplicates
-            const existingIndex = newSections[sectionIndex].items.findIndex(
-              item => item._id === newConversation._id
-            );
+            // Enhanced duplicate check - check by ID AND by name for communities
+            const existingIndex = newSections[sectionIndex].items.findIndex(item => {
+              if (item._id === newConversation._id) return true;
+              // For communities, also check by name to prevent name-based duplicates
+              if (newConversation.type === 'community' && item.name === newConversation.name) {
+                console.warn(`🔔 Found community with same name: ${item.name}, potential duplicate`);
+                return true;
+              }
+              return false;
+            });
             
             if (existingIndex === -1) {
-              console.log(`🔔 Adding conversation ${newConversation._id} to ${sectionName} section`);
+              console.log(`🔔 Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
               // Add to the beginning of the list for newest first
               newSections[sectionIndex].items.unshift(newConversation);
             } else {
-              console.log(`🔔 Conversation ${newConversation._id} already exists, skipping duplicate`);
+              console.log(`🔔 Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
             }
           } else {
             console.warn(`🔔 Section ${sectionName} not found for conversation type ${newConversation.type}`);
@@ -641,23 +656,16 @@ export default function MessagesPage() {
           return newSections;
         });
         
-        // Update all conversations ref for real-time access
-        setAllConversations(prev => {
-          allConversationsRef.current = prev;
-          return prev;
-        });
-        
         // Show notification for non-creator users
-        const isCreator = newConversation.createdBy === userId;
-        if (!isCreator) {
-          setNotification({
-            message: `You were added to ${newConversation.name || 'a new conversation'}!`
-          });
-          setTimeout(() => setNotification(null), 3000);
-        }
+        setNotification({
+          message: `You were added to ${newConversation.name || 'a new conversation'}!`
+        });
+        setTimeout(() => setNotification(null), 3000);
         
         // Refresh unread count in header
         if (refreshUnreadCount) refreshUnreadCount();
+      } else if (isCreator) {
+        console.log('🔔 User is the creator of this conversation, already added locally');
       } else {
         console.log('🔔 User is not a member of this conversation, ignoring');
       }
@@ -1151,6 +1159,8 @@ export default function MessagesPage() {
   };
 
   const handleConversationCreated = async (newConversation) => {
+    console.log('🔔 Handling locally created conversation:', newConversation);
+    
     // Immediate local update - don't wait for socket events
     setAllConversations(prev => {
       const newSections = [...prev];
@@ -1159,24 +1169,27 @@ export default function MessagesPage() {
       const sectionIndex = newSections.findIndex(s => s.section === sectionName);
       
       if (sectionIndex !== -1) {
-        // Check if conversation already exists to prevent duplicates
-        const existingIndex = newSections[sectionIndex].items.findIndex(
-          item => item._id === newConversation._id
-        );
+        // Enhanced duplicate check - check by ID AND by name for communities
+        const existingIndex = newSections[sectionIndex].items.findIndex(item => {
+          if (item._id === newConversation._id) return true;
+          // For communities, also check by name to prevent name-based duplicates
+          if (newConversation.type === 'community' && item.name === newConversation.name) {
+            console.warn(`🔔 LOCAL: Found community with same name: ${item.name}, potential duplicate`);
+            return true;
+          }
+          return false;
+        });
         
         if (existingIndex === -1) {
+          console.log(`🔔 LOCAL: Adding conversation ${newConversation._id} (${newConversation.name}) to ${sectionName} section`);
           // Add to the beginning of the list for newest first
           newSections[sectionIndex].items.unshift(newConversation);
+        } else {
+          console.log(`🔔 LOCAL: Conversation ${newConversation._id} (${newConversation.name}) already exists in ${sectionName}, skipping duplicate`);
         }
       }
       
       return newSections;
-    });
-    
-    // Update refs for real-time access
-    setAllConversations(prev => {
-      allConversationsRef.current = prev;
-      return prev;
     });
     
     // Select the new conversation
