@@ -117,6 +117,7 @@ export default function MessagesPage() {
   const chatSocket = useChatSocket();
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
   const [messages, setMessages] = useState([]);
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
@@ -630,7 +631,9 @@ export default function MessagesPage() {
       // Always show conversation if user should see it (creator will have it from API, others get it from socket)
       if (shouldShowConversation) {
         // Add to conversations list in real-time
+        console.log('🔄 [Real-time] Current allConversations before update:', allConversations);
         setAllConversations(prev => {
+          console.log('🔄 [Real-time] setAllConversations called with prev:', prev);
           const newSections = [...prev];
           // With unified structure, we always use the first (and only) section
           const sectionIndex = 0;
@@ -688,6 +691,10 @@ export default function MessagesPage() {
           
           return newSections;
         });
+        
+        // Force a re-render to ensure sidebar updates
+        setForceUpdate(prev => prev + 1);
+        console.log('🔄 [Real-time] Forced re-render triggered');
         
         setNotification({
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
@@ -846,6 +853,7 @@ export default function MessagesPage() {
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
+    console.log('🔄 [Memo] filteredConversations recalculating with', allConversations.length, 'sections, forceUpdate:', forceUpdate);
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
@@ -878,7 +886,7 @@ export default function MessagesPage() {
         items: filteredItems,
       };
     });
-  }, [allConversations, search, user?.id]);
+  }, [allConversations, search, user?.id, forceUpdate]);
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {

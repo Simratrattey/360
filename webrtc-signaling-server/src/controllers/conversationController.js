@@ -162,6 +162,45 @@ export async function createConversation(req, res, next) {
       // Populate members for response
       await conversation.populate('members', 'username fullName avatarUrl');
 
+      // Emit real-time event to all users and join them to the community room
+      if (req.io) {
+        const conversationId = conversation._id.toString();
+        const conversationData = conversation.toObject();
+        
+        // Get app locals to access onlineUsers
+        const onlineUsers = req.app.locals.onlineUsers || new Map();
+        
+        // Join all online users to the community room
+        req.io.sockets.sockets.forEach(socket => {
+          if (socket.userId) {
+            socket.join(conversationId);
+            console.log(`[Community] User ${socket.userId} joined community room ${conversationId}`);
+          }
+        });
+        
+        // Notify all online users about the new community using socket IDs
+        console.log(`[Community] Notifying ${onlineUsers.size} online users about new community ${conversationId}`);
+        onlineUsers.forEach((userInfo, onlineUserId) => {
+          if (userInfo.socketId) {
+            req.io.to(userInfo.socketId).emit('conversation:created', {
+              ...conversationData,
+              type: conversationData.type,
+              members: conversationData.members,
+              createdBy: userId // This is the actual creator ID from function scope
+            });
+            console.log(`[Community] Emitted conversation:created to user ${onlineUserId} via socket ${userInfo.socketId}`);
+          }
+        });
+        
+        // Also broadcast to all sockets as fallback
+        req.io.emit('conversation:created', {
+          ...conversationData,
+          type: conversationData.type,
+          members: conversationData.members,
+          createdBy: userId
+        });
+      }
+
       res.status(201).json({ 
         message: 'Community created successfully',
         conversation 
@@ -183,6 +222,48 @@ export async function createConversation(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit real-time event to all conversation members and join them to the room
+    if (req.io) {
+      const conversationId = conversation._id.toString();
+      const conversationData = conversation.toObject();
+      
+      // Get app locals to access onlineUsers
+      const onlineUsers = req.app.locals.onlineUsers || new Map();
+      
+      // Join all members to the conversation room and notify them
+      conversation.members.forEach(member => {
+        const memberId = member._id.toString();
+        
+        // Find the member's socket and join them to the conversation room
+        const memberSocket = Array.from(req.io.sockets.sockets.values()).find(socket => socket.userId === memberId);
+        if (memberSocket) {
+          memberSocket.join(conversationId);
+          console.log(`[Conversation] User ${memberId} joined room ${conversationId}`);
+        }
+        
+        // Notify ALL members using their socket ID for more reliable delivery
+        const onlineUser = onlineUsers.get(memberId);
+        if (onlineUser && onlineUser.socketId) {
+          req.io.to(onlineUser.socketId).emit('conversation:created', {
+            ...conversationData,
+            type: conversationData.type,
+            members: conversationData.members,
+            createdBy: userId
+          });
+          console.log(`[Conversation] Emitted conversation:created to user ${memberId} via socket ${onlineUser.socketId}`);
+        } else {
+          // Fallback to user ID targeting
+          req.io.to(memberId).emit('conversation:created', {
+            ...conversationData,
+            type: conversationData.type,
+            members: conversationData.members,
+            createdBy: userId
+          });
+          console.log(`[Conversation] Emitted conversation:created to user ${memberId} (fallback method)`);
+        }
+      });
+    }
 
     res.status(201).json({ 
       message: 'Conversation created successfully',
