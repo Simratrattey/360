@@ -148,16 +148,16 @@ export default function DashboardPage() {
       if (data.createdBy && data.createdBy !== user.id) {
         // Add to general notifications for dashboard display
         const notification = {
-          _id: `conv-created-${data.conversation._id}-${Date.now()}`,
+          _id: `conv-created-${data._id}-${Date.now()}`,
           type: 'conversation_created',
-          title: `New ${data.conversation.type === 'dm' ? 'Direct Message' : data.conversation.type === 'group' ? 'Group' : 'Community'}`,
-          message: `You were added to ${data.conversation.name || 'a new conversation'}`,
+          title: `New ${data.type === 'dm' ? 'Direct Message' : data.type === 'group' ? 'Group' : 'Community'}`,
+          message: `You were added to ${data.name || 'a new conversation'}`,
           createdAt: new Date().toISOString(),
           read: false,
           data: {
-            conversationId: data.conversation._id,
-            conversationName: data.conversation.name,
-            conversationType: data.conversation.type,
+            conversationId: data._id,
+            conversationName: data.name,
+            conversationType: data.type,
             createdBy: data.createdBy
           }
         };
@@ -173,7 +173,7 @@ export default function DashboardPage() {
           new Notification(notification.title, {
             body: notification.message,
             icon: '/favicon.ico',
-            tag: `conversation-created-${data.conversation._id}`
+            tag: `conversation-created-${data._id}`
           });
         }
       }
