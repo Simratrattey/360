@@ -167,8 +167,8 @@ export async function createConversation(req, res, next) {
         const conversationId = conversation._id.toString();
         const conversationData = conversation.toObject();
         
-        // Get app locals to access onlineUsers
-        const onlineUsers = req.app.locals.onlineUsers || new Map();
+        // Get onlineUsers from middleware
+        const onlineUsers = req.onlineUsers || new Map();
         
         // Join all online users to the community room
         req.io.sockets.sockets.forEach(socket => {
@@ -228,8 +228,9 @@ export async function createConversation(req, res, next) {
       const conversationId = conversation._id.toString();
       const conversationData = conversation.toObject();
       
-      // Get app locals to access onlineUsers
-      const onlineUsers = req.app.locals.onlineUsers || new Map();
+      // Get onlineUsers from middleware
+      const onlineUsers = req.onlineUsers || new Map();
+      console.log(`[Conversation] Total online users: ${onlineUsers.size}`);
       
       // Join all members to the conversation room and notify them
       conversation.members.forEach(member => {
@@ -244,23 +245,28 @@ export async function createConversation(req, res, next) {
         
         // Notify ALL members using their socket ID for more reliable delivery
         const onlineUser = onlineUsers.get(memberId);
+        console.log(`[Conversation] Processing member ${memberId}, online:`, !!onlineUser, 'socketId:', onlineUser?.socketId);
+        
         if (onlineUser && onlineUser.socketId) {
-          req.io.to(onlineUser.socketId).emit('conversation:created', {
+          const eventData = {
             ...conversationData,
             type: conversationData.type,
             members: conversationData.members,
             createdBy: userId
-          });
-          console.log(`[Conversation] Emitted conversation:created to user ${memberId} via socket ${onlineUser.socketId}`);
+          };
+          req.io.to(onlineUser.socketId).emit('conversation:created', eventData);
+          console.log(`[Conversation] ✅ Emitted conversation:created to user ${memberId} via socket ${onlineUser.socketId}`);
+          console.log(`[Conversation] Event data:`, JSON.stringify(eventData, null, 2));
         } else {
           // Fallback to user ID targeting
-          req.io.to(memberId).emit('conversation:created', {
+          const eventData = {
             ...conversationData,
             type: conversationData.type,
             members: conversationData.members,
             createdBy: userId
-          });
-          console.log(`[Conversation] Emitted conversation:created to user ${memberId} (fallback method)`);
+          };
+          req.io.to(memberId).emit('conversation:created', eventData);
+          console.log(`[Conversation] ⚠️  Emitted conversation:created to user ${memberId} (fallback method)`);
         }
       });
     }

@@ -418,6 +418,7 @@ const sendNotification = sendNotificationToUser;
 // Make sendNotification available to routes
 app.locals.sendNotification = sendNotification;
 app.locals.io = io;
+app.locals.onlineUsers = onlineUsers;
 
 // Socket.io logic
 io.on('connection', async socket => {
@@ -954,9 +955,10 @@ app.post('/api/broadcast/newProducer', express.json(), (req, res) => {
   }
 });
 
-// Middleware to make io instance available to controllers
+// Middleware to make io instance and onlineUsers available to controllers
 app.use((req, res, next) => {
   req.io = io;
+  req.onlineUsers = onlineUsers;
   next();
 });
 

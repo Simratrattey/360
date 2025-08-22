@@ -678,8 +678,10 @@ export default function MessagesPage() {
 
     // Real-time conversation creation events
     chatSocket.on('conversation:created', (newConversation) => {
-      console.log('🔄 [Real-time] Received conversation:created event:', newConversation);
+      console.log('🔥 [CONVERSATION-CREATED] Event received!');
+      console.log('🔥 [CONVERSATION-CREATED] Data:', JSON.stringify(newConversation, null, 2));
       const userId = user?.id;
+      console.log('🔥 [CONVERSATION-CREATED] Current user ID:', userId);
       
       // For communities: visible to all users (no membership check)
       // For groups/DMs: require explicit membership
@@ -688,11 +690,13 @@ export default function MessagesPage() {
                                       (typeof m === 'string' ? m : m._id) === userId
                                     );
       
-      console.log('🔄 [Real-time] shouldShowConversation:', shouldShowConversation, 'for user:', userId);
+      console.log('🔥 [CONVERSATION-CREATED] Should show conversation:', shouldShowConversation);
+      console.log('🔥 [CONVERSATION-CREATED] Conversation type:', newConversation.type);
+      console.log('🔥 [CONVERSATION-CREATED] Members:', newConversation.members?.map(m => typeof m === 'string' ? m : m._id));
       
       // Always show conversation if user should see it (creator will have it from API, others get it from socket)
       if (shouldShowConversation) {
-        console.log('🔄 [Real-time] Adding conversation to sidebar using addConversationToTop');
+        console.log('🔥 [CONVERSATION-CREATED] ✅ Adding to sidebar now!');
         
         // Use the same approach as chat:new messages - simple and effective!
         addConversationToTop(newConversation);
@@ -701,6 +705,8 @@ export default function MessagesPage() {
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
         });
         setTimeout(() => setNotification(null), 3000);
+      } else {
+        console.log('🔥 [CONVERSATION-CREATED] ❌ Not adding to sidebar - user is not a member');
       }
     });
 
