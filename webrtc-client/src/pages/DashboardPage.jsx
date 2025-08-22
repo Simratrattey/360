@@ -180,16 +180,16 @@ export default function DashboardPage() {
             <MessageSquare className="h-6 w-6 text-blue-400" />
             Notifications
           </h2>
-          {globalUnreadCount > 0 && (
+          {(globalUnreadCount && globalUnreadCount > 0) && (
             <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
               {globalUnreadCount} unread
             </span>
           )}
         </div>
-        {(messageNotifications.length > 0 || generalNotifications.length > 0) ? (
+        {(messageNotifications.length > 0 || (generalNotifications && generalNotifications.length > 0)) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {/* General notifications (conversation creation/deletion, etc.) */}
-            {generalNotifications.filter(n => !n.read).slice(0, 5).map((notif, idx) => (
+            {(generalNotifications || []).filter(n => !n.read).slice(0, 5).map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: (generalNotifications.filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
+                transition={{ delay: ((generalNotifications || []).filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => navigate(`/messages?conversation=${notif.id}`)}
               >
