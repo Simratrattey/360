@@ -632,69 +632,69 @@ export default function MessagesPage() {
       if (shouldShowConversation) {
         // Add to conversations list in real-time
         console.log('🔄 [Real-time] Current allConversations before update:', allConversations);
+        // DIRECT STATE UPDATE APPROACH - Create completely new state object
+        console.log('🔄 [Real-time] DIRECT UPDATE: Creating new conversation state');
+        
         setAllConversations(prev => {
-          console.log('🔄 [Real-time] setAllConversations called with prev:', prev);
-          const newSections = [...prev];
-          // With unified structure, we always use the first (and only) section
-          const sectionIndex = 0;
+          console.log('🔄 [Real-time] Previous state:', prev);
           
-          if (sectionIndex < newSections.length) {
-            // Check for duplicates more thoroughly
-            const existingIndex = newSections[sectionIndex].items.findIndex(item => {
-              // Check by ID first
-              if (item._id === newConversation._id) return true;
-              // For communities, also check by name
-              if (newConversation.type === 'community' && item.type === 'community' && 
-                  item.name === newConversation.name) {
-                return true;
-              }
-              // For DMs, check if same participants
-              if (newConversation.type === 'dm' && item.type === 'dm') {
-                const newMembers = (newConversation.members || []).map(m => typeof m === 'string' ? m : m._id).sort();
-                const itemMembers = (item.members || []).map(m => typeof m === 'string' ? m : m._id).sort();
-                return JSON.stringify(newMembers) === JSON.stringify(itemMembers);
-              }
-              return false;
-            });
-            
-            console.log('🔄 [Real-time] Existing conversation found at index:', existingIndex);
-            
-            if (existingIndex === -1) {
-              // Ensure conversation has required fields for display
-              const conversationToAdd = {
-                ...newConversation,
-                unread: 0,
-                lastMessage: null,
-                lastMessageAt: newConversation.createdAt || new Date().toISOString()
-              };
-              
-              console.log('🔄 [Real-time] Adding new conversation to sidebar:', conversationToAdd);
-              
-              // Add to top and re-sort by most recent activity
-              const updatedItems = [conversationToAdd, ...newSections[sectionIndex].items]
-                .sort((a, b) => {
-                  const dateA = new Date(a.lastMessageAt || a.createdAt);
-                  const dateB = new Date(b.lastMessageAt || b.createdAt);
-                  return dateB - dateA;
-                });
-              
-              newSections[sectionIndex] = {
-                ...newSections[sectionIndex],
-                items: updatedItems
-              };
-              
-              console.log('🔄 [Real-time] Updated conversations list with', updatedItems.length, 'conversations');
-            } else {
-              console.log('🔄 [Real-time] Conversation already exists, skipping duplicate');
-            }
+          // Get current items from first section or initialize
+          const currentItems = (prev[0]?.items || []);
+          console.log('🔄 [Real-time] Current items count:', currentItems.length);
+          
+          // Check if conversation already exists
+          const existingConv = currentItems.find(item => item._id === newConversation._id);
+          if (existingConv) {
+            console.log('🔄 [Real-time] Conversation already exists, no update needed');
+            return prev;
           }
           
-          return newSections;
+          // Create new conversation object with all required fields
+          const conversationToAdd = {
+            _id: newConversation._id,
+            name: newConversation.name,
+            type: newConversation.type,
+            members: newConversation.members || [],
+            admins: newConversation.admins || [],
+            createdBy: newConversation.createdBy,
+            createdAt: newConversation.createdAt || new Date().toISOString(),
+            updatedAt: newConversation.updatedAt || new Date().toISOString(),
+            unread: 0,
+            lastMessage: null,
+            lastMessageAt: newConversation.createdAt || new Date().toISOString(),
+            description: newConversation.description || null
+          };
+          
+          console.log('🔄 [Real-time] Adding conversation:', conversationToAdd);
+          
+          // Create completely new items array
+          const newItems = [conversationToAdd, ...currentItems]
+            .sort((a, b) => {
+              const dateA = new Date(a.lastMessageAt || a.createdAt);
+              const dateB = new Date(b.lastMessageAt || b.createdAt);
+              return dateB - dateA;
+            });
+          
+          // Create completely new state structure
+          const newState = [{
+            section: 'All Conversations',
+            icon: 'MessageCircle',
+            items: newItems
+          }];
+          
+          console.log('🔄 [Real-time] New state created with', newItems.length, 'conversations');
+          return newState;
         });
         
         // Force a re-render to ensure sidebar updates
         setForceUpdate(prev => prev + 1);
         console.log('🔄 [Real-time] Forced re-render triggered');
+        
+        // Also trigger a conversation refresh as backup
+        setTimeout(() => {
+          console.log('🔄 [Real-time] Backup: Refreshing conversations from API');
+          fetchConversations();
+        }, 100);
         
         setNotification({
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
