@@ -625,14 +625,11 @@ export default function MessagesPage() {
                                     );
       
       // Check if current user is the creator
-      const isCreator = newConversation.createdBy === userId || 
+      const isCreator = newConversation.conversation?.createdBy === userId || 
+                       newConversation.createdBy === userId ||
                        (typeof newConversation.createdBy === 'object' && newConversation.createdBy?._id === userId);
       
-      // Skip socket handling for communities to prevent duplication
-      if (newConversation.type === 'community') {
-        return;
-      }
-      
+      // Handle both communities and groups/DMs (but not for creator to avoid duplication)
       if (shouldShowConversation && !isCreator) {
         // Add to conversations list in real-time
         setAllConversations(prev => {
