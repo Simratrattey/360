@@ -216,12 +216,16 @@ export const NotificationProvider = ({ children }) => {
     // Note: Unread count is managed by the Layout component through API calls
     // to avoid double counting with the messages page unread logic
     
-    // Show browser notification if applicable
-    if (document.visibilityState === 'visible' && document.hasFocus()) {
-      console.log('App is in foreground, not showing browser notification');
-      // You could show an in-app toast notification here instead
-    } else {
+    // Show browser notification for important notification types (always show for conversation events)
+    const alwaysShowTypes = ['conversation_created', 'community_created', 'conversation_deleted'];
+    const shouldShowBrowser = alwaysShowTypes.includes(notification.type) || 
+                             (document.visibilityState !== 'visible' || !document.hasFocus());
+    
+    if (shouldShowBrowser) {
+      console.log('📢 Showing browser notification for type:', notification.type);
       showBrowserNotification(notification);
+    } else {
+      console.log('📢 App is in foreground, browser notification skipped for type:', notification.type);
     }
   }, [notifications, showBrowserNotification]);
 

@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
@@ -186,14 +186,50 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {messageNotifications.length > 0 ? (
+        {(messageNotifications.length > 0 || generalNotifications.length > 0) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
-            {messageNotifications.map((notif, idx) => (
+            {/* General notifications (conversation creation/deletion, etc.) */}
+            {generalNotifications.filter(n => !n.read).slice(0, 5).map((notif, idx) => (
               <motion.div
-                key={`${notif.id}-${idx}`}
+                key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
+                className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 shadow hover:scale-105 transition-transform cursor-pointer"
+                onClick={() => {
+                  // Navigate to messages page for conversation notifications
+                  if (notif.data?.conversationId) {
+                    navigate(`/messages?conversation=${notif.data.conversationId}`);
+                  }
+                }}
+              >
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    {notif.type === 'conversation_created' ? '🎉' : 
+                     notif.type === 'community_created' ? '🌍' : 
+                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-primary-800">{notif.title}</h3>
+                  </div>
+                  <p className="text-secondary-600 text-sm">{notif.message}</p>
+                  <p className="text-secondary-500 text-xs">
+                    {new Date(notif.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+            
+            {/* Message notifications */}
+            {messageNotifications.map((notif, idx) => (
+              <motion.div
+                key={`message-${notif.id}-${idx}`}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: (generalNotifications.filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => navigate(`/messages?conversation=${notif.id}`)}
               >
@@ -231,7 +267,7 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="text-center text-secondary-400 py-8 text-lg">No new messages 🎉</div>
+          <div className="text-center text-secondary-400 py-8 text-lg">No new notifications 🎉</div>
         )}
       </motion.div>
 
