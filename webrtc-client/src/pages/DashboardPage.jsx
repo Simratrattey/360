@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
+  const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
   const [scheduling, setScheduling] = useState(false);
 
   useEffect(() => {
@@ -137,6 +138,92 @@ export default function DashboardPage() {
     };
   }, [chatSocket, user.id]);
 
+  // Real-time conversation creation/deletion updates for dashboard
+  useEffect(() => {
+    if (!chatSocket || !chatSocket.socket) return;
+    
+    const handleConversationCreated = (data) => {
+      console.log('📢 Dashboard received conversation:created event:', data);
+      // Only show if the creator is NOT the current user (others created it)
+      if (data.createdBy && data.createdBy !== user.id) {
+        // Add to general notifications for dashboard display
+        const notification = {
+          _id: `conv-created-${data.conversation._id}-${Date.now()}`,
+          type: 'conversation_created',
+          title: `New ${data.conversation.type === 'dm' ? 'Direct Message' : data.conversation.type === 'group' ? 'Group' : 'Community'}`,
+          message: `You were added to ${data.conversation.name || 'a new conversation'}`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          data: {
+            conversationId: data.conversation._id,
+            conversationName: data.conversation.name,
+            conversationType: data.conversation.type,
+            createdBy: data.createdBy
+          }
+        };
+
+        // Update local general notifications (this will show in dashboard)
+        setLocalGeneralNotifications(prev => {
+          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
+          return updated;
+        });
+
+        // Show browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: '/favicon.ico',
+            tag: `conversation-created-${data.conversation._id}`
+          });
+        }
+      }
+    };
+
+    const handleConversationDeleted = (data) => {
+      console.log('📢 Dashboard received conversation:deleted event:', data);
+      // Only show if the deleter is NOT the current user (others deleted it)
+      if (data.deletedBy && data.deletedBy !== user.id) {
+        // Add to general notifications for dashboard display
+        const notification = {
+          _id: `conv-deleted-${data.conversationId}-${Date.now()}`,
+          type: 'conversation_deleted',
+          title: 'Conversation Deleted',
+          message: `${data.conversationName || 'A conversation'} was deleted`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          data: {
+            conversationId: data.conversationId,
+            conversationName: data.conversationName,
+            deletedBy: data.deletedBy
+          }
+        };
+
+        // Update local general notifications (this will show in dashboard)
+        setLocalGeneralNotifications(prev => {
+          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
+          return updated;
+        });
+
+        // Show browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: '/favicon.ico',
+            tag: `conversation-deleted-${data.conversationId}`
+          });
+        }
+      }
+    };
+
+    chatSocket.on('conversation:created', handleConversationCreated);
+    chatSocket.on('conversation:deleted', handleConversationDeleted);
+    
+    return () => {
+      chatSocket.off('conversation:created', handleConversationCreated);
+      chatSocket.off('conversation:deleted', handleConversationDeleted);
+    };
+  }, [chatSocket, user.id]);
+
   const createNewMeeting = () => {
     const roomId = Date.now().toString();
     navigate(`/meeting/${roomId}`);
@@ -186,10 +273,10 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0) ? (
+        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0 || (Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []).length > 0) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {/* General notifications (conversation creation/deletion, etc.) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).map((notif, idx) => (
+            {[...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
@@ -229,7 +316,7 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: ((Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
+                transition={{ delay: ([...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => navigate(`/messages?conversation=${notif.id}`)}
               >
