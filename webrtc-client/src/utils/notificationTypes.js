@@ -4,7 +4,10 @@ export const NOTIFICATION_TYPES = {
   MEETING_INVITE: 'meeting_invite',
   SYSTEM_ALERT: 'system_alert',
   TASK_ASSIGNMENT: 'task_assignment',
-  MENTION: 'mention'
+  MENTION: 'mention',
+  CONVERSATION_CREATED: 'conversation_created',
+  COMMUNITY_CREATED: 'community_created',
+  CONVERSATION_DELETED: 'conversation_deleted'
 };
 
 export const NOTIFICATION_ICONS = {
@@ -13,6 +16,9 @@ export const NOTIFICATION_ICONS = {
   [NOTIFICATION_TYPES.SYSTEM_ALERT]: '⚠️',
   [NOTIFICATION_TYPES.TASK_ASSIGNMENT]: '✅',
   [NOTIFICATION_TYPES.MENTION]: '@',
+  [NOTIFICATION_TYPES.CONVERSATION_CREATED]: '🎉',
+  [NOTIFICATION_TYPES.COMMUNITY_CREATED]: '🌍',
+  [NOTIFICATION_TYPES.CONVERSATION_DELETED]: '🗑️',
   default: '🔔'
 };
 
@@ -47,6 +53,24 @@ export const getNotificationConfig = (type) => {
       icon: NOTIFICATION_ICONS[NOTIFICATION_TYPES.MENTION],
       priority: 'high',
       requiresAck: true
+    },
+    [NOTIFICATION_TYPES.CONVERSATION_CREATED]: {
+      title: 'New Conversation',
+      icon: NOTIFICATION_ICONS[NOTIFICATION_TYPES.CONVERSATION_CREATED],
+      priority: 'normal',
+      requiresAck: false
+    },
+    [NOTIFICATION_TYPES.COMMUNITY_CREATED]: {
+      title: 'New Community',
+      icon: NOTIFICATION_ICONS[NOTIFICATION_TYPES.COMMUNITY_CREATED],
+      priority: 'normal',
+      requiresAck: false
+    },
+    [NOTIFICATION_TYPES.CONVERSATION_DELETED]: {
+      title: 'Conversation Deleted',
+      icon: NOTIFICATION_ICONS[NOTIFICATION_TYPES.CONVERSATION_DELETED],
+      priority: 'normal',
+      requiresAck: false
     }
   };
 
@@ -65,5 +89,15 @@ export const shouldShowNotification = (notification) => {
       new URLSearchParams(window.location.search).get('conversation') === notification.data?.conversationId) {
     return false;
   }
+  
+  // Always show conversation creation/deletion notifications (they're important)
+  if ([
+    NOTIFICATION_TYPES.CONVERSATION_CREATED, 
+    NOTIFICATION_TYPES.COMMUNITY_CREATED,
+    NOTIFICATION_TYPES.CONVERSATION_DELETED
+  ].includes(notification.type)) {
+    return true;
+  }
+  
   return true;
 };

@@ -2,6 +2,7 @@ import Conversation, { ReadReceipt } from '../models/conversation.js';
 import User from '../models/user.js';
 import Message from '../models/message.js';
 import mongoose from 'mongoose';
+import { createNotification } from './notificationController.js';
 
 // List all conversations for the current user
 export async function listConversations(req, res, next) {
@@ -180,7 +181,7 @@ export async function createConversation(req, res, next) {
         
         // Notify all online users about the new community using socket IDs
         console.log(`[Community] Notifying ${onlineUsers.size} online users about new community ${conversationId}`);
-        onlineUsers.forEach((userInfo, onlineUserId) => {
+        onlineUsers.forEach(async (userInfo, onlineUserId) => {
           if (userInfo.socketId) {
             req.io.to(userInfo.socketId).emit('conversation:created', {
               ...conversationData,
@@ -189,6 +190,31 @@ export async function createConversation(req, res, next) {
               createdBy: userId // This is the actual creator ID from function scope
             });
             console.log(`[Community] Emitted conversation:created to user ${onlineUserId} via socket ${userInfo.socketId}`);
+
+            // Create notification for all users (except creator)
+            if (onlineUserId !== userId) {
+              try {
+                const notification = await createNotification(
+                  onlineUserId,
+                  userId,
+                  'community_created',
+                  'New Community',
+                  `${conversation.name} community was created`,
+                  {
+                    conversationId: conversation._id,
+                    conversationType: 'community',
+                    conversationName: conversation.name
+                  }
+                );
+                
+                console.log(`[Community] ✅ Created notification for user ${onlineUserId}:`, notification._id);
+                
+                // Send real-time notification
+                req.io.to(userInfo.socketId).emit('notification:new', notification);
+              } catch (error) {
+                console.error(`[Community] ❌ Failed to create notification for user ${onlineUserId}:`, error);
+              }
+            }
           }
         });
         
@@ -267,6 +293,33 @@ export async function createConversation(req, res, next) {
           };
           req.io.to(memberId).emit('conversation:created', eventData);
           console.log(`[Conversation] ⚠️  Emitted conversation:created to user ${memberId} (fallback method)`);
+        }
+
+        // Create notification for members (except creator)
+        if (memberId !== userId) {
+          try {
+            const notification = await createNotification(
+              memberId,
+              userId,
+              'conversation_created',
+              `New ${type}`,
+              `You were added to ${conversation.name || 'a new conversation'}`,
+              {
+                conversationId: conversation._id,
+                conversationType: type,
+                conversationName: conversation.name
+              }
+            );
+            
+            console.log(`[Conversation] ✅ Created notification for user ${memberId}:`, notification._id);
+            
+            // Send real-time notification if user is online
+            if (onlineUser && onlineUser.socketId) {
+              req.io.to(onlineUser.socketId).emit('notification:new', notification);
+            }
+          } catch (error) {
+            console.error(`[Conversation] ❌ Failed to create notification for user ${memberId}:`, error);
+          }
         }
       });
     }
@@ -451,6 +504,33 @@ export async function deleteConversation(req, res, next) {
           };
           req.io.to(memberId).emit('conversation:deleted', eventData);
           console.log(`[Conversation-Delete] ⚠️  Emitted conversation:deleted to user ${memberId} (fallback method)`);
+        }
+
+        // Create notification for members (except deleter)
+        if (memberId !== userId) {
+          try {
+            const notification = await createNotification(
+              memberId,
+              userId,
+              'conversation_deleted',
+              `${conversationType} Deleted`,
+              `${conversationName} was deleted`,
+              {
+                conversationId,
+                conversationType,
+                conversationName
+              }
+            );
+            
+            console.log(`[Conversation-Delete] ✅ Created notification for user ${memberId}:`, notification._id);
+            
+            // Send real-time notification if user is online
+            if (onlineUser && onlineUser.socketId) {
+              req.io.to(onlineUser.socketId).emit('notification:new', notification);
+            }
+          } catch (error) {
+            console.error(`[Conversation-Delete] ❌ Failed to create notification for user ${memberId}:`, error);
+          }
         }
       });
     }
