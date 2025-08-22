@@ -119,7 +119,7 @@ router.post('/produce', async (req, res) => {
         console.log(`[SFU] 📡 Requesting signaling server to broadcast newProducer: room=${roomId}, producer=${producer.id}, peerId=${peerId}`);
         
         // Call signaling server endpoint to broadcast the event
-        const broadcastResponse = await fetch(`http://comm360-signaling-staging:5050/api/broadcast/newProducer`, {
+        const broadcastResponse = await fetch(`http://comm360-signaling-production:5050/api/broadcast/newProducer`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
