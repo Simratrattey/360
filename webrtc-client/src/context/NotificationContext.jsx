@@ -199,7 +199,7 @@ export const NotificationProvider = ({ children }) => {
     console.log('📢 New notification received:', notification);
     
     // Skip if this is a duplicate notification
-    const isDuplicate = (notifications || []).some(n => n._id === notification._id);
+    const isDuplicate = (Array.isArray(notifications) ? notifications : []).some(n => n._id === notification._id);
     if (isDuplicate) {
       console.log('Skipping duplicate notification');
       return;
