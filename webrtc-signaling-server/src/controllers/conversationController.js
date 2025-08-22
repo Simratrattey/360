@@ -181,7 +181,7 @@ export async function createConversation(req, res, next) {
         
         // Notify all online users about the new community using socket IDs
         console.log(`[Community] Notifying ${onlineUsers.size} online users about new community ${conversationId}`);
-        onlineUsers.forEach(async (userInfo, onlineUserId) => {
+        for (const [onlineUserId, userInfo] of onlineUsers) {
           if (userInfo.socketId) {
             req.io.to(userInfo.socketId).emit('conversation:created', {
               ...conversationData,
@@ -216,7 +216,7 @@ export async function createConversation(req, res, next) {
               }
             }
           }
-        });
+        }
         
         // Also broadcast to all sockets as fallback
         req.io.emit('conversation:created', {
@@ -259,7 +259,7 @@ export async function createConversation(req, res, next) {
       console.log(`[Conversation] Total online users: ${onlineUsers.size}`);
       
       // Join all members to the conversation room and notify them
-      conversation.members.forEach(member => {
+      for (const member of conversation.members) {
         const memberId = member._id.toString();
         
         // Find the member's socket and join them to the conversation room
@@ -321,7 +321,7 @@ export async function createConversation(req, res, next) {
             console.error(`[Conversation] ❌ Failed to create notification for user ${memberId}:`, error);
           }
         }
-      });
+      }
     }
 
     res.status(201).json({ 
@@ -481,7 +481,7 @@ export async function deleteConversation(req, res, next) {
       console.log(`[Conversation-Delete] Total online users: ${onlineUsers.size}`);
       
       // Notify all members about conversation deletion
-      conversationMembers.forEach(memberId => {
+      for (const memberId of conversationMembers) {
         const onlineUser = onlineUsers.get(memberId);
         console.log(`[Conversation-Delete] Processing member ${memberId}, online:`, !!onlineUser, 'socketId:', onlineUser?.socketId);
         
@@ -532,7 +532,7 @@ export async function deleteConversation(req, res, next) {
             console.error(`[Conversation-Delete] ❌ Failed to create notification for user ${memberId}:`, error);
           }
         }
-      });
+      }
     }
 
     res.json({ message: 'Conversation deleted successfully' });

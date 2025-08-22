@@ -23,7 +23,6 @@
     "mediasoup": "^3.16.4",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",
-    "mongoose-sanitizer": "^1.0.0",
     "multer": "^2.0.0",
     "node-fetch": "^3.3.2",
     "rrule": "^2.8.1",
