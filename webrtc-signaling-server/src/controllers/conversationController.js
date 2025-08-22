@@ -408,11 +408,52 @@ export async function deleteConversation(req, res, next) {
       }
     }
 
+    // Store conversation info before deletion for real-time notifications
+    const conversationName = conversation.name || 'Conversation';
+    const conversationType = conversation.type;
+    const conversationMembers = conversation.members.map(member => 
+      typeof member === 'string' ? member : member._id.toString()
+    );
+
     // Delete all messages in the conversation
     await Message.deleteMany({ conversation: conversationId });
 
     // Delete the conversation
     await conversation.deleteOne();
+
+    // Emit real-time event to all conversation members
+    if (req.io) {
+      // Get onlineUsers from middleware
+      const onlineUsers = req.onlineUsers || new Map();
+      console.log(`[Conversation-Delete] Total online users: ${onlineUsers.size}`);
+      
+      // Notify all members about conversation deletion
+      conversationMembers.forEach(memberId => {
+        const onlineUser = onlineUsers.get(memberId);
+        console.log(`[Conversation-Delete] Processing member ${memberId}, online:`, !!onlineUser, 'socketId:', onlineUser?.socketId);
+        
+        if (onlineUser && onlineUser.socketId) {
+          const eventData = {
+            conversationId,
+            deletedBy: userId,
+            conversationName,
+            conversationType
+          };
+          req.io.to(onlineUser.socketId).emit('conversation:deleted', eventData);
+          console.log(`[Conversation-Delete] ✅ Emitted conversation:deleted to user ${memberId} via socket ${onlineUser.socketId}`);
+        } else {
+          // Fallback to user ID targeting
+          const eventData = {
+            conversationId,
+            deletedBy: userId,
+            conversationName,
+            conversationType
+          };
+          req.io.to(memberId).emit('conversation:deleted', eventData);
+          console.log(`[Conversation-Delete] ⚠️  Emitted conversation:deleted to user ${memberId} (fallback method)`);
+        }
+      });
+    }
 
     res.json({ message: 'Conversation deleted successfully' });
   } catch (err) {

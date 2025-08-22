@@ -711,101 +711,61 @@ export default function MessagesPage() {
     });
 
     chatSocket.on('conversation:deleted', ({ conversationId, deletedBy, conversationName, conversationType }) => {
-      const isDeleter = deletedBy === user?.id;
+      console.log('🔥 [CONVERSATION-DELETED] Event received!');
+      console.log('🔥 [CONVERSATION-DELETED] Data:', { conversationId, deletedBy, conversationName, conversationType });
       
-      if (isDeleter) {
-        // For the person who deleted: Remove immediately
-        setAllConversations(prev => {
-          const newSections = prev.map(section => ({
-            ...section,
-            items: section.items.filter(c => c._id !== conversationId)
-          }));
-          
-          // Update ref
-          allConversationsRef.current = newSections;
-          return newSections;
-        });
+      const isDeleter = deletedBy === user?.id;
+      console.log('🔥 [CONVERSATION-DELETED] Is deleter:', isDeleter);
+      
+      // Remove conversation from sidebar for ALL users (same as creation - immediate update)
+      console.log('🔥 [CONVERSATION-DELETED] Removing conversation from sidebar');
+      setAllConversations(prev => {
+        const newSections = prev.map(section => ({
+          ...section,
+          items: section.items.filter(c => c._id !== conversationId),
+          _lastUpdated: Date.now() // Trigger re-render
+        }));
         
-        // If this was the selected conversation, clear selection
-        if (selected && selected._id === conversationId) {
-          setSelected(null);
-          selectedRef.current = null;
-          setMessages([]);
+        console.log('🔥 [CONVERSATION-DELETED] Updated sidebar sections');
+        allConversationsRef.current = newSections;
+        return newSections;
+      });
+      
+      // If this was the selected conversation, clear selection
+      if (selected && selected._id === conversationId) {
+        console.log('🔥 [CONVERSATION-DELETED] Clearing current selection');
+        setSelected(null);
+        selectedRef.current = null;
+        setMessages([]);
+      }
+      
+      // Remove from message cache
+      setMessagesCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[conversationId];
+        
+        // Update localStorage
+        try {
+          localStorage.setItem('messagesCache', JSON.stringify(newCache));
+        } catch (error) {
+          console.error('Error updating localStorage cache:', error);
         }
         
-        // Remove from message cache
-        setMessagesCache(prev => {
-          const newCache = { ...prev };
-          delete newCache[conversationId];
-          
-          // Update localStorage
-          try {
-            localStorage.setItem('messagesCache', JSON.stringify(newCache));
-          } catch (error) {
-            console.error('Error updating localStorage cache:', error);
-          }
-          
-          messagesCacheRef.current = newCache;
-          return newCache;
+        messagesCacheRef.current = newCache;
+        return newCache;
+      });
+      
+      // Show notification
+      if (isDeleter) {
+        setNotification({
+          message: `${conversationName} deleted successfully`
         });
       } else {
-        // For others: Add system message about deletion but keep conversation visible
-        const deletionMessage = {
-          _id: `deletion-${conversationId}-${Date.now()}`,
-          conversationId: conversationId,
-          text: `🚨 This ${conversationType || 'group'} no longer exists. You can delete this conversation.`,
-          type: 'system',
-          isSystemMessage: true,
-          isDeletionNotice: true,
-          createdAt: new Date().toISOString(),
-          senderId: 'system'
-        };
-        
-        // Add the deletion message to the conversation
-        setMessagesCache(prev => {
-          const conversationMessages = prev[conversationId] || [];
-          const updatedMessages = [...conversationMessages, deletionMessage];
-          const newCache = { ...prev, [conversationId]: updatedMessages };
-          
-          // Update localStorage
-          try {
-            localStorage.setItem('messagesCache', JSON.stringify(newCache));
-          } catch (error) {
-            console.error('Error updating localStorage cache:', error);
-          }
-          
-          messagesCacheRef.current = newCache;
-          return newCache;
-        });
-        
-        // If this conversation is currently selected, update the messages
-        if (selected && selected._id === conversationId) {
-          setMessages(prev => [...prev, deletionMessage]);
-        }
-        
-        // Update conversation in sidebar to show it's deleted (but keep it visible)
-        setAllConversations(prev => {
-          const newSections = prev.map(section => ({
-            ...section,
-            items: section.items.map(c => c._id === conversationId ? {
-              ...c,
-              isDeleted: true,
-              lastMessage: {
-                text: 'This group no longer exists',
-                createdAt: new Date().toISOString()
-              }
-            } : c)
-          }));
-          
-          allConversationsRef.current = newSections;
-          return newSections;
-        });
-        
         setNotification({
-          message: `${conversationName || 'A conversation'} was deleted`
+          message: `${conversationName} was deleted`
         });
-        setTimeout(() => setNotification(null), 3000);
       }
+      setTimeout(() => setNotification(null), 3000);
       
       // Refresh unread count in header
       if (refreshUnreadCount) refreshUnreadCount();
@@ -1227,22 +1187,7 @@ export default function MessagesPage() {
         return newCache;
       });
       
-      // Backend should emit 'conversation:deleted' event to all members automatically
-      // TODO: Remove this test code once backend is emitting proper events
-      if (process.env.NODE_ENV === 'development') {
-        // Simulate backend event for testing
-        setTimeout(() => {
-          console.log('🔔 [SIMULATION] Emitting test conversation:deleted event');
-          if (chatSocket.socket) {
-            chatSocket.socket.emit('conversation:deleted', { 
-              conversationId: conv._id, 
-              deletedBy: user?.id, 
-              conversationName: conv.name,
-              conversationType: conv.type 
-            });
-          }
-        }, 100);
-      }
+      // Backend will automatically emit 'conversation:deleted' event to all members
       
       // Refresh unread count in header
       if (refreshUnreadCount) refreshUnreadCount();
@@ -1517,22 +1462,7 @@ export default function MessagesPage() {
       return newCache;
     });
     
-    // Backend should emit 'conversation:deleted' event to all members automatically
-    // TODO: Remove this test code once backend is emitting proper events
-    if (process.env.NODE_ENV === 'development') {
-      // Simulate backend event for testing  
-      setTimeout(() => {
-        console.log('🔔 [SIMULATION] Emitting test conversation:deleted event');
-        if (chatSocket.socket) {
-          chatSocket.socket.emit('conversation:deleted', { 
-            conversationId, 
-            deletedBy: user?.id, 
-            conversationName: 'Test Conversation',
-            conversationType: 'group' 
-          });
-        }
-      }, 100);
-    }
+    // Backend will automatically emit 'conversation:deleted' event to all members
     
     // Refresh unread count in header
     if (refreshUnreadCount) refreshUnreadCount();
