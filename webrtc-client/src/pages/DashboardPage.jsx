@@ -186,7 +186,7 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {(messageNotifications.length > 0 || (generalNotifications && generalNotifications.length > 0)) ? (
+        {((messageNotifications || []).length > 0 || ((generalNotifications || []).length > 0)) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {/* General notifications (conversation creation/deletion, etc.) */}
             {(generalNotifications || []).filter(n => !n.read).slice(0, 5).map((notif, idx) => (
@@ -224,7 +224,7 @@ export default function DashboardPage() {
             ))}
             
             {/* Message notifications */}
-            {messageNotifications.map((notif, idx) => (
+            {(messageNotifications || []).map((notif, idx) => (
               <motion.div
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
