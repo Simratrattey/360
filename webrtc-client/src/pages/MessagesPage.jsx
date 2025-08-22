@@ -256,6 +256,68 @@ export default function MessagesPage() {
     });
   }, []);
 
+  // Add new conversation to top of sidebar (similar to moveConversationToTop but for new conversations)
+  const addConversationToTop = useCallback((newConversation) => {
+    setAllConversations(prevSections => {
+      const newSections = [...prevSections];
+      // With unified structure, we work with the first (and only) section
+      const sectionIndex = 0;
+      
+      // Ensure section exists
+      if (sectionIndex >= newSections.length) {
+        newSections.push({
+          section: 'All Conversations',
+          icon: 'MessageCircle',
+          items: []
+        });
+      }
+      
+      const section = newSections[sectionIndex];
+      
+      // Check if conversation already exists
+      const existingIndex = section.items.findIndex(c => c._id === newConversation._id);
+      if (existingIndex !== -1) {
+        console.log('🔄 [addConversationToTop] Conversation already exists, skipping');
+        return prevSections;
+      }
+      
+      // Create conversation object with all required fields
+      const conversationToAdd = {
+        _id: newConversation._id,
+        name: newConversation.name,
+        type: newConversation.type,
+        members: newConversation.members || [],
+        admins: newConversation.admins || [],
+        createdBy: newConversation.createdBy,
+        createdAt: newConversation.createdAt || new Date().toISOString(),
+        updatedAt: newConversation.updatedAt || new Date().toISOString(),
+        description: newConversation.description || null,
+        unread: 0,
+        lastMessage: null,
+        lastMessageAt: newConversation.createdAt || new Date().toISOString(),
+        _lastUpdated: Date.now() // This triggers re-render
+      };
+      
+      console.log('🔄 [addConversationToTop] Adding new conversation:', conversationToAdd);
+      
+      // Add to top and re-sort by most recent activity (same logic as moveConversationToTop)
+      const allItemsUpdated = [conversationToAdd, ...section.items].sort((a, b) => {
+        const dateA = new Date(a.lastMessageAt || a.createdAt);
+        const dateB = new Date(b.lastMessageAt || b.createdAt);
+        return dateB - dateA;
+      });
+      
+      newSections[sectionIndex] = {
+        ...section,
+        items: allItemsUpdated,
+        _lastUpdated: Date.now() // This triggers re-render
+      };
+      
+      console.log('🔄 [addConversationToTop] Updated sidebar with', allItemsUpdated.length, 'conversations');
+      return newSections;
+    });
+  }, []);
+
   // Request notification permission on mount
   useEffect(() => {
     if (window.Notification && Notification.permission === 'default') {
@@ -630,71 +692,10 @@ export default function MessagesPage() {
       
       // Always show conversation if user should see it (creator will have it from API, others get it from socket)
       if (shouldShowConversation) {
-        // Add to conversations list in real-time
-        console.log('🔄 [Real-time] Current allConversations before update:', allConversations);
-        // DIRECT STATE UPDATE APPROACH - Create completely new state object
-        console.log('🔄 [Real-time] DIRECT UPDATE: Creating new conversation state');
+        console.log('🔄 [Real-time] Adding conversation to sidebar using addConversationToTop');
         
-        setAllConversations(prev => {
-          console.log('🔄 [Real-time] Previous state:', prev);
-          
-          // Get current items from first section or initialize
-          const currentItems = (prev[0]?.items || []);
-          console.log('🔄 [Real-time] Current items count:', currentItems.length);
-          
-          // Check if conversation already exists
-          const existingConv = currentItems.find(item => item._id === newConversation._id);
-          if (existingConv) {
-            console.log('🔄 [Real-time] Conversation already exists, no update needed');
-            return prev;
-          }
-          
-          // Create new conversation object with all required fields
-          const conversationToAdd = {
-            _id: newConversation._id,
-            name: newConversation.name,
-            type: newConversation.type,
-            members: newConversation.members || [],
-            admins: newConversation.admins || [],
-            createdBy: newConversation.createdBy,
-            createdAt: newConversation.createdAt || new Date().toISOString(),
-            updatedAt: newConversation.updatedAt || new Date().toISOString(),
-            unread: 0,
-            lastMessage: null,
-            lastMessageAt: newConversation.createdAt || new Date().toISOString(),
-            description: newConversation.description || null
-          };
-          
-          console.log('🔄 [Real-time] Adding conversation:', conversationToAdd);
-          
-          // Create completely new items array
-          const newItems = [conversationToAdd, ...currentItems]
-            .sort((a, b) => {
-              const dateA = new Date(a.lastMessageAt || a.createdAt);
-              const dateB = new Date(b.lastMessageAt || b.createdAt);
-              return dateB - dateA;
-            });
-          
-          // Create completely new state structure
-          const newState = [{
-            section: 'All Conversations',
-            icon: 'MessageCircle',
-            items: newItems
-          }];
-          
-          console.log('🔄 [Real-time] New state created with', newItems.length, 'conversations');
-          return newState;
-        });
-        
-        // Force a re-render to ensure sidebar updates
-        setForceUpdate(prev => prev + 1);
-        console.log('🔄 [Real-time] Forced re-render triggered');
-        
-        // Also trigger a conversation refresh as backup
-        setTimeout(() => {
-          console.log('🔄 [Real-time] Backup: Refreshing conversations from API');
-          fetchConversations();
-        }, 100);
+        // Use the same approach as chat:new messages - simple and effective!
+        addConversationToTop(newConversation);
         
         setNotification({
           message: `You were added to ${newConversation.name || 'a new conversation'}!`
