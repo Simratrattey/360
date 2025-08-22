@@ -615,6 +615,7 @@ export default function MessagesPage() {
 
     // Real-time conversation creation events
     chatSocket.on('conversation:created', (newConversation) => {
+      console.log('🔄 [Real-time] Received conversation:created event:', newConversation);
       const userId = user?.id;
       
       // For communities: visible to all users (no membership check)
@@ -624,13 +625,10 @@ export default function MessagesPage() {
                                       (typeof m === 'string' ? m : m._id) === userId
                                     );
       
-      // Check if current user is the creator
-      const isCreator = newConversation.conversation?.createdBy === userId || 
-                       newConversation.createdBy === userId ||
-                       (typeof newConversation.createdBy === 'object' && newConversation.createdBy?._id === userId);
+      console.log('🔄 [Real-time] shouldShowConversation:', shouldShowConversation, 'for user:', userId);
       
-      // Handle both communities and groups/DMs (but not for creator to avoid duplication)
-      if (shouldShowConversation && !isCreator) {
+      // Always show conversation if user should see it (creator will have it from API, others get it from socket)
+      if (shouldShowConversation) {
         // Add to conversations list in real-time
         setAllConversations(prev => {
           const newSections = [...prev];
@@ -638,18 +636,39 @@ export default function MessagesPage() {
           const sectionIndex = 0;
           
           if (sectionIndex < newSections.length) {
-            // Check for duplicates
+            // Check for duplicates more thoroughly
             const existingIndex = newSections[sectionIndex].items.findIndex(item => {
+              // Check by ID first
               if (item._id === newConversation._id) return true;
-              if (newConversation.type === 'community' && item.name === newConversation.name) {
+              // For communities, also check by name
+              if (newConversation.type === 'community' && item.type === 'community' && 
+                  item.name === newConversation.name) {
                 return true;
+              }
+              // For DMs, check if same participants
+              if (newConversation.type === 'dm' && item.type === 'dm') {
+                const newMembers = (newConversation.members || []).map(m => typeof m === 'string' ? m : m._id).sort();
+                const itemMembers = (item.members || []).map(m => typeof m === 'string' ? m : m._id).sort();
+                return JSON.stringify(newMembers) === JSON.stringify(itemMembers);
               }
               return false;
             });
             
+            console.log('🔄 [Real-time] Existing conversation found at index:', existingIndex);
+            
             if (existingIndex === -1) {
+              // Ensure conversation has required fields for display
+              const conversationToAdd = {
+                ...newConversation,
+                unread: 0,
+                lastMessage: null,
+                lastMessageAt: newConversation.createdAt || new Date().toISOString()
+              };
+              
+              console.log('🔄 [Real-time] Adding new conversation to sidebar:', conversationToAdd);
+              
               // Add to top and re-sort by most recent activity
-              const updatedItems = [newConversation, ...newSections[sectionIndex].items]
+              const updatedItems = [conversationToAdd, ...newSections[sectionIndex].items]
                 .sort((a, b) => {
                   const dateA = new Date(a.lastMessageAt || a.createdAt);
                   const dateB = new Date(b.lastMessageAt || b.createdAt);
@@ -660,6 +679,10 @@ export default function MessagesPage() {
                 ...newSections[sectionIndex],
                 items: updatedItems
               };
+              
+              console.log('🔄 [Real-time] Updated conversations list with', updatedItems.length, 'conversations');
+            } else {
+              console.log('🔄 [Real-time] Conversation already exists, skipping duplicate');
             }
           }
           
