@@ -369,6 +369,13 @@ export default function MessagesPage() {
   useEffect(() => {
     // Set up the message sender function for the queue
     messageQueue.setMessageSender(async (messageData) => {
+      console.log('📤 [QUEUE] Sending queued message:', {
+        tempId: messageData.tempId,
+        conversationId: messageData.conversationId,
+        socketConnected: chatSocket.connected,
+        text: messageData.text?.substring(0, 20) + '...'
+      });
+      
       const response = await chatSocket.sendMessage({
         conversationId: messageData.conversationId,
         text: messageData.text,
@@ -376,6 +383,8 @@ export default function MessagesPage() {
         replyTo: messageData.replyTo,
         tempId: messageData.tempId,
       });
+      
+      console.log('📤 [QUEUE] Queued message response:', response);
       
       if (response && response.success) {
         try {
@@ -634,12 +643,16 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log('📨 Handling new message:', {
+      console.log('📨 [NEW MESSAGE] Received:', {
         messageId: msg._id,
         tempId: msg.tempId,
         isMyMessage,
         isCurrentConversation,
-        text: msg.text?.substring(0, 20) + '...'
+        conversationId,
+        selectedConv: selectedRef.current?._id,
+        senderName: msg.senderName,
+        text: msg.text?.substring(0, 20) + '...',
+        timestamp: new Date().toISOString()
       });
       
       // 1. Update message cache

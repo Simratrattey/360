@@ -50,14 +50,23 @@ class MessageQueueService {
   // Setup network event listeners
   setupNetworkListeners() {
     window.addEventListener('online', () => {
-      console.log('🌐 Network back online, processing queues...');
+      console.log('🌐 [NETWORK] Back online, processing queues...', {
+        retryQueue: this.retryQueue.length,
+        offlineQueue: this.offlineQueue.length
+      });
       this.isOnline = true;
-      this.processQueues();
+      
+      // Add a small delay to ensure all users have time to reconnect and rejoin rooms
+      setTimeout(() => {
+        console.log('🌐 [NETWORK] Processing queues after reconnection delay...');
+        this.processQueues();
+      }, 2000); // 2 second delay
+      
       this.notifyListeners({ type: 'network', online: true });
     });
 
     window.addEventListener('offline', () => {
-      console.log('📡 Network offline, queuing messages...');
+      console.log('📡 [NETWORK] Offline, queuing messages...');
       this.isOnline = false;
       this.notifyListeners({ type: 'network', online: false });
     });
@@ -175,7 +184,9 @@ class MessageQueueService {
 
     for (const item of toProcess) {
       try {
-        await this.sendMessage(item);
+        console.log('📱 Sending offline message:', item.tempId, 'to conversation:', item.conversationId);
+        const response = await this.sendMessage(item);
+        console.log('📱 Offline message response:', response);
         // Success - remove from any other queues
         this.removeFromQueues(item.tempId);
         console.log('📱 Offline message sent successfully:', item.tempId);
@@ -209,7 +220,9 @@ class MessageQueueService {
       this.retryQueue = this.retryQueue.filter(q => q.tempId !== item.tempId);
 
       try {
-        await this.sendMessage(item);
+        console.log('🔄 Sending retry message:', item.tempId, 'attempt:', item.attempt + 1);
+        const response = await this.sendMessage(item);
+        console.log('🔄 Retry message response:', response);
         // Success - don't add back to queue, and ensure it's removed from all queues
         this.removeFromQueues(item.tempId);
         console.log('🔄 Retry message sent successfully:', item.tempId);
