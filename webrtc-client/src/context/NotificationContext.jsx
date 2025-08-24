@@ -207,7 +207,7 @@ export const NotificationProvider = ({ children }) => {
     
     // Add to notifications list
     setNotifications(prev => {
-      const updated = [notification, ...prev];
+      const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
       // Update cache
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
       return updated;
