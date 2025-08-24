@@ -91,6 +91,8 @@ class MessageStatusService {
     this.persistStatus();
     
     console.log('📊 Status updated:', { tempId, previousStatus, newStatus: status });
+    console.log('📊 Current status map size:', this.messageStatuses.size);
+    console.log('📊 Notifying', this.listeners.length, 'listeners');
     
     this.notifyListeners({
       type: 'statusChanged',
@@ -120,10 +122,16 @@ class MessageStatusService {
 
   // Mark message as sent (server acknowledged)
   markAsSent(tempId, messageId) {
+    console.log('✅ markAsSent called with:', { tempId, messageId });
+    console.log('✅ Current status before update:', this.getMessageStatus(tempId));
+    
     this.setMessageStatus(tempId, MESSAGE_STATUS.SENT, { messageId });
+    
     if (messageId && messageId !== tempId) {
       this.updateMessageMapping(tempId, messageId);
     }
+    
+    console.log('✅ Status after markAsSent:', this.getMessageStatus(tempId));
   }
 
   // Mark message as delivered
@@ -211,6 +219,8 @@ class MessageStatusService {
     const status = this.getMessageStatus(tempId);
     const deliveryInfo = messageId ? this.getDeliveryInfo(messageId) : null;
     const readInfo = messageId ? this.getReadInfo(messageId) : null;
+    
+    console.log('🔍 getMessageStatusInfo:', { tempId, messageId, status, hasStatus: this.messageStatuses.has(tempId) });
     
     return {
       status,
