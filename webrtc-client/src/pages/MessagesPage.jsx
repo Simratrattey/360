@@ -646,7 +646,13 @@ export default function MessagesPage() {
         const convMessages = prev[conversationId] || [];
         
         // Skip if message already exists (by _id or tempId)
-        if (convMessages.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId))) {
+        const isDuplicate = convMessages.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId));
+        if (isDuplicate) {
+          console.log('📨 Skipping duplicate message in cache:', {
+            messageId: msg._id,
+            tempId: msg.tempId,
+            existingIds: convMessages.map(m => ({ id: m._id, tempId: m.tempId }))
+          });
           return prev;
         }
         
@@ -682,7 +688,13 @@ export default function MessagesPage() {
       if (isCurrentConversation) {
         setMessages(prev => {
           // Skip if message already exists (by _id or tempId)
-          if (prev.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId))) {
+          const isDuplicate = prev.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId));
+          if (isDuplicate) {
+            console.log('📨 Skipping duplicate message in current view:', {
+              messageId: msg._id,
+              tempId: msg.tempId,
+              existingIds: prev.map(m => ({ id: m._id, tempId: m.tempId }))
+            });
             return prev;
           }
           

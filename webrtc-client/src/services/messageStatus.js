@@ -285,5 +285,8 @@ class MessageStatusService {
 }
 
 // Create singleton instance
-export const messageStatus = new MessageStatusService();
+const messageStatusInstance = new MessageStatusService();
+
+// Export both the instance and the class
+export { messageStatusInstance as messageStatus, MESSAGE_STATUS };
 export default MessageStatusService;

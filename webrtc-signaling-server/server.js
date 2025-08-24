@@ -791,7 +791,7 @@ io.on('connection', async socket => {
       
     } catch (error) {
       console.error('Error sending message:', error);
-      socket.emit('chat:error', { message: 'Failed to send message' });
+      socket.emit('chat:send:error', { message: 'Failed to send message', tempId });
     } finally {
       await session.endSession();
     }
@@ -845,7 +845,7 @@ io.on('connection', async socket => {
       });
     } catch (error) {
       console.error('Error marking message as read:', error);
-      socket.emit('chat:error', { message: 'Failed to mark message as read' });
+      socket.emit('chat:read:error', { message: 'Failed to mark message as read' });
     } finally {
       await session.endSession();
     }

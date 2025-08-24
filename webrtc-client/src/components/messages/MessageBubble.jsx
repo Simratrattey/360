@@ -5,7 +5,7 @@ import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, c
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
-import MessageStatusService, { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
+import { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({

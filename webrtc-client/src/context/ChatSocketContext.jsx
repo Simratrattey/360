@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import MessageStatusService, { messageStatus } from '../services/messageStatus';
+import { messageStatus } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
 
@@ -288,21 +288,24 @@ export function ChatSocketProvider({ children }) {
             resolve(response);
             // Clean up listeners
             socket.off('chat:sent', successHandler);
-            socket.off('chat:error', errorHandler);
+            socket.off('chat:send:error', errorHandler);
           }
         };
 
         const errorHandler = (error) => {
-          console.error('Message send error:', error);
-          reject(new Error(error.message || 'Failed to send message'));
-          // Clean up listeners
-          socket.off('chat:sent', successHandler);
-          socket.off('chat:error', errorHandler);
+          // Only handle errors for this specific message
+          if (error.tempId === data.tempId) {
+            console.error('Message send error:', error);
+            reject(new Error(error.message || 'Failed to send message'));
+            // Clean up listeners
+            socket.off('chat:sent', successHandler);
+            socket.off('chat:send:error', errorHandler);
+          }
         };
 
         // Set up listeners before sending
         socket.on('chat:sent', successHandler);
-        socket.on('chat:error', errorHandler);
+        socket.on('chat:send:error', errorHandler);
 
         // Send the message
         socket.emit('chat:send', data);
@@ -310,7 +313,7 @@ export function ChatSocketProvider({ children }) {
         // Set timeout to prevent hanging promises
         setTimeout(() => {
           socket.off('chat:sent', successHandler);
-          socket.off('chat:error', errorHandler);
+          socket.off('chat:send:error', errorHandler);
           reject(new Error('Message send timeout'));
         }, 10000); // 10 second timeout
 

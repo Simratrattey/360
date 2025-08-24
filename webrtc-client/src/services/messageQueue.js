@@ -141,17 +141,29 @@ class MessageQueueService {
     const initialRetryLength = this.retryQueue.length;
     const initialOfflineLength = this.offlineQueue.length;
 
+    console.log('🗑️ Attempting to remove message from queues:', {
+      tempId,
+      beforeRetryLength: initialRetryLength,
+      beforeOfflineLength: initialOfflineLength
+    });
+
     this.retryQueue = this.retryQueue.filter(item => item.tempId !== tempId);
     this.offlineQueue = this.offlineQueue.filter(item => item.tempId !== tempId);
 
     if (this.retryQueue.length !== initialRetryLength || this.offlineQueue.length !== initialOfflineLength) {
       this.persistQueues();
-      console.log('✅ Message removed from queues:', tempId);
+      console.log('✅ Message removed from queues:', {
+        tempId,
+        afterRetryLength: this.retryQueue.length,
+        afterOfflineLength: this.offlineQueue.length
+      });
       
       this.notifyListeners({
         type: 'messageRemoved',
         tempId
       });
+    } else {
+      console.log('⚠️ No messages were removed from queues for tempId:', tempId);
     }
   }
 
@@ -189,6 +201,9 @@ class MessageQueueService {
     for (const item of toProcess) {
       try {
         await this.sendMessage(item);
+        // Success - remove from any other queues
+        this.removeFromQueues(item.tempId);
+        console.log('📱 Offline message sent successfully:', item.tempId);
       } catch (error) {
         console.error('Failed to send offline message:', error);
         // Move to retry queue if send fails
@@ -220,7 +235,9 @@ class MessageQueueService {
 
       try {
         await this.sendMessage(item);
-        // Success - don't add back to queue
+        // Success - don't add back to queue, and ensure it's removed from all queues
+        this.removeFromQueues(item.tempId);
+        console.log('🔄 Retry message sent successfully:', item.tempId);
         this.notifyListeners({
           type: 'messageRetrySuccess',
           tempId: item.tempId
