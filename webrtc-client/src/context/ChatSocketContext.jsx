@@ -41,7 +41,6 @@ export function ChatSocketProvider({ children }) {
       // Start heartbeat to keep connection alive
       const heartbeat = setInterval(() => {
         if (s.connected) {
-          console.log('🔔 Sending heartbeat to keep connection alive');
           s.emit('heartbeat');
         } else {
           console.log('🔔 Socket disconnected, stopping heartbeat');
@@ -99,7 +98,6 @@ export function ChatSocketProvider({ children }) {
 
     s.on('onlineUsers', (users) => {
       console.log('Received online users:', users.length);
-      console.log('🔔 Online users list:', users.map(u => ({ id: u.id, username: u.username })));
       const userMap = new Map();
       users.forEach(user => userMap.set(user.id, user));
       setOnlineUsers(userMap);
@@ -107,7 +105,6 @@ export function ChatSocketProvider({ children }) {
 
     // Debug: Add specific event listeners for debugging
     s.on('chat:new', (message) => {
-      console.log('🔔 Received chat:new event:', message);
       // Show browser notification if message is not from current user
       if (
         window.Notification &&
@@ -132,7 +129,6 @@ export function ChatSocketProvider({ children }) {
 
     // Message delivery status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
-      console.log('🔔 Received chat:delivered event:', { messageId, recipients });
       
       try {
         if (typeof markAsDelivered === 'function') {
@@ -158,7 +154,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('chat:read', ({ messageId, userId, readBy }) => {
-      console.log('🔔 Received chat:read event:', { messageId, userId, readBy });
       
       try {
         if (typeof markAsRead === 'function') {
@@ -192,7 +187,6 @@ export function ChatSocketProvider({ children }) {
 
     // Cleanup function to prevent memory leaks
     return () => {
-      console.log('🔔 Cleaning up socket connection and listeners');
       
       // Clear heartbeat interval if exists
       if (s.heartbeatInterval) {

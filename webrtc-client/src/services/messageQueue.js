@@ -50,20 +50,11 @@ class MessageQueueService {
   // Setup network event listeners
   setupNetworkListeners() {
     window.addEventListener('online', () => {
-      console.log('🌐 [NETWORK] Back online, processing queues...', {
-        retryQueue: this.retryQueue.length,
-        offlineQueue: this.offlineQueue.length
-      });
       this.isOnline = true;
-      
-      // Queue processing will be triggered by socket connection event
-      console.log('🌐 [NETWORK] Waiting for socket connection to process queues...');
-      
       this.notifyListeners({ type: 'network', online: true });
     });
 
     window.addEventListener('offline', () => {
-      console.log('📡 [NETWORK] Offline, queuing messages...');
       this.isOnline = false;
       this.notifyListeners({ type: 'network', online: false });
     });
@@ -156,7 +147,6 @@ class MessageQueueService {
 
     // Check if socket is connected before processing
     if (this.isSocketConnected && !this.isSocketConnected()) {
-      console.log('📡 [QUEUE] Socket not connected, skipping queue processing');
       return;
     }
 
@@ -179,20 +169,15 @@ class MessageQueueService {
   async processOfflineQueue() {
     if (this.offlineQueue.length === 0) return;
 
-    console.log('📱 Processing offline queue:', this.offlineQueue.length, 'messages');
-
     const toProcess = [...this.offlineQueue];
     this.offlineQueue = [];
     this.persistQueues();
 
     for (const item of toProcess) {
       try {
-        console.log('📱 Sending offline message:', item.tempId, 'to conversation:', item.conversationId);
         const response = await this.sendMessage(item);
-        console.log('📱 Offline message response:', response);
         // Success - remove from any other queues
         this.removeFromQueues(item.tempId);
-        console.log('📱 Offline message sent successfully:', item.tempId);
       } catch (error) {
         console.error('Failed to send offline message:', error);
         // Move to retry queue if send fails
@@ -216,19 +201,14 @@ class MessageQueueService {
       return;
     }
 
-    console.log('🔄 Processing retry queue:', readyToRetry.length, 'messages ready');
-
     for (const item of readyToRetry) {
       // Remove from queue temporarily
       this.retryQueue = this.retryQueue.filter(q => q.tempId !== item.tempId);
 
       try {
-        console.log('🔄 Sending retry message:', item.tempId, 'attempt:', item.attempt + 1);
         const response = await this.sendMessage(item);
-        console.log('🔄 Retry message response:', response);
         // Success - don't add back to queue, and ensure it's removed from all queues
         this.removeFromQueues(item.tempId);
-        console.log('🔄 Retry message sent successfully:', item.tempId);
         this.notifyListeners({
           type: 'messageRetrySuccess',
           tempId: item.tempId

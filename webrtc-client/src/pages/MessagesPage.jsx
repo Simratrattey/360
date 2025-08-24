@@ -279,7 +279,6 @@ export default function MessagesPage() {
       // Check if conversation already exists
       const existingIndex = section.items.findIndex(c => c._id === newConversation._id);
       if (existingIndex !== -1) {
-        console.log('🔄 [addConversationToTop] Conversation already exists, skipping');
         return prevSections;
       }
       
@@ -300,7 +299,6 @@ export default function MessagesPage() {
         _lastUpdated: Date.now() // This triggers re-render
       };
       
-      console.log('🔄 [addConversationToTop] Adding new conversation:', conversationToAdd);
       
       // Add to top and re-sort by most recent activity (same logic as moveConversationToTop)
       const allItemsUpdated = [conversationToAdd, ...section.items].sort((a, b) => {
@@ -315,7 +313,6 @@ export default function MessagesPage() {
         _lastUpdated: Date.now() // This triggers re-render
       };
       
-      console.log('🔄 [addConversationToTop] Updated sidebar with', allItemsUpdated.length, 'conversations');
       return newSections;
     });
   }, []);
@@ -368,13 +365,6 @@ export default function MessagesPage() {
   useEffect(() => {
     // Set up the message sender function for the queue
     messageQueue.setMessageSender(async (messageData) => {
-      console.log('📤 [QUEUE] Sending queued message:', {
-        tempId: messageData.tempId,
-        conversationId: messageData.conversationId,
-        socketConnected: chatSocket.connected,
-        text: messageData.text?.substring(0, 20) + '...'
-      });
-      
       const response = await chatSocket.sendMessage({
         conversationId: messageData.conversationId,
         text: messageData.text,
@@ -382,8 +372,6 @@ export default function MessagesPage() {
         replyTo: messageData.replyTo,
         tempId: messageData.tempId,
       });
-      
-      console.log('📤 [QUEUE] Queued message response:', response);
       
       if (response && response.success) {
         try {
@@ -449,7 +437,6 @@ export default function MessagesPage() {
 
     // Listen for socket connection to process queues when actually connected
     const handleSocketConnect = () => {
-      console.log('🔗 [SOCKET] Connected, processing queues...');
       setTimeout(() => {
         messageQueue.processQueues();
       }, 1000); // Small delay to ensure rooms are joined
@@ -660,17 +647,6 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log('📨 [NEW MESSAGE] Received:', {
-        messageId: msg._id,
-        tempId: msg.tempId,
-        isMyMessage,
-        isCurrentConversation,
-        conversationId,
-        selectedConv: selectedRef.current?._id,
-        senderName: msg.senderName,
-        text: msg.text?.substring(0, 20) + '...',
-        timestamp: new Date().toISOString()
-      });
       
       // 1. Update message cache
       setMessagesCache(prev => {
@@ -683,12 +659,6 @@ export default function MessagesPage() {
           (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
         );
         if (isDuplicate) {
-          console.log('📨 Skipping duplicate message in cache:', {
-            messageId: msg._id,
-            tempId: msg.tempId,
-            existingIds: convMessages.map(m => ({ id: m._id, tempId: m.tempId })),
-            reason: 'duplicate detected'
-          });
           return prev;
         }
         
@@ -730,12 +700,6 @@ export default function MessagesPage() {
             (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
           );
           if (isDuplicate) {
-            console.log('📨 Skipping duplicate message in current view:', {
-              messageId: msg._id,
-              tempId: msg.tempId,
-              existingIds: prev.map(m => ({ id: m._id, tempId: m.tempId })),
-              reason: 'duplicate detected'
-            });
             return prev;
           }
           
@@ -1011,7 +975,6 @@ export default function MessagesPage() {
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
-    console.log('🔄 [Memo] filteredConversations recalculating with', allConversations.length, 'sections, forceUpdate:', forceUpdate);
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
