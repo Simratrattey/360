@@ -50,7 +50,6 @@ import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useMediaQuery } from 'react-responsive';
 import { useMessageNotifications } from '../components/Layout';
-import ConnectionStatus from '../components/ConnectionStatus';
 import NetworkStatus from '../components/NetworkStatus';
 import { messageQueue } from '../services/messageQueue';
 import { messageStatus, MESSAGE_STATUS } from '../services/messageStatus';
@@ -2304,9 +2303,6 @@ export default function MessagesPage() {
         currentUserId={user?.id}
       />
 
-      {/* Connection Status (for debugging) */}
-      <ConnectionStatus />
-      
       {/* Network Status and Message Queue Indicator */}
       <NetworkStatus />
     </div>

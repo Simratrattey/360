@@ -190,21 +190,6 @@ function MessageBubble({
     return (
       <div className="flex items-center space-x-1">
         {getStatusIcon()}
-        {/* Show retry button for failed messages */}
-        {statusInfo.isFailed && (
-          <button
-            onClick={() => {
-              // This will be handled by the parent component
-              if (window.retryMessage) {
-                window.retryMessage(tempId);
-              }
-            }}
-            className="text-red-400 hover:text-red-600 transition-colors"
-            title="Retry sending"
-          >
-            <RotateCcw className="h-3 w-3" />
-          </button>
-        )}
       </div>
     );
   };
@@ -835,6 +820,45 @@ function MessageBubble({
                     <span className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
                       Sending...
                     </span>
+                  </div>
+                );
+              })()}
+
+              {/* Failed message retry button - more prominent */}
+              {isOwn && (() => {
+                const tempId = msg.tempId || messageId;
+                let isFailed = false;
+                
+                try {
+                  if (typeof getMessageStatusInfo === 'function') {
+                    const statusInfo = getMessageStatusInfo(tempId, messageId);
+                    isFailed = statusInfo.isFailed;
+                  } else if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
+                    const statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+                    isFailed = statusInfo.isFailed;
+                  } else {
+                    // Fallback to legacy property
+                    isFailed = msg.failed;
+                  }
+                } catch (error) {
+                  // Fallback to legacy property
+                  isFailed = msg.failed;
+                }
+                
+                return isFailed && (
+                  <div className="flex items-center justify-center mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                    <button
+                      onClick={() => {
+                        if (window.retryMessage) {
+                          window.retryMessage(tempId);
+                        }
+                      }}
+                      className="flex items-center space-x-2 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium transition-colors"
+                      title="Retry sending message"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Retry</span>
+                    </button>
                   </div>
                 );
               })()}
