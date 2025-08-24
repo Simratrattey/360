@@ -146,11 +146,21 @@ function MessageBubble({
     const tempId = msg.tempId || messageId;
     let statusInfo;
     
+    console.log('🔍 MessageBubble status check:', { 
+      msgId: messageId, 
+      msgTempId: msg.tempId, 
+      tempId, 
+      hasGetMessageStatusInfo: typeof getMessageStatusInfo === 'function',
+      hasMessageStatusProp: !!messageStatus 
+    });
+    
     try {
       if (typeof getMessageStatusInfo === 'function') {
         statusInfo = getMessageStatusInfo(tempId, messageId);
+        console.log('🔍 Status from service:', statusInfo);
       } else if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
         statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+        console.log('🔍 Status from prop:', statusInfo);
       } else {
         console.error('getMessageStatusInfo is not available');
         // Fallback to basic status
@@ -171,6 +181,7 @@ function MessageBubble({
     }
     
     const getStatusIcon = () => {
+      console.log('🎨 Rendering status icon for:', statusInfo.status);
       switch (statusInfo.status) {
         case MESSAGE_STATUS.SENDING:
           return <Clock className="h-3 w-3 text-gray-400 animate-pulse" title="Sending..." />;
