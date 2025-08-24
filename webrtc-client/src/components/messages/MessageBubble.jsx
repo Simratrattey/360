@@ -5,7 +5,7 @@ import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, c
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
-import { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
+import { messageStatus, MESSAGE_STATUS, getMessageStatusInfo } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({
@@ -147,10 +147,12 @@ function MessageBubble({
     let statusInfo;
     
     try {
-      if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
+      if (typeof getMessageStatusInfo === 'function') {
+        statusInfo = getMessageStatusInfo(tempId, messageId);
+      } else if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
         statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
       } else {
-        console.error('messageStatus.getMessageStatusInfo is not available');
+        console.error('getMessageStatusInfo is not available');
         // Fallback to basic status
         statusInfo = {
           status: MESSAGE_STATUS.SENT,

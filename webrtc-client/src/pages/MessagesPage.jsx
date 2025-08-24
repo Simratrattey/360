@@ -379,9 +379,12 @@ export default function MessagesPage() {
       
       if (response && response.success) {
         try {
-          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
-            messageStatus.markAsSent(messageData.tempId, response.messageId);
-          }
+          // Small delay to ensure other processing completes
+          setTimeout(() => {
+            if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+              messageStatus.markAsSent(messageData.tempId, response.messageId);
+            }
+          }, 50);
         } catch (error) {
           console.error('Error marking message as sent in queue:', error);
         }
@@ -646,12 +649,17 @@ export default function MessagesPage() {
         const convMessages = prev[conversationId] || [];
         
         // Skip if message already exists (by _id or tempId)
-        const isDuplicate = convMessages.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId));
+        const isDuplicate = convMessages.some(m => 
+          m._id === msg._id || 
+          (msg.tempId && m.tempId === msg.tempId) ||
+          (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
+        );
         if (isDuplicate) {
           console.log('📨 Skipping duplicate message in cache:', {
             messageId: msg._id,
             tempId: msg.tempId,
-            existingIds: convMessages.map(m => ({ id: m._id, tempId: m.tempId }))
+            existingIds: convMessages.map(m => ({ id: m._id, tempId: m.tempId })),
+            reason: 'duplicate detected'
           });
           return prev;
         }
@@ -688,12 +696,17 @@ export default function MessagesPage() {
       if (isCurrentConversation) {
         setMessages(prev => {
           // Skip if message already exists (by _id or tempId)
-          const isDuplicate = prev.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId));
+          const isDuplicate = prev.some(m => 
+            m._id === msg._id || 
+            (msg.tempId && m.tempId === msg.tempId) ||
+            (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
+          );
           if (isDuplicate) {
             console.log('📨 Skipping duplicate message in current view:', {
               messageId: msg._id,
               tempId: msg.tempId,
-              existingIds: prev.map(m => ({ id: m._id, tempId: m.tempId }))
+              existingIds: prev.map(m => ({ id: m._id, tempId: m.tempId })),
+              reason: 'duplicate detected'
             });
             return prev;
           }
@@ -1067,12 +1080,15 @@ export default function MessagesPage() {
       // Mark as sent if successful
       if (response && response.success) {
         try {
-          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
-            messageStatus.markAsSent(messageData.tempId, response.messageId);
-          }
           if (messageQueue && typeof messageQueue.removeFromQueues === 'function') {
             messageQueue.removeFromQueues(messageData.tempId);
           }
+          // Small delay to ensure queue cleanup completes first
+          setTimeout(() => {
+            if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+              messageStatus.markAsSent(messageData.tempId, response.messageId);
+            }
+          }, 50);
         } catch (error) {
           console.error('Error updating message status:', error);
         }

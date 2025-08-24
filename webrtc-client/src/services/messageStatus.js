@@ -287,6 +287,14 @@ class MessageStatusService {
 // Create singleton instance
 const messageStatusInstance = new MessageStatusService();
 
+// Export individual functions for better compatibility
+export const getMessageStatusInfo = (tempId, messageId) => messageStatusInstance.getMessageStatusInfo(tempId, messageId);
+export const setMessageStatus = (tempId, status, additionalData) => messageStatusInstance.setMessageStatus(tempId, status, additionalData);
+export const markAsSent = (tempId, messageId) => messageStatusInstance.markAsSent(tempId, messageId);
+export const markAsDelivered = (messageId, deliveredTo) => messageStatusInstance.markAsDelivered(messageId, deliveredTo);
+export const markAsRead = (messageId, readBy) => messageStatusInstance.markAsRead(messageId, readBy);
+export const markAsFailed = (tempId, error) => messageStatusInstance.markAsFailed(tempId, error);
+
 // Export both the instance and the class
-export { messageStatusInstance as messageStatus, MESSAGE_STATUS };
+export { messageStatusInstance as messageStatus };
 export default MessageStatusService;

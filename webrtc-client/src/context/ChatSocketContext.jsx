@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { messageStatus } from '../services/messageStatus';
+import { messageStatus as messageStatusService, markAsDelivered, markAsRead } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
 
@@ -10,7 +10,7 @@ export function ChatSocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Map());
-  const [messageStatus, setMessageStatus] = useState(new Map());
+  const [legacyMessageStatus, setLegacyMessageStatus] = useState(new Map());
   const listeners = useRef({});
 
   useEffect(() => {
@@ -135,17 +135,19 @@ export function ChatSocketProvider({ children }) {
       console.log('🔔 Received chat:delivered event:', { messageId, recipients });
       
       try {
-        if (messageStatus && typeof messageStatus.markAsDelivered === 'function') {
-          messageStatus.markAsDelivered(messageId, recipients);
+        if (typeof markAsDelivered === 'function') {
+          markAsDelivered(messageId, recipients);
+        } else if (messageStatusService && typeof messageStatusService.markAsDelivered === 'function') {
+          messageStatusService.markAsDelivered(messageId, recipients);
         } else {
-          console.error('messageStatus.markAsDelivered is not available');
+          console.error('markAsDelivered is not available');
         }
       } catch (error) {
         console.error('Error marking message as delivered:', error);
       }
       
       // Update legacy status for backward compatibility
-      setMessageStatus(prev => {
+      setLegacyMessageStatus(prev => {
         const newMap = new Map(prev);
         const status = newMap.get(messageId) || { sent: true, delivered: false, read: false, recipients: [] };
         status.delivered = true;
@@ -159,17 +161,19 @@ export function ChatSocketProvider({ children }) {
       console.log('🔔 Received chat:read event:', { messageId, userId, readBy });
       
       try {
-        if (messageStatus && typeof messageStatus.markAsRead === 'function') {
-          messageStatus.markAsRead(messageId, readBy || [userId]);
+        if (typeof markAsRead === 'function') {
+          markAsRead(messageId, readBy || [userId]);
+        } else if (messageStatusService && typeof messageStatusService.markAsRead === 'function') {
+          messageStatusService.markAsRead(messageId, readBy || [userId]);
         } else {
-          console.error('messageStatus.markAsRead is not available');
+          console.error('markAsRead is not available');
         }
       } catch (error) {
         console.error('Error marking message as read:', error);
       }
       
       // Update legacy status for backward compatibility
-      setMessageStatus(prev => {
+      setLegacyMessageStatus(prev => {
         const newMap = new Map(prev);
         const status = newMap.get(messageId) || { sent: true, delivered: false, read: false, recipients: [] };
         status.read = true;
@@ -209,7 +213,7 @@ export function ChatSocketProvider({ children }) {
       setSocket(null);
       setConnected(false);
       setOnlineUsers(new Map());
-      setMessageStatus(new Map());
+      setLegacyMessageStatus(new Map());
     };
   }, [user]);
 
@@ -377,7 +381,7 @@ export function ChatSocketProvider({ children }) {
       socket,
       connected,
       onlineUsers,
-      messageStatus,
+      messageStatus: legacyMessageStatus,
       on,
       off,
       joinConversation,
