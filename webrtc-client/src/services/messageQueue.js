@@ -268,12 +268,6 @@ class MessageQueueService {
     ];
   }
 
-  // Clear all queues (for testing/debugging)
-  clearQueues() {
-    this.retryQueue = [];
-    this.offlineQueue = [];
-    this.persistQueues();
-  }
 }
 
 // Create singleton instance

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink, Clock, AlertCircle, RotateCcw } from 'lucide-react';
+import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, MoreVertical, Copy, Pin, Star, ExternalLink, Clock, AlertCircle, RotateCcw } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
@@ -36,8 +36,6 @@ function MessageBubble({
   isStarred = false,
 }) {
   const messageId = msg._id || msg.id;
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [videoPlaying, setVideoPlaying] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);

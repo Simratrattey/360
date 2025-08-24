@@ -174,7 +174,6 @@ export default function ChatWindow({
     };
   }, [hasMoreMessages, loadingMore, onLoadMore]);
 
-  const isLoading = loading;
 
   const typingUsers = Object.keys(typing || {}).filter(
     userId => typing[userId] && userId !== currentUserId,
@@ -207,7 +206,7 @@ export default function ChatWindow({
         </div>
       )}
       
-      {isLoading ? (
+      {loading ? (
         <div className="flex h-full items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>

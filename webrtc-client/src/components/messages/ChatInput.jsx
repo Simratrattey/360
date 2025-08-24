@@ -11,7 +11,6 @@ export default function ChatInput({
   onFileChange,
   uploadFile,
   onRemoveFile,
-  onShowEmojiPicker,
   onTyping,
   members = [],
   isSending = false,
