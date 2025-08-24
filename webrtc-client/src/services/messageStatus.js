@@ -40,11 +40,6 @@ class MessageStatusService {
         this.readTracking = new Map(Object.entries(read));
       }
       
-      console.log('📊 Message status loaded:', {
-        statuses: this.messageStatuses.size,
-        delivery: this.deliveryTracking.size,
-        read: this.readTracking.size
-      });
     } catch (error) {
       console.error('Error loading message status:', error);
     }
@@ -90,7 +85,6 @@ class MessageStatusService {
     this.messageStatuses.set(tempId, status);
     this.persistStatus();
     
-    console.log('📊 Status updated:', { tempId, previousStatus, newStatus: status });
     
     this.notifyListeners({
       type: 'statusChanged',
@@ -114,7 +108,6 @@ class MessageStatusService {
       this.messageStatuses.set(realMessageId, status);
       this.persistStatus();
       
-      console.log('📊 Message ID mapping updated:', { tempId, realMessageId, status });
     }
   }
 
@@ -144,7 +137,6 @@ class MessageStatusService {
     
     this.persistStatus();
     
-    console.log('📊 Message delivered:', { messageId, deliveredTo });
     
     this.notifyListeners({
       type: 'delivered',
@@ -170,7 +162,6 @@ class MessageStatusService {
     
     this.persistStatus();
     
-    console.log('📊 Message read:', { messageId, readBy });
     
     this.notifyListeners({
       type: 'read',
@@ -241,7 +232,6 @@ class MessageStatusService {
     }
     
     this.persistStatus();
-    console.log('🧹 Message status cleanup completed');
   }
 
   // Get status icon for UI

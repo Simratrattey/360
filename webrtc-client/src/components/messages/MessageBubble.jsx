@@ -146,21 +146,11 @@ function MessageBubble({
     const tempId = msg.tempId || messageId;
     let statusInfo;
     
-    console.log('🔍 MessageBubble status check:', { 
-      msgId: messageId, 
-      msgTempId: msg.tempId, 
-      tempId, 
-      hasGetMessageStatusInfo: typeof getMessageStatusInfo === 'function',
-      hasMessageStatusProp: !!messageStatus 
-    });
-    
     try {
       if (typeof getMessageStatusInfo === 'function') {
         statusInfo = getMessageStatusInfo(tempId, messageId);
-        console.log('🔍 Status from service:', statusInfo);
       } else if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
         statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
-        console.log('🔍 Status from prop:', statusInfo);
       } else {
         console.error('getMessageStatusInfo is not available');
         // Fallback to basic status
@@ -181,7 +171,6 @@ function MessageBubble({
     }
     
     const getStatusIcon = () => {
-      console.log('🎨 Rendering status icon for:', statusInfo.status);
       switch (statusInfo.status) {
         case MESSAGE_STATUS.SENDING:
           return <Clock className="h-3 w-3 text-gray-400 animate-pulse" title="Sending..." />;
@@ -819,15 +808,36 @@ function MessageBubble({
                 </div>
               )}
               
-              {/* Sending indicator */}
-              {msg.sending && (
-                <div className="flex items-center space-x-2 mt-2">
-                  <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60"></div>
-                  <span className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-                    Sending...
-                  </span>
-                </div>
-              )}
+              {/* Sending indicator - using status service */}
+              {(() => {
+                const tempId = msg.tempId || messageId;
+                let isSending = false;
+                
+                try {
+                  if (typeof getMessageStatusInfo === 'function') {
+                    const statusInfo = getMessageStatusInfo(tempId, messageId);
+                    isSending = statusInfo.isSending;
+                  } else if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
+                    const statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+                    isSending = statusInfo.isSending;
+                  } else {
+                    // Fallback to legacy property
+                    isSending = msg.sending;
+                  }
+                } catch (error) {
+                  // Fallback to legacy property
+                  isSending = msg.sending;
+                }
+                
+                return isSending && (
+                  <div className="flex items-center space-x-2 mt-2">
+                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60"></div>
+                    <span className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                      Sending...
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Edited indicator */}
               {msg.edited && (

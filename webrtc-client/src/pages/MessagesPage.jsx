@@ -395,7 +395,6 @@ export default function MessagesPage() {
 
     // Listen for queue events
     const unsubscribeQueue = messageQueue.addListener((event) => {
-      console.log('📦 Queue event:', event);
       
       switch (event.type) {
         case 'messageRetrySuccess':
@@ -432,7 +431,6 @@ export default function MessagesPage() {
 
     // Listen for status changes to update UI
     const unsubscribeStatus = messageStatus.addListener((event) => {
-      console.log('📊 Status event:', event);
       
       // Force re-render when status changes
       setMessages(prev => [...prev]);

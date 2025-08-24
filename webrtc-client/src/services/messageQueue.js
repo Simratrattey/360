@@ -30,10 +30,6 @@ class MessageQueueService {
         this.offlineQueue = JSON.parse(persistedOfflineQueue);
       }
       
-      console.log('📦 Message queues loaded:', {
-        retryQueue: this.retryQueue.length,
-        offlineQueue: this.offlineQueue.length
-      });
     } catch (error) {
       console.error('Error loading persisted queues:', error);
       this.retryQueue = [];
@@ -98,11 +94,6 @@ class MessageQueueService {
     this.retryQueue.push(queueItem);
     this.persistQueues();
     
-    console.log('🔄 Message added to retry queue:', {
-      tempId: messageData.tempId,
-      attempt,
-      nextRetry: new Date(queueItem.nextRetry).toISOString()
-    });
 
     this.notifyListeners({
       type: 'messageQueued',
@@ -124,10 +115,6 @@ class MessageQueueService {
     this.offlineQueue.push(queueItem);
     this.persistQueues();
     
-    console.log('📱 Message added to offline queue:', {
-      tempId: messageData.tempId,
-      conversationId: messageData.conversationId
-    });
 
     this.notifyListeners({
       type: 'messageQueued',
@@ -141,29 +128,17 @@ class MessageQueueService {
     const initialRetryLength = this.retryQueue.length;
     const initialOfflineLength = this.offlineQueue.length;
 
-    console.log('🗑️ Attempting to remove message from queues:', {
-      tempId,
-      beforeRetryLength: initialRetryLength,
-      beforeOfflineLength: initialOfflineLength
-    });
 
     this.retryQueue = this.retryQueue.filter(item => item.tempId !== tempId);
     this.offlineQueue = this.offlineQueue.filter(item => item.tempId !== tempId);
 
     if (this.retryQueue.length !== initialRetryLength || this.offlineQueue.length !== initialOfflineLength) {
       this.persistQueues();
-      console.log('✅ Message removed from queues:', {
-        tempId,
-        afterRetryLength: this.retryQueue.length,
-        afterOfflineLength: this.offlineQueue.length
-      });
       
       this.notifyListeners({
         type: 'messageRemoved',
         tempId
       });
-    } else {
-      console.log('⚠️ No messages were removed from queues for tempId:', tempId);
     }
   }
 
@@ -297,7 +272,6 @@ class MessageQueueService {
     this.retryQueue = [];
     this.offlineQueue = [];
     this.persistQueues();
-    console.log('🗑️ All message queues cleared');
   }
 }
 
