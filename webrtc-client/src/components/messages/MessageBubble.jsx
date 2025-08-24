@@ -808,8 +808,8 @@ function MessageBubble({
                 </div>
               )}
               
-              {/* Sending indicator - using status service */}
-              {(() => {
+              {/* Sending indicator - only for own messages */}
+              {isOwn && (() => {
                 const tempId = msg.tempId || messageId;
                 let isSending = false;
                 
