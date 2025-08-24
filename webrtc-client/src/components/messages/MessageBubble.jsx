@@ -1107,13 +1107,12 @@ function MessageBubble({
   );
 }
 
-// Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 // Wrap with error boundary to handle any errors in message rendering
-const MessageBubbleWithErrorBoundary = React.memo((props) => (
+const MessageBubbleWithErrorBoundary = (props) => (
   <MessageErrorBoundary>
     <MessageBubble {...props} />
   </MessageErrorBoundary>
-));
+);
 
 MessageBubbleWithErrorBoundary.displayName = 'MessageBubbleWithErrorBoundary';
 

@@ -432,14 +432,10 @@ export default function MessagesPage() {
 
     // Listen for status changes to update UI
     const unsubscribeStatus = messageStatus.addListener((event) => {
-      console.log('📊 Status event received in MessagesPage:', event);
+      console.log('📊 Status event:', event);
       
       // Force re-render when status changes
-      console.log('📊 Forcing re-render of messages');
-      setMessages(prev => {
-        console.log('📊 Current messages count:', prev.length);
-        return [...prev];
-      });
+      setMessages(prev => [...prev]);
     });
 
     // Process any existing queues on mount
