@@ -56,11 +56,8 @@ class MessageQueueService {
       });
       this.isOnline = true;
       
-      // Add a small delay to ensure all users have time to reconnect and rejoin rooms
-      setTimeout(() => {
-        console.log('🌐 [NETWORK] Processing queues after reconnection delay...');
-        this.processQueues();
-      }, 2000); // 2 second delay
+      // Queue processing will be triggered by socket connection event
+      console.log('🌐 [NETWORK] Waiting for socket connection to process queues...');
       
       this.notifyListeners({ type: 'network', online: true });
     });
@@ -154,6 +151,12 @@ class MessageQueueService {
   // Process all queues
   async processQueues() {
     if (this.isProcessing || !this.isOnline) {
+      return;
+    }
+
+    // Check if socket is connected before processing
+    if (this.isSocketConnected && !this.isSocketConnected()) {
+      console.log('📡 [QUEUE] Socket not connected, skipping queue processing');
       return;
     }
 
@@ -260,6 +263,11 @@ class MessageQueueService {
   // Set message sender function
   setMessageSender(senderFunction) {
     this.sendMessage = senderFunction;
+  }
+
+  // Set socket connection checker
+  setSocketChecker(checkerFunction) {
+    this.isSocketConnected = checkerFunction;
   }
 
   // Get queue status

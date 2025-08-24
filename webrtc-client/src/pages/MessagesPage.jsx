@@ -402,6 +402,9 @@ export default function MessagesPage() {
       return response;
     });
 
+    // Set up socket connection checker for the queue
+    messageQueue.setSocketChecker(() => chatSocket.connected);
+
     // Listen for queue events
     const unsubscribeQueue = messageQueue.addListener((event) => {
       
@@ -445,6 +448,18 @@ export default function MessagesPage() {
       setMessages(prev => [...prev]);
     });
 
+    // Listen for socket connection to process queues when actually connected
+    const handleSocketConnect = () => {
+      console.log('🔗 [SOCKET] Connected, processing queues...');
+      setTimeout(() => {
+        messageQueue.processQueues();
+      }, 1000); // Small delay to ensure rooms are joined
+    };
+
+    if (chatSocket.socket) {
+      chatSocket.on('connect', handleSocketConnect);
+    }
+
     // Process any existing queues on mount
     messageQueue.processQueues();
 
@@ -452,6 +467,9 @@ export default function MessagesPage() {
     return () => {
       unsubscribeQueue();
       unsubscribeStatus();
+      if (chatSocket.socket) {
+        chatSocket.off('connect', handleSocketConnect);
+      }
     };
   }, [chatSocket]);
 
