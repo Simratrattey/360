@@ -657,7 +657,7 @@ io.on('connection', async socket => {
   });
 
   // Send a new message
-  socket.on('chat:send', async ({ conversationId, text, file, replyTo }) => {
+  socket.on('chat:send', async ({ conversationId, text, file, replyTo, tempId }) => {
     const userId = socket.userId;
     const session = await mongoose.startSession();
     let populatedMessage;
@@ -780,6 +780,14 @@ io.on('connection', async socket => {
           console.error(`Error creating notification for user ${recipientId}:`, error);
         }
       }
+      
+      // Send success acknowledgment to sender
+      socket.emit('chat:sent', {
+        success: true,
+        messageId: populatedMessage._id.toString(),
+        tempId: tempId || `${conversationId}-${Date.now()}`
+      });
+      
     } catch (error) {
       console.error('Error sending message:', error);
       socket.emit('chat:error', { message: 'Failed to send message' });

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink } from 'lucide-react';
+import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink, Clock, AlertCircle, RotateCcw } from 'lucide-react';
 import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
+import { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({
@@ -138,19 +139,50 @@ function MessageBubble({
   };
 
   const renderStatusIndicator = () => {
-    if (!messageStatus) return null;
+    // Only show status for own messages
+    if (!isOwn) return null;
     
-    const status = messageStatus[messageId];
-    if (!status) return null;
+    // Get status info from the message status service
+    const tempId = msg.tempId || messageId;
+    const statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+    
+    const getStatusIcon = () => {
+      switch (statusInfo.status) {
+        case MESSAGE_STATUS.SENDING:
+          return <Clock className="h-3 w-3 text-gray-400 animate-pulse" title="Sending..." />;
+        case MESSAGE_STATUS.SENT:
+          return <Check className="h-3 w-3 text-gray-400" title="Sent" />;
+        case MESSAGE_STATUS.DELIVERED:
+          return <CheckCheck className="h-3 w-3 text-gray-400" title="Delivered" />;
+        case MESSAGE_STATUS.READ:
+          return <CheckCheck className="h-3 w-3 text-blue-400" title="Read" />;
+        case MESSAGE_STATUS.FAILED:
+          return <AlertCircle className="h-3 w-3 text-red-400" title="Failed to send" />;
+        default:
+          return <Clock className="h-3 w-3 text-gray-400 animate-pulse" title="Sending..." />;
+      }
+    };
 
-    if (status.read) {
-      return <CheckCheck className="h-3 w-3" />;
-    } else if (status.delivered) {
-      return <Check className="h-3 w-3" />;
-    } else if (status.sent) {
-      return <div className="h-3 w-3 border border-current rounded-full" />;
-    }
-    return null;
+    return (
+      <div className="flex items-center space-x-1">
+        {getStatusIcon()}
+        {/* Show retry button for failed messages */}
+        {statusInfo.isFailed && (
+          <button
+            onClick={() => {
+              // This will be handled by the parent component
+              if (window.retryMessage) {
+                window.retryMessage(tempId);
+              }
+            }}
+            className="text-red-400 hover:text-red-600 transition-colors"
+            title="Retry sending"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    );
   };
 
   // Helper: get user object from onlineUsers (Map or array)

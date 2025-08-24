@@ -51,6 +51,9 @@ import { useChatSocket } from '../context/ChatSocketContext';
 import { useMediaQuery } from 'react-responsive';
 import { useMessageNotifications } from '../components/Layout';
 import ConnectionStatus from '../components/ConnectionStatus';
+import NetworkStatus from '../components/NetworkStatus';
+import { messageQueue } from '../services/messageQueue';
+import { messageStatus, MESSAGE_STATUS } from '../services/messageStatus';
 
 
 // Placeholder for emoji list
@@ -361,6 +364,92 @@ export default function MessagesPage() {
       }
     }
   }, [allConversations, isMobile]);
+
+  // Initialize message queue and status services
+  useEffect(() => {
+    // Set up the message sender function for the queue
+    messageQueue.setMessageSender(async (messageData) => {
+      const response = await chatSocket.sendMessage({
+        conversationId: messageData.conversationId,
+        text: messageData.text,
+        file: messageData.file,
+        replyTo: messageData.replyTo,
+        tempId: messageData.tempId,
+      });
+      
+      if (response && response.success) {
+        messageStatus.markAsSent(messageData.tempId, response.messageId);
+      }
+      
+      return response;
+    });
+
+    // Listen for queue events
+    const unsubscribeQueue = messageQueue.addListener((event) => {
+      console.log('📦 Queue event:', event);
+      
+      switch (event.type) {
+        case 'messageRetrySuccess':
+          setNotification({
+            message: 'Message sent successfully!'
+          });
+          setTimeout(() => setNotification(null), 2000);
+          break;
+          
+        case 'messageRetryFailed':
+          messageStatus.markAsFailed(event.tempId, event.error);
+          setNotification({
+            message: 'Message failed to send. Check your connection.'
+          });
+          setTimeout(() => setNotification(null), 3000);
+          break;
+          
+        case 'network':
+          if (event.online) {
+            setNotification({
+              message: 'Connection restored. Sending queued messages...'
+            });
+            setTimeout(() => setNotification(null), 2000);
+          }
+          break;
+      }
+    });
+
+    // Listen for status changes to update UI
+    const unsubscribeStatus = messageStatus.addListener((event) => {
+      console.log('📊 Status event:', event);
+      
+      // Force re-render when status changes
+      setMessages(prev => [...prev]);
+    });
+
+    // Process any existing queues on mount
+    messageQueue.processQueues();
+
+    // Cleanup
+    return () => {
+      unsubscribeQueue();
+      unsubscribeStatus();
+    };
+  }, [chatSocket]);
+
+  // Global retry function for failed messages
+  useEffect(() => {
+    window.retryMessage = (tempId) => {
+      const queuedMessages = messageQueue.getQueuedMessages(selected?._id);
+      const messageToRetry = queuedMessages.find(msg => msg.tempId === tempId);
+      
+      if (messageToRetry) {
+        messageQueue.addToRetryQueue(messageToRetry, 0); // Reset retry count
+        messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
+        messageQueue.processQueues();
+      }
+    };
+
+    return () => {
+      delete window.retryMessage;
+    };
+  }, [selected]);
 
   const fetchConversations = async () => {
     try {
@@ -886,6 +975,46 @@ export default function MessagesPage() {
     }
   };
 
+  // Send message with network resilience and retry logic
+  const sendMessageWithRetry = async (messageData) => {
+    try {
+      // Check if we're online
+      if (!navigator.onLine) {
+        // Add to offline queue
+        messageQueue.addToOfflineQueue(messageData);
+        messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+        return;
+      }
+
+      // Try to send the message
+      const response = await chatSocket.sendMessage({
+        conversationId: messageData.conversationId,
+        text: messageData.text,
+        file: messageData.file,
+        replyTo: messageData.replyTo,
+        tempId: messageData.tempId,
+      });
+
+      // Mark as sent if successful
+      if (response && response.success) {
+        messageStatus.markAsSent(messageData.tempId, response.messageId);
+        // Remove from any queues since it was successful
+        messageQueue.removeFromQueues(messageData.tempId);
+      }
+
+    } catch (error) {
+      console.error('Message send failed:', error);
+      
+      // Add to retry queue for automatic retry
+      messageQueue.addToRetryQueue(messageData);
+      
+      // Mark as failed temporarily (will be updated when retry succeeds)
+      messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+      
+      throw error; // Re-throw to handle in calling function
+    }
+  };
+
   // Send a new message. This version implements an "optimistic" update so the message
   // Enhanced handleSend with optimistic UI and loading states
   const handleSend = async () => {
@@ -931,6 +1060,7 @@ export default function MessagesPage() {
       const tempId = `temp-${Date.now()}`;
       const tempMsg = {
         _id: tempId,
+        tempId, // Keep track of temp ID for status updates
         conversationId: selected._id,
         senderId: user?.id,
         senderName: user?.fullName || user?.username || '',
@@ -941,6 +1071,9 @@ export default function MessagesPage() {
         pending: true,
         sending: true, // Mark as currently sending
       };
+      
+      // Set initial status as sending
+      messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
       
       // Add optimistic message to UI immediately
       setMessages(prev => [...prev, tempMsg]);
@@ -961,13 +1094,25 @@ export default function MessagesPage() {
         new Date().toISOString()
       );
       
-      // Emit the actual message to the server
-      chatSocket.sendMessage({
+      // Prepare message data for sending
+      const messageData = {
+        tempId,
         conversationId: selected._id,
         text: input.trim(),
         file: fileMeta,
         replyTo: replyTo ? replyTo._id : undefined,
-      });
+        senderId: user?.id,
+        senderName: user?.fullName || user?.username || '',
+        createdAt: new Date().toISOString()
+      };
+
+      // Send message with network resilience
+      try {
+        await sendMessageWithRetry(messageData);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        // Message will be queued by sendMessageWithRetry
+      }
       
       // Reset input fields immediately for better UX
       setInput('');
@@ -984,14 +1129,12 @@ export default function MessagesPage() {
       }
       
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error in message handling:', error);
+      // Don't remove optimistic messages - let the queue system handle retries
       setNotification({
-        message: 'Failed to send message. Please try again.'
+        message: 'Message queued for sending when connection improves'
       });
       setTimeout(() => setNotification(null), 3000);
-      
-      // Remove the optimistic message on error
-      setMessages(prev => prev.filter(msg => !msg.sending));
     } finally {
       setIsSending(false);
       setUploadProgress(0);
@@ -2028,6 +2171,9 @@ export default function MessagesPage() {
 
       {/* Connection Status (for debugging) */}
       <ConnectionStatus />
+      
+      {/* Network Status and Message Queue Indicator */}
+      <NetworkStatus />
     </div>
   );
 } 

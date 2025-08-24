@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { messageStatus } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
 
@@ -129,19 +130,12 @@ export function ChatSocketProvider({ children }) {
       }
     });
 
-    s.on('chat:delivered', (data) => {
-      console.log('🔔 Received chat:delivered event:', data);
-    });
-
-    s.on('chat:read', (data) => {
-      console.log('🔔 Received chat:read event:', data);
-    });
-
-    // Note: conversation:created, conversation:deleted, and conversation:updated events
-    // are handled in MessagesPage component to update UI directly
-
-    // Message status events
+    // Message delivery status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
+      console.log('🔔 Received chat:delivered event:', { messageId, recipients });
+      messageStatus.markAsDelivered(messageId, recipients);
+      
+      // Update legacy status for backward compatibility
       setMessageStatus(prev => {
         const newMap = new Map(prev);
         const status = newMap.get(messageId) || { sent: true, delivered: false, read: false, recipients: [] };
@@ -152,7 +146,11 @@ export function ChatSocketProvider({ children }) {
       });
     });
 
-    s.on('chat:read', ({ messageId, userId }) => {
+    s.on('chat:read', ({ messageId, userId, readBy }) => {
+      console.log('🔔 Received chat:read event:', { messageId, userId, readBy });
+      messageStatus.markAsRead(messageId, readBy || [userId]);
+      
+      // Update legacy status for backward compatibility
       setMessageStatus(prev => {
         const newMap = new Map(prev);
         const status = newMap.get(messageId) || { sent: true, delivered: false, read: false, recipients: [] };
@@ -161,6 +159,9 @@ export function ChatSocketProvider({ children }) {
         return newMap;
       });
     });
+
+    // Note: conversation:created, conversation:deleted, and conversation:updated events
+    // are handled in MessagesPage component to update UI directly
 
     // Note: Removed notify-message handler to prevent duplicate notifications
     // All message notifications are now handled through chat:new events in MessagesPage
@@ -253,14 +254,53 @@ export function ChatSocketProvider({ children }) {
   };
   
   const sendMessage = (data) => {
-    if (socket && data) {
+    return new Promise((resolve, reject) => {
+      if (!socket || !data) {
+        reject(new Error('Socket not connected or no data provided'));
+        return;
+      }
+
       try {
         console.log('Sending message:', data);
+        
+        // Set up one-time listeners for this message
+        const successHandler = (response) => {
+          if (response.tempId === data.tempId) {
+            console.log('Message sent successfully:', response);
+            resolve(response);
+            // Clean up listeners
+            socket.off('chat:sent', successHandler);
+            socket.off('chat:error', errorHandler);
+          }
+        };
+
+        const errorHandler = (error) => {
+          console.error('Message send error:', error);
+          reject(new Error(error.message || 'Failed to send message'));
+          // Clean up listeners
+          socket.off('chat:sent', successHandler);
+          socket.off('chat:error', errorHandler);
+        };
+
+        // Set up listeners before sending
+        socket.on('chat:sent', successHandler);
+        socket.on('chat:error', errorHandler);
+
+        // Send the message
         socket.emit('chat:send', data);
+
+        // Set timeout to prevent hanging promises
+        setTimeout(() => {
+          socket.off('chat:sent', successHandler);
+          socket.off('chat:error', errorHandler);
+          reject(new Error('Message send timeout'));
+        }, 10000); // 10 second timeout
+
       } catch (error) {
         console.error('Error sending message:', error);
+        reject(error);
       }
-    }
+    });
   };
   
   const editMessage = (data) => {
