@@ -5,7 +5,7 @@ import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, c
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
-import { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
+import MessageStatusService, { messageStatus, MESSAGE_STATUS } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
 function MessageBubble({
@@ -142,9 +142,31 @@ function MessageBubble({
     // Only show status for own messages
     if (!isOwn) return null;
     
-    // Get status info from the message status service
+    // Get status info from the message status service with error handling
     const tempId = msg.tempId || messageId;
-    const statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+    let statusInfo;
+    
+    try {
+      if (messageStatus && typeof messageStatus.getMessageStatusInfo === 'function') {
+        statusInfo = messageStatus.getMessageStatusInfo(tempId, messageId);
+      } else {
+        console.error('messageStatus.getMessageStatusInfo is not available');
+        // Fallback to basic status
+        statusInfo = {
+          status: MESSAGE_STATUS.SENT,
+          isFailed: false,
+          isSending: false
+        };
+      }
+    } catch (error) {
+      console.error('Error getting message status info:', error);
+      // Fallback to basic status
+      statusInfo = {
+        status: MESSAGE_STATUS.SENT,
+        isFailed: false,
+        isSending: false
+      };
+    }
     
     const getStatusIcon = () => {
       switch (statusInfo.status) {

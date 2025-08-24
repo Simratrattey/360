@@ -378,7 +378,13 @@ export default function MessagesPage() {
       });
       
       if (response && response.success) {
-        messageStatus.markAsSent(messageData.tempId, response.messageId);
+        try {
+          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+            messageStatus.markAsSent(messageData.tempId, response.messageId);
+          }
+        } catch (error) {
+          console.error('Error marking message as sent in queue:', error);
+        }
       }
       
       return response;
@@ -397,7 +403,13 @@ export default function MessagesPage() {
           break;
           
         case 'messageRetryFailed':
-          messageStatus.markAsFailed(event.tempId, event.error);
+          try {
+            if (messageStatus && typeof messageStatus.markAsFailed === 'function') {
+              messageStatus.markAsFailed(event.tempId, event.error);
+            }
+          } catch (error) {
+            console.error('Error marking message as failed:', error);
+          }
           setNotification({
             message: 'Message failed to send. Check your connection.'
           });
@@ -440,9 +452,19 @@ export default function MessagesPage() {
       const messageToRetry = queuedMessages.find(msg => msg.tempId === tempId);
       
       if (messageToRetry) {
-        messageQueue.addToRetryQueue(messageToRetry, 0); // Reset retry count
-        messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
-        messageQueue.processQueues();
+        try {
+          if (messageQueue && typeof messageQueue.addToRetryQueue === 'function') {
+            messageQueue.addToRetryQueue(messageToRetry, 0); // Reset retry count
+          }
+          if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
+            messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
+          }
+          if (messageQueue && typeof messageQueue.processQueues === 'function') {
+            messageQueue.processQueues();
+          }
+        } catch (error) {
+          console.error('Error retrying message:', error);
+        }
       }
     };
 
@@ -611,19 +633,36 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
+      console.log('📨 Handling new message:', {
+        messageId: msg._id,
+        tempId: msg.tempId,
+        isMyMessage,
+        isCurrentConversation,
+        text: msg.text?.substring(0, 20) + '...'
+      });
+      
       // 1. Update message cache
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
-        // Skip if message already exists
-        if (convMessages.some(m => m._id === msg._id)) {
+        // Skip if message already exists (by _id or tempId)
+        if (convMessages.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId))) {
           return prev;
         }
         
-        // For my own messages, remove optimistic duplicates
+        // For my own messages, remove optimistic duplicates (messages with tempId that match the real message)
         let cleanMessages = convMessages;
         if (isMyMessage) {
-          cleanMessages = convMessages.filter(m => !m.pending && !m.sending);
+          // Remove optimistic messages (pending/sending) and tempId matches
+          cleanMessages = convMessages.filter(m => {
+            // Keep the message if it's not pending/sending and doesn't match the incoming message
+            if (!m.pending && !m.sending) return true;
+            // Remove if tempIds match (this optimistic message is being replaced)
+            if (msg.tempId && m.tempId === msg.tempId) return false;
+            // Remove if it's a pending/sending message from this user
+            if (m.senderId === user.id && (m.pending || m.sending)) return false;
+            return true;
+          });
         }
         
         const newCache = [...cleanMessages, { ...msg, conversationId }];
@@ -642,14 +681,24 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
+          // Skip if message already exists (by _id or tempId)
+          if (prev.some(m => m._id === msg._id || (msg.tempId && m.tempId === msg.tempId))) {
+            return prev;
+          }
+          
           // For my messages, remove optimistic versions
           let filtered = prev;
           if (isMyMessage) {
-            filtered = prev.filter(m => !m.pending && !m.sending);
+            filtered = prev.filter(m => {
+              // Keep the message if it's not pending/sending and doesn't match the incoming message
+              if (!m.pending && !m.sending) return true;
+              // Remove if tempIds match (this optimistic message is being replaced)
+              if (msg.tempId && m.tempId === msg.tempId) return false;
+              // Remove if it's a pending/sending message from this user
+              if (m.senderId === user.id && (m.pending || m.sending)) return false;
+              return true;
+            });
           }
-          
-          // Add if not already there
-          if (filtered.some(m => m._id === msg._id)) return filtered;
           
           return [...filtered, { ...msg, conversationId }];
         });
@@ -981,8 +1030,16 @@ export default function MessagesPage() {
       // Check if we're online
       if (!navigator.onLine) {
         // Add to offline queue
-        messageQueue.addToOfflineQueue(messageData);
-        messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+        try {
+          if (messageQueue && typeof messageQueue.addToOfflineQueue === 'function') {
+            messageQueue.addToOfflineQueue(messageData);
+          }
+          if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
+            messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+          }
+        } catch (error) {
+          console.error('Error adding message to offline queue:', error);
+        }
         return;
       }
 
@@ -997,19 +1054,34 @@ export default function MessagesPage() {
 
       // Mark as sent if successful
       if (response && response.success) {
-        messageStatus.markAsSent(messageData.tempId, response.messageId);
-        // Remove from any queues since it was successful
-        messageQueue.removeFromQueues(messageData.tempId);
+        try {
+          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+            messageStatus.markAsSent(messageData.tempId, response.messageId);
+          }
+          if (messageQueue && typeof messageQueue.removeFromQueues === 'function') {
+            messageQueue.removeFromQueues(messageData.tempId);
+          }
+        } catch (error) {
+          console.error('Error updating message status:', error);
+        }
       }
 
     } catch (error) {
       console.error('Message send failed:', error);
       
       // Add to retry queue for automatic retry
-      messageQueue.addToRetryQueue(messageData);
-      
-      // Mark as failed temporarily (will be updated when retry succeeds)
-      messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+      try {
+        if (messageQueue && typeof messageQueue.addToRetryQueue === 'function') {
+          messageQueue.addToRetryQueue(messageData);
+        }
+        
+        // Mark as failed temporarily (will be updated when retry succeeds)
+        if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
+          messageStatus.setMessageStatus(messageData.tempId, MESSAGE_STATUS.SENDING);
+        }
+      } catch (error) {
+        console.error('Error queueing message for retry:', error);
+      }
       
       throw error; // Re-throw to handle in calling function
     }
@@ -1073,7 +1145,13 @@ export default function MessagesPage() {
       };
       
       // Set initial status as sending
-      messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
+      try {
+        if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
+          messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
+        }
+      } catch (error) {
+        console.error('Error setting message status:', error);
+      }
       
       // Add optimistic message to UI immediately
       setMessages(prev => [...prev, tempMsg]);

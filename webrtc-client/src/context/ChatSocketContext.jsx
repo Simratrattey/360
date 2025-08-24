@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { messageStatus } from '../services/messageStatus';
+import MessageStatusService, { messageStatus } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
 
@@ -133,7 +133,16 @@ export function ChatSocketProvider({ children }) {
     // Message delivery status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
       console.log('🔔 Received chat:delivered event:', { messageId, recipients });
-      messageStatus.markAsDelivered(messageId, recipients);
+      
+      try {
+        if (messageStatus && typeof messageStatus.markAsDelivered === 'function') {
+          messageStatus.markAsDelivered(messageId, recipients);
+        } else {
+          console.error('messageStatus.markAsDelivered is not available');
+        }
+      } catch (error) {
+        console.error('Error marking message as delivered:', error);
+      }
       
       // Update legacy status for backward compatibility
       setMessageStatus(prev => {
@@ -148,7 +157,16 @@ export function ChatSocketProvider({ children }) {
 
     s.on('chat:read', ({ messageId, userId, readBy }) => {
       console.log('🔔 Received chat:read event:', { messageId, userId, readBy });
-      messageStatus.markAsRead(messageId, readBy || [userId]);
+      
+      try {
+        if (messageStatus && typeof messageStatus.markAsRead === 'function') {
+          messageStatus.markAsRead(messageId, readBy || [userId]);
+        } else {
+          console.error('messageStatus.markAsRead is not available');
+        }
+      } catch (error) {
+        console.error('Error marking message as read:', error);
+      }
       
       // Update legacy status for backward compatibility
       setMessageStatus(prev => {

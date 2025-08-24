@@ -722,7 +722,8 @@ io.on('connection', async socket => {
         ...populatedMessage.toObject(),
         conversationId: conversationId,
         senderId: userId,
-        senderName: populatedMessage.sender.fullName || populatedMessage.sender.username
+        senderName: populatedMessage.sender.fullName || populatedMessage.sender.username,
+        tempId: tempId // Include tempId for client-side deduplication
       };
       
       // Send to all online members except sender
