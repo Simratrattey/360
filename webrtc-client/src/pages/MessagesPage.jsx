@@ -798,21 +798,144 @@ export default function MessagesPage() {
       }
     });
 
-    // Conversation administration events
-    chatSocket.on('conversation:memberAdded', ({ conversationId, userId, addedBy }) => {
-      console.log('🔔 Member added to conversation:', { conversationId, userId, addedBy });
-      if (selected && selected._id === conversationId) {
-        handleConversationUpdated();
+    // Enhanced group membership events with real-time updates and notifications
+    chatSocket.on('conversation:memberAdded', ({ 
+      conversationId, 
+      conversationName, 
+      conversationType, 
+      userId, 
+      addedBy, 
+      addedUser, 
+      adderUser 
+    }) => {
+      console.log('🔥 [MEMBER-ADDED] Event received!');
+      console.log('🔥 [MEMBER-ADDED] Data:', { conversationId, conversationName, conversationType, userId, addedBy, addedUser, adderUser });
+      
+      const currentUserId = user?.id;
+      const isCurrentUser = userId === currentUserId;
+      const isAdder = addedBy === currentUserId;
+      
+      console.log('🔥 [MEMBER-ADDED] Current user ID:', currentUserId);
+      console.log('🔥 [MEMBER-ADDED] Is current user being added:', isCurrentUser);
+      console.log('🔥 [MEMBER-ADDED] Is current user the adder:', isAdder);
+      
+      // If current user was added to the group, they should see it in their conversation list
+      if (isCurrentUser) {
+        console.log('🔥 [MEMBER-ADDED] ✅ Current user was added to group - refreshing conversation list');
+        
+        // Refresh conversations to get the new group with updated members
+        fetchConversations(true);
+        
+        // Show notification
+        setNotification({
+          message: `You were added to ${conversationName || 'a group'} by ${adderUser?.fullName || adderUser?.username || 'someone'}!`
+        });
+        setTimeout(() => setNotification(null), 4000);
+        
+        // Show browser notification if supported
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Added to Group', {
+            body: `You were added to ${conversationName || 'a group'} by ${adderUser?.fullName || adderUser?.username || 'someone'}`,
+            icon: '/favicon.ico'
+          });
+        }
+      } else {
+        // For other users, just update the current conversation if they're viewing it
+        if (selected && selected._id === conversationId) {
+          console.log('🔥 [MEMBER-ADDED] ✅ Updating current conversation with new member');
+          handleConversationUpdated();
+        }
+        
+        // Show notification to existing members
+        if (!isAdder) { // Don't show notification to the person who added someone
+          setNotification({
+            message: `${addedUser?.fullName || addedUser?.username || 'Someone'} was added to ${conversationName || 'the group'}`
+          });
+          setTimeout(() => setNotification(null), 3000);
+        }
       }
-      // Removed fetchConversations() - socket events should handle updates
     });
 
-    chatSocket.on('conversation:memberRemoved', ({ conversationId, userId, removedBy }) => {
-      console.log('🔔 Member removed from conversation:', { conversationId, userId, removedBy });
-      if (selected && selected._id === conversationId) {
-        handleConversationUpdated();
+    chatSocket.on('conversation:memberRemoved', ({ 
+      conversationId, 
+      conversationName, 
+      conversationType, 
+      userId, 
+      removedBy, 
+      removedUser, 
+      removerUser 
+    }) => {
+      console.log('🔥 [MEMBER-REMOVED] Event received!');
+      console.log('🔥 [MEMBER-REMOVED] Data:', { conversationId, conversationName, conversationType, userId, removedBy, removedUser, removerUser });
+      
+      const currentUserId = user?.id;
+      const isCurrentUser = userId === currentUserId;
+      const isRemover = removedBy === currentUserId;
+      
+      console.log('🔥 [MEMBER-REMOVED] Current user ID:', currentUserId);
+      console.log('🔥 [MEMBER-REMOVED] Is current user being removed:', isCurrentUser);
+      console.log('🔥 [MEMBER-REMOVED] Is current user the remover:', isRemover);
+      
+      // If current user was removed from the group
+      if (isCurrentUser) {
+        console.log('🔥 [MEMBER-REMOVED] ❌ Current user was removed from group');
+        
+        // Remove conversation from sidebar immediately (similar to conversation:deleted)
+        setAllConversations(prev => {
+          const newSections = prev.map(section => ({
+            ...section,
+            items: section.items.filter(c => c._id !== conversationId),
+            _lastUpdated: Date.now()
+          }));
+          
+          console.log('🔥 [MEMBER-REMOVED] Updated sidebar sections - removed conversation');
+          allConversationsRef.current = newSections;
+          return newSections;
+        });
+        
+        // If this was the selected conversation, clear selection
+        if (selected && selected._id === conversationId) {
+          console.log('🔥 [MEMBER-REMOVED] Clearing current selection');
+          setSelected(null);
+          selectedRef.current = null;
+          setMessages([]);
+        }
+        
+        // Remove from message cache
+        setMessagesCache(prev => {
+          const newCache = { ...prev };
+          delete newCache[conversationId];
+          return newCache;
+        });
+        
+        // Show notification
+        setNotification({
+          message: `You were removed from ${conversationName || 'a group'} by ${removerUser?.fullName || removerUser?.username || 'an admin'}`
+        });
+        setTimeout(() => setNotification(null), 4000);
+        
+        // Show browser notification if supported
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Removed from Group', {
+            body: `You were removed from ${conversationName || 'a group'} by ${removerUser?.fullName || removerUser?.username || 'an admin'}`,
+            icon: '/favicon.ico'
+          });
+        }
+      } else {
+        // For other users, update the current conversation if they're viewing it
+        if (selected && selected._id === conversationId) {
+          console.log('🔥 [MEMBER-REMOVED] ✅ Updating current conversation - member removed');
+          handleConversationUpdated();
+        }
+        
+        // Show notification to remaining members
+        if (!isRemover) { // Don't show notification to the person who removed someone
+          setNotification({
+            message: `${removedUser?.fullName || removedUser?.username || 'Someone'} was removed from ${conversationName || 'the group'}`
+          });
+          setTimeout(() => setNotification(null), 3000);
+        }
       }
-      // Removed fetchConversations() - socket events should handle updates
     });
 
     chatSocket.on('conversation:adminAdded', ({ conversationId, userId, adminId }) => {

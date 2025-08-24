@@ -362,7 +362,7 @@ export async function addMember(req, res, next) {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findById(conversationId).populate('members', 'username fullName avatarUrl');
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
@@ -379,13 +379,37 @@ export async function addMember(req, res, next) {
     conversation.members.push(userId);
     await conversation.save();
 
-    // Emit socket event for real-time updates
+    // Get added user info and adder info for notifications
+    const addedUser = await User.findById(userId).select('username fullName avatarUrl');
+    const adderUser = await User.findById(currentUserId).select('username fullName avatarUrl');
+
+    // Emit socket event for real-time updates with enhanced data
     if (req.io) {
-      req.io.to(conversationId).emit('conversation:memberAdded', {
+      const eventData = {
         conversationId,
+        conversationName: conversation.name,
+        conversationType: conversation.type,
         userId,
-        addedBy: currentUserId
-      });
+        addedBy: currentUserId,
+        addedUser: {
+          _id: addedUser._id,
+          username: addedUser.username,
+          fullName: addedUser.fullName,
+          avatarUrl: addedUser.avatarUrl
+        },
+        adderUser: {
+          _id: adderUser._id,
+          username: adderUser.username,
+          fullName: adderUser.fullName,
+          avatarUrl: adderUser.avatarUrl
+        }
+      };
+
+      // Emit to conversation members
+      req.io.to(conversationId).emit('conversation:memberAdded', eventData);
+
+      // Also emit to the added user specifically (in case they're not in the room yet)
+      req.io.to(userId).emit('conversation:memberAdded', eventData);
     }
 
     res.json({ message: 'Member added successfully', conversation });
@@ -400,7 +424,7 @@ export async function removeMember(req, res, next) {
     const { conversationId, userId } = req.params;
     const currentUserId = req.user.id;
 
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findById(conversationId).populate('members', 'username fullName avatarUrl');
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
@@ -414,6 +438,10 @@ export async function removeMember(req, res, next) {
       return res.status(400).json({ message: 'User is not a member' });
     }
 
+    // Get removed user info and remover info for notifications before removing
+    const removedUser = await User.findById(userId).select('username fullName avatarUrl');
+    const removerUser = await User.findById(currentUserId).select('username fullName avatarUrl');
+
     conversation.members = conversation.members.filter(id => id.toString() !== userId);
     // Also remove from admins if they were an admin
     conversation.admins = conversation.admins.filter(id => id.toString() !== userId);
@@ -422,13 +450,33 @@ export async function removeMember(req, res, next) {
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
 
-    // Emit socket event for real-time updates
+    // Emit socket event for real-time updates with enhanced data
     if (req.io) {
-      req.io.to(conversationId).emit('conversation:memberRemoved', {
+      const eventData = {
         conversationId,
+        conversationName: conversation.name,
+        conversationType: conversation.type,
         userId,
-        removedBy: currentUserId
-      });
+        removedBy: currentUserId,
+        removedUser: {
+          _id: removedUser._id,
+          username: removedUser.username,
+          fullName: removedUser.fullName,
+          avatarUrl: removedUser.avatarUrl
+        },
+        removerUser: {
+          _id: removerUser._id,
+          username: removerUser.username,
+          fullName: removerUser.fullName,
+          avatarUrl: removerUser.avatarUrl
+        }
+      };
+
+      // Emit to conversation members (they should still see this update)
+      req.io.to(conversationId).emit('conversation:memberRemoved', eventData);
+
+      // Also emit to the removed user specifically (they need to know they were removed)
+      req.io.to(userId).emit('conversation:memberRemoved', eventData);
     }
 
     res.json({ message: 'Member removed successfully', conversation });

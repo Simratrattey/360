@@ -215,12 +215,95 @@ export default function DashboardPage() {
       }
     };
 
+    // Handle group membership changes for dashboard notifications
+    const handleMemberAdded = (data) => {
+      console.log('📢 Dashboard received conversation:memberAdded event:', data);
+      const { conversationId, conversationName, conversationType, userId, addedBy, addedUser, adderUser } = data;
+      
+      // Show notification if current user was added to a group
+      if (userId === user.id) {
+        const notification = {
+          _id: `member-added-${conversationId}-${Date.now()}`,
+          type: 'member_added',
+          title: 'Added to Group',
+          message: `You were added to ${conversationName || 'a group'} by ${adderUser?.fullName || adderUser?.username || 'someone'}`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          data: {
+            conversationId,
+            conversationName,
+            conversationType,
+            addedBy,
+            addedUser,
+            adderUser
+          }
+        };
+
+        setLocalGeneralNotifications(prev => {
+          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
+          return updated;
+        });
+
+        // Show browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: '/favicon.ico',
+            tag: `member-added-${conversationId}`
+          });
+        }
+      }
+    };
+
+    const handleMemberRemoved = (data) => {
+      console.log('📢 Dashboard received conversation:memberRemoved event:', data);
+      const { conversationId, conversationName, conversationType, userId, removedBy, removedUser, removerUser } = data;
+      
+      // Show notification if current user was removed from a group
+      if (userId === user.id) {
+        const notification = {
+          _id: `member-removed-${conversationId}-${Date.now()}`,
+          type: 'member_removed',
+          title: 'Removed from Group',
+          message: `You were removed from ${conversationName || 'a group'} by ${removerUser?.fullName || removerUser?.username || 'an admin'}`,
+          createdAt: new Date().toISOString(),
+          read: false,
+          data: {
+            conversationId,
+            conversationName,
+            conversationType,
+            removedBy,
+            removedUser,
+            removerUser
+          }
+        };
+
+        setLocalGeneralNotifications(prev => {
+          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
+          return updated;
+        });
+
+        // Show browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(notification.title, {
+            body: notification.message,
+            icon: '/favicon.ico',
+            tag: `member-removed-${conversationId}`
+          });
+        }
+      }
+    };
+
     chatSocket.on('conversation:created', handleConversationCreated);
     chatSocket.on('conversation:deleted', handleConversationDeleted);
+    chatSocket.on('conversation:memberAdded', handleMemberAdded);
+    chatSocket.on('conversation:memberRemoved', handleMemberRemoved);
     
     return () => {
       chatSocket.off('conversation:created', handleConversationCreated);
       chatSocket.off('conversation:deleted', handleConversationDeleted);
+      chatSocket.off('conversation:memberAdded', handleMemberAdded);
+      chatSocket.off('conversation:memberRemoved', handleMemberRemoved);
     };
   }, [chatSocket, user.id]);
 
