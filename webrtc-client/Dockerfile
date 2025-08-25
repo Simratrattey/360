@@ -17,6 +17,7 @@ RUN --mount=type=ssh git clone --depth 1 \
       'git@github.com:/TipTop-Tech/Comm360.git' /app
 WORKDIR /app/webrtc-client
 
+# Copy .env from root repository (context is now root directory)
 COPY .env .env
 RUN npm ci && npm run build
 

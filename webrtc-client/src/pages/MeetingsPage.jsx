@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar as CalendarIcon, 
@@ -71,8 +72,8 @@ export default function MeetingsPage() {
   }, [meetings]);
 
   const startNow = () => {
-    const roomId = Date.now().toString();
-    navigate(`/meeting/${roomId}`);
+    const roomId = generateRoomId();
+    openMeetingWindow(roomId);
   };
 
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function MeetingsPage() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => {
                   const joinId = prompt('Enter meeting ID to join');
-                  if (joinId) navigate(`/meeting/${joinId}`);
+                  if (joinId) openMeetingWindow(joinId);
                 }}
                 className="btn-outline flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg border-2"
               >
@@ -256,7 +257,7 @@ export default function MeetingsPage() {
                         onClick={() => {
                           const { status } = getMeetingStatus(meeting);
                           if (status === 'live') {
-                            navigate(`/meeting/${meeting.roomId}`);
+                            openMeetingWindow(meeting.roomId);
                           } else {
                             navigate(`/meetings/${meeting._id}`);
                           }

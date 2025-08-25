@@ -19,84 +19,66 @@ import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 
 
 export default function App() {
-  const { user } = useContext(AuthContext);
+  const { user, loading } = useContext(AuthContext);
   const location = useLocation();
 
-  return (
-    <ErrorBoundary level="app" showDetails={process.env.NODE_ENV === 'development'}>
-      {/* If not logged in, show login page */}
-      {!user ? (
-        <>
+  // Show loading state while authentication is being checked
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  // Check if this is a meeting page (standalone)
+  const isMeetingPage = location.pathname.startsWith('/meeting/');
+
+  // If not logged in, show login page (except for meeting pages which need special handling)
+  if (!user && !isMeetingPage) {
+    return (
+      <>
+        <Routes>
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="*" element={ <Navigate to="/login" state={{ from: location }} replace /> } />
+        </Routes>
+        <Toaster position="top-right" />
+      </>
+    );
+  }
+
+  // Handle meeting pages without layout (standalone)
+  if (isMeetingPage) {
+    return (
+      <>
+        <div className="min-h-screen bg-gray-900">
           <Routes>
-            <Route path="/register" element={
-              <ErrorBoundary level="page">
-                <RegisterPage />
-              </ErrorBoundary>
-            } />
-            <Route path="/login" element={
-              <ErrorBoundary level="page">
-                <LoginPage />
-              </ErrorBoundary>
-            } />
-            <Route path="*" element={ <Navigate to="/login" state={{ from: location }} replace /> } />
+            <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
+            <Route path="*" element={ <Navigate to="/login" replace /> } />
           </Routes>
-          <Toaster position="top-right" />
-        </>
-      ) : (
-        /* If logged in, show the main app with layout */
-        <>
-          <ErrorBoundary level="page">
-            <Layout>
-              <Routes>
-                <Route path="/" element={
-                  <ErrorBoundary level="page">
-                    <DashboardPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/meetings" element={
-                  <ErrorBoundary level="page">
-                    <MeetingsPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/meeting/:roomId" element={ 
-                  <PrivateRoute> 
-                    <ErrorBoundary level="page">
-                      <MeetingPage />
-                    </ErrorBoundary>
-                  </PrivateRoute> 
-                } />
-                <Route path="/meetings/:id" element={
-                  <ErrorBoundary level="page">
-                    <MeetingDetailsPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/contacts" element={
-                  <ErrorBoundary level="page">
-                    <ContactsPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/settings" element={
-                  <ErrorBoundary level="page">
-                    <SettingsPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/messages" element={
-                  <ErrorBoundary level="page">
-                    <MessagesPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="/search" element={
-                  <ErrorBoundary level="page">
-                    <SearchResultsPage />
-                  </ErrorBoundary>
-                } />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Layout>
-          </ErrorBoundary>
-          <Toaster position="top-right" />
-        </>
-      )}
-    </ErrorBoundary>
+        </div>
+        <Toaster position="top-right" />
+      </>
+    );
+  }
+
+  // If logged in and not a meeting page, show the main app with layout
+  return (
+    <>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/meetings" element={<MeetingsPage />} />
+          <Route path="/meetings/:id" element={<MeetingDetailsPage />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/search" element={<SearchResultsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+      <Toaster position="top-right" />
+    </>
   );
 }

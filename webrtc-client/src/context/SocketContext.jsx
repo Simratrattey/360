@@ -117,6 +117,7 @@ export function SocketProvider({ children }) {
   }, [user]);
 
   const joinRoom = (roomId) => {
+    console.log('[SocketContext] 🎯 joinRoom called with roomId:', roomId, 'type:', typeof roomId);
     setCurrentRoom(roomId);
     if (!sfuSocket) {
       console.warn('[SocketContext] ⚠️ no socket yet, saved room only:', roomId);
@@ -131,7 +132,9 @@ export function SocketProvider({ children }) {
       sfuSocket.connect();
     } else {
       console.log('[SocketContext] 🔁 socket already connected, emitting joinRoom for', roomId);
+      console.log('[SocketContext] 📤 About to emit joinRoom event to server...');
       sfuSocket.emit('joinRoom', roomId);
+      console.log('[SocketContext] ✅ joinRoom event emitted successfully');
     }
   };
 

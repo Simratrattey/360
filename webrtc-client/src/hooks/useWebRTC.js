@@ -25,7 +25,9 @@ export function useWebRTC() {
   // === Get User Media ===
   const getUserMedia = useCallback(async () => {
     try {
+      console.log('[WebRTC] 📹 Requesting camera/microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log('[WebRTC] ✅ Got media stream:', stream.getTracks().map(t => t.kind));
       setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
       return stream;
@@ -279,6 +281,12 @@ export function useWebRTC() {
   useEffect(() => {
     console.log('[WebRTC] 🔧 Setting up newProducer event listener, sfuSocket:', !!sfuSocket, 'connected:', sfuSocket?.connected);
     
+    // Early return if no socket available
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping newProducer setup');
+      return;
+    }
+    
     const handleNewProducer = async ({ producerId, peerId: incomingPeerId }) => {
       const myPeerId = sfuSocket?.id;
       console.log('[WebRTC] ↪ newProducer event:', producerId, 'peerId:', incomingPeerId, 'myPeerId:', myPeerId);
@@ -357,6 +365,11 @@ export function useWebRTC() {
 
   // — listen for peers hanging up and remove their stream —
   useEffect(() => {
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping hangup setup');
+      return;
+    }
+    
     const handleHangup = (peerId) => {
       console.log('[useWebRTC] 🔔 received hangup for', peerId, 'typeof:', typeof peerId);
       console.log('[useWebRTC] 📊 Current state before hangup:');
@@ -424,15 +437,21 @@ export function useWebRTC() {
     console.log('[WebRTC] 🚀 Starting join meeting process with socket ID:', sfuSocket.id);
     
     try {
+      console.log('[WebRTC] 📹 Step 1: Getting user media...');
       const stream = await getUserMedia();
+      console.log('[WebRTC] 🔧 Step 2: Loading device...');
       await loadDevice();
+      console.log('[WebRTC] 📤 Step 3: Creating send transport...');
       await createSendTransport(roomId);
+      console.log('[WebRTC] 📥 Step 4: Creating receive transport...');
       await createRecvTransport();
       
       // Join the room first to establish participant presence
+      console.log('[WebRTC] 🚪 Joining room:', roomId);
       joinRoom(roomId);
       
       // Small delay to ensure room join is processed
+      console.log('[WebRTC] ⏳ Waiting for room join to process...');
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Produce local tracks after room join
@@ -476,10 +495,29 @@ export function useWebRTC() {
   }, [localStream, leaveRoom]);
 
   useEffect(() => {
+    if (!sfuSocket) {
+      console.log('[WebRTC] ⚠️ No sfuSocket available, skipping roomClosed setup');
+      return;
+    }
+    
     const handleClosed = (rid) => {
+      console.log('[WebRTC] 🚪 Room closed event received:', rid, 'currentRoom:', currentRoom, 'match:', rid === currentRoom);
       if (rid === currentRoom) {
-        leaveMeeting();
-        navigate('/meetings');
+        console.log('[WebRTC] ⚠️ ROOM CLOSED - This indicates a server-side issue');
+        console.log('[WebRTC] 💡 Possible causes: room doesn\'t exist, invalid room ID, or server error');
+        
+        // Temporarily disable automatic closing to debug the issue
+        console.log('[WebRTC] 🔍 DEBUG MODE: Not closing window automatically - check server logs');
+        
+        // Uncomment these lines after debugging:
+        // leaveMeeting();
+        // if (window.opener) {
+        //   console.log('[WebRTC] 🪟 Room closed - closing meeting window');
+        //   window.close();
+        // } else {
+        //   console.log('[WebRTC] 📤 Room closed - navigating to /meetings');
+        //   navigate('/meetings');
+        // }
       }
     };
 

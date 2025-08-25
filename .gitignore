@@ -133,15 +133,6 @@ recordings/
 
 # Local development files
 .local webrtc-client/node_modules
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 
 # Claude Code 
 CLAUDE.md
->>>>>>> main
-=======
-
-# Claude Code 
-CLAUDE.md
->>>>>>> milestone1/main
