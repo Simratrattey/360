@@ -215,6 +215,64 @@ class MessageStatusService {
     };
   }
 
+  // Clean old status data (older than 7 days)
+  cleanup() {
+    const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+    
+    for (const [messageId, deliveryInfo] of this.deliveryTracking.entries()) {
+      if (deliveryInfo.deliveredAt < sevenDaysAgo) {
+        this.deliveryTracking.delete(messageId);
+      }
+    }
+    
+    for (const [messageId, readInfo] of this.readTracking.entries()) {
+      if (readInfo.readAt < sevenDaysAgo) {
+        this.readTracking.delete(messageId);
+      }
+    }
+    
+    this.persistStatus();
+  }
+
+  // Get status icon for UI
+  getStatusIcon(tempId, messageId) {
+    const info = this.getMessageStatusInfo(tempId, messageId);
+    
+    switch (info.status) {
+      case MESSAGE_STATUS.SENDING:
+        return '⏳';
+      case MESSAGE_STATUS.SENT:
+        return '✓';
+      case MESSAGE_STATUS.DELIVERED:
+        return '✓✓';
+      case MESSAGE_STATUS.READ:
+        return '💙';
+      case MESSAGE_STATUS.FAILED:
+        return '❌';
+      default:
+        return '⏳';
+    }
+  }
+
+  // Get status description for UI
+  getStatusDescription(tempId, messageId) {
+    const info = this.getMessageStatusInfo(tempId, messageId);
+    
+    switch (info.status) {
+      case MESSAGE_STATUS.SENDING:
+        return 'Sending...';
+      case MESSAGE_STATUS.SENT:
+        return 'Sent';
+      case MESSAGE_STATUS.DELIVERED:
+        return 'Delivered';
+      case MESSAGE_STATUS.READ:
+        return 'Read';
+      case MESSAGE_STATUS.FAILED:
+        return 'Failed to send';
+      default:
+        return 'Sending...';
+    }
+  }
 }
 
 // Create singleton instance
