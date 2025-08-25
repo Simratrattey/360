@@ -1,6 +1,7 @@
 // src/pages/MeetingDetailsPage.jsx
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { openMeetingWindow } from '../utils/meetingWindow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Calendar, 
@@ -334,7 +335,7 @@ export default function MeetingDetailsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button
-                  onClick={() => navigate(`/meeting/${meeting.roomId}`)}
+                  onClick={() => openMeetingWindow(meeting.roomId)}
                   className="w-full btn-primary flex items-center gap-2"
                   disabled={status.status === 'completed'}
                 >

@@ -132,6 +132,27 @@ class BotService {
     }
   }
 
+  // Translate text using dedicated translation endpoint
+  async translateText(text, sourceLanguage = 'auto', targetLanguage = 'en') {
+    try {
+      const response = await API.post('/translate', {
+        text,
+        sourceLanguage,
+        targetLanguage
+      });
+      
+      return { 
+        success: true, 
+        data: response.data 
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Translation failed' 
+      };
+    }
+  }
+
   // Send audio message to bot (alternative method)
   async sendAudioMessageAlt(audioBlob) {
     try {

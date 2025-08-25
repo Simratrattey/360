@@ -1,0 +1,86 @@
+# =============================================================================
+# COMM360 STAGING ENVIRONMENT - Docker Compose Configuration
+# =============================================================================
+# This file contains the staging deployment configuration for Comm360
+# Services run on: Client (4050), API (6050), SFU (9181), TURN (4478)
+# URL: https://comm360-staging.feeltiptop.com
+# =============================================================================
+
+version: '3.8'
+
+networks:
+  comm360-staging-net:
+    driver: bridge
+
+services:
+  client:
+    build:
+      context: ./webrtc-client
+      dockerfile: Dockerfile
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: staging
+    container_name: comm360-client-staging
+    networks:
+      - comm360-staging-net
+    ports:
+      - "4050:80"
+    env_file: .env.staging
+
+  signaling:
+    build:
+      context: .
+      dockerfile: webrtc-signaling-server/Dockerfile
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: staging
+        SERVER_PORT: 6050
+    container_name: comm360-signaling-staging
+    networks:
+      - comm360-staging-net
+    ports:
+      - "6050:6050"
+    env_file: .env.staging
+    environment:
+      - PORT=6050
+    extra_hosts:
+      - "comm360-staging.feeltiptop.com:131.153.168.218"
+
+  sfu:
+    build:
+      context: .
+      dockerfile: webrtc-signaling-server/Dockerfile.sfu
+      ssh:
+        - default
+      args:
+        GIT_BRANCH: staging
+        SERVER_PORT: 9181
+    container_name: comm360-sfu-staging
+    networks:
+      - comm360-staging-net
+    ports:
+      - "131.153.168.218:9181:9181"
+      - "131.153.168.218:11000-11100:11000-11100/udp"
+    env_file: .env.staging
+    environment:
+      - PORT=9181
+      - DEBUG=mediasoup*
+    extra_hosts:
+      - "comm360-staging.feeltiptop.com:131.153.168.218"
+
+  coturn:
+    build:
+      context: .
+      dockerfile: coturn/Dockerfile
+      ssh:
+        - default
+    container_name: comm360-coturn-staging
+    networks:
+      - comm360-staging-net
+    ports:
+      - "4478:3478"
+      - "4478:3478/udp"
+      - "31000-31010:31000-31010/udp"
+    env_file: .env.staging

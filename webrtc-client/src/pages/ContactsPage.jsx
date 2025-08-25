@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 
 export default function ContactsPage() {
   const navigate = useNavigate();
@@ -64,8 +65,8 @@ export default function ContactsPage() {
   };
 
   const startVideoCall = (contact) => {
-    const roomId = Date.now().toString();
-    navigate(`/meeting/${roomId}`);
+    const roomId = generateRoomId();
+    openMeetingWindow(roomId);
   };
 
   const getStatusColor = (status) => {

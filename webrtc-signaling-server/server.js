@@ -19,8 +19,11 @@ import Message from './src/models/message.js';
 import Conversation from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
-// import { transcribeAudio } from './stt.js';
-// import { generateAudio } from './tts.js';
+import { 
+  transcribeAudio, 
+  generateAudio, 
+  translateText 
+} from './realtime-speech/index.js';
 
 import authRoutes from './src/routes/auth.js';
 import authMiddleware from './src/middleware/auth.js';
@@ -97,8 +100,8 @@ import mediasoup from 'mediasoup';
 let worker, router;
 async function initMediasoup() {
   worker = await mediasoup.createWorker({ 
-    rtcMinPort : 10000,
-    rtcMaxPort : 10100,
+    rtcMinPort : parseInt(process.env.RTC_MIN_PORT) || 10000,
+    rtcMaxPort : parseInt(process.env.RTC_MAX_PORT) || 10100,
     logLevel   : 'debug',
     logTags    : [
       'ice',   // ICE candidate gathering & checks
@@ -304,6 +307,161 @@ app.post(
     }
   }
 );
+
+// Translation endpoint: accepts { text, sourceLanguage, targetLanguage }
+app.post(
+  '/api/translate',
+  express.json({ limit: '200kb' }),
+  async (req, res) => {
+    try {
+      const { text, sourceLanguage = 'auto', targetLanguage = 'en' } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ error: 'No "text" provided' });
+      }
+
+      const translatedText = await translateText(text, sourceLanguage, targetLanguage);
+      
+      return res.json({ 
+        originalText: text,
+        translatedText,
+        sourceLanguage,
+        targetLanguage
+      });
+
+    } catch (err) {
+      console.error('❌ /api/translate error:', err.message);
+      return res.status(500).json({
+        error: 'Translation failed',
+        details: err.message
+      });
+    }
+  }
+);
+
+// STT endpoint with fallback for non-FFmpeg environments
+app.post(
+  '/api/stt',
+  upload.single('audio'),
+  async (req, res) => {
+    try {
+      console.log('[STT] Request received:', {
+        hasFile: !!req.file,
+        body: req.body,
+        fileSize: req.file?.size,
+        filename: req.file?.filename,
+        mimetype: req.file?.mimetype
+      });
+
+      if (!req.file) {
+        console.error('[STT] No audio file provided');
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
+
+      console.log('[STT] Reading audio file...');
+      const audioBuffer = await fs.promises.readFile(req.file.path);
+      const { language = 'auto', translate = false } = req.body;
+      
+      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, language=${language}, translate=${translate}`);
+      console.log(`[STT] GROQ_API_KEY exists: ${!!process.env.GROQ_API_KEY}`);
+      
+      const transcription = await transcribeAudio(audioBuffer, {
+        language,
+        translate: translate === 'true'
+      });
+      
+      console.log(`[STT] Transcription successful: ${transcription}`);
+      
+      return res.json({ 
+        transcription,
+        language,
+        translate
+      });
+
+    } catch (err) {
+      console.error('❌ /api/stt error:', err.message);
+      console.error('❌ /api/stt stack:', err.stack);
+      return res.status(500).json({
+        error: 'Speech-to-text failed',
+        details: err.message
+      });
+    } finally {
+      // Clean up uploaded file
+      if (req.file) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    }
+  }
+);
+
+// STT health check endpoint
+app.get('/api/stt-health', async (req, res) => {
+  try {
+    const { transcribeAudio } = await import('./realtime-speech/index.js');
+    res.json({ 
+      status: 'ok',
+      sttAvailable: typeof transcribeAudio === 'function',
+      groqKeyConfigured: !!process.env.GROQ_API_KEY,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.json({ 
+      status: 'error', 
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Test FFmpeg availability endpoint
+app.get('/api/test-ffmpeg', async (req, res) => {
+  try {
+    const { checkFFmpegAvailable } = await import('./realtime-speech/audioConverter.js');
+    const available = await checkFFmpegAvailable();
+    res.json({ ffmpegAvailable: available });
+  } catch (err) {
+    res.json({ ffmpegAvailable: false, error: err.message });
+  }
+});
+
+// Debug STT endpoint (for testing without real API keys)
+app.post('/api/stt-debug', upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    const audioBuffer = await fs.promises.readFile(req.file.path);
+    const { language = 'auto', translate = false } = req.body;
+    
+    console.log(`[STT-DEBUG] Processing ${audioBuffer.length} bytes of audio`);
+    console.log(`[STT-DEBUG] Language: ${language}, Translate: ${translate}`);
+    console.log(`[STT-DEBUG] GROQ_API_KEY set: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
+    console.log(`[STT-DEBUG] GROQ_API_KEY value: ${process.env.GROQ_API_KEY?.substring(0, 10)}...`);
+    
+    // Return mock transcription for testing
+    const mockTranscription = `Mock transcription for ${audioBuffer.length} bytes of audio data`;
+    
+    return res.json({ 
+      transcription: mockTranscription,
+      language,
+      translate,
+      debug: true
+    });
+
+  } catch (err) {
+    console.error('❌ /api/stt-debug error:', err.message);
+    return res.status(500).json({
+      error: 'STT debug failed',
+      details: err.message
+    });
+  } finally {
+    // Clean up uploaded file
+    if (req.file) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+    }
+  }
+});
 // ─────────────────────────────────────────────────────────────────────
 
 // Health check for Render
