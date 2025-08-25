@@ -2,6 +2,7 @@ import Conversation, { ReadReceipt } from '../models/conversation.js';
 import User from '../models/user.js';
 import Message from '../models/message.js';
 import mongoose from 'mongoose';
+import { createNotification } from './notificationController.js';
 
 // List all conversations for the current user
 export async function listConversations(req, res, next) {
@@ -21,7 +22,7 @@ export async function listConversations(req, res, next) {
     // Combine user conversations with communities
     const allConversations = [...userConversations, ...communities];
 
-    // Calculate unread counts for each conversation
+    // Calculate unread counts and get latest message for each conversation
     const conversationsWithUnread = await Promise.all(
       allConversations.map(async (conversation) => {
         // Get user's last read time for this conversation
@@ -40,12 +41,35 @@ export async function listConversations(req, res, next) {
           createdAt: { $gt: lastReadAt }
         });
 
+        // Get the latest message in this conversation
+        const latestMessage = await Message.findOne({
+          conversation: conversation._id
+        })
+        .sort({ createdAt: -1 })
+        .select('text file createdAt sender')
+        .populate('sender', 'username fullName')
+        .lean();
+
         return {
           ...conversation.toObject(),
-          unread: unreadCount
+          unread: unreadCount,
+          lastMessage: latestMessage ? {
+            text: latestMessage.text,
+            file: latestMessage.file,
+            createdAt: latestMessage.createdAt,
+            senderName: latestMessage.sender?.fullName || latestMessage.sender?.username
+          } : null,
+          lastMessageAt: latestMessage ? latestMessage.createdAt : conversation.createdAt
         };
       })
     );
+
+    // Sort conversations by lastMessageAt (most recent first)
+    conversationsWithUnread.sort((a, b) => {
+      const dateA = new Date(a.lastMessageAt || a.createdAt);
+      const dateB = new Date(b.lastMessageAt || b.createdAt);
+      return dateB - dateA;
+    });
 
     res.json({ conversations: conversationsWithUnread });
   } catch (err) {
@@ -139,6 +163,70 @@ export async function createConversation(req, res, next) {
       // Populate members for response
       await conversation.populate('members', 'username fullName avatarUrl');
 
+      // Emit real-time event to all users and join them to the community room
+      if (req.io) {
+        const conversationId = conversation._id.toString();
+        const conversationData = conversation.toObject();
+        
+        // Get onlineUsers from middleware
+        const onlineUsers = req.onlineUsers || new Map();
+        
+        // Join all online users to the community room
+        req.io.sockets.sockets.forEach(socket => {
+          if (socket.userId) {
+            socket.join(conversationId);
+            console.log(`[Community] User ${socket.userId} joined community room ${conversationId}`);
+          }
+        });
+        
+        // Notify all online users about the new community using socket IDs
+        console.log(`[Community] Notifying ${onlineUsers.size} online users about new community ${conversationId}`);
+        for (const [onlineUserId, userInfo] of onlineUsers) {
+          if (userInfo.socketId) {
+            req.io.to(userInfo.socketId).emit('conversation:created', {
+              ...conversationData,
+              type: conversationData.type,
+              members: conversationData.members,
+              createdBy: userId // This is the actual creator ID from function scope
+            });
+            console.log(`[Community] Emitted conversation:created to user ${onlineUserId} via socket ${userInfo.socketId}`);
+
+            // Create notification for all users (except creator)
+            if (onlineUserId !== userId) {
+              try {
+                const notification = await createNotification(
+                  onlineUserId,
+                  userId,
+                  'community_created',
+                  'New Community',
+                  `${conversation.name} community was created`,
+                  {
+                    conversationId: conversation._id,
+                    conversationType: 'community',
+                    conversationName: conversation.name
+                  }
+                );
+                
+                console.log(`[Community] ✅ Created notification for user ${onlineUserId}:`, notification._id);
+                
+                // Send real-time notification
+                req.io.to(userInfo.socketId).emit('notification:new', notification);
+              } catch (error) {
+                console.error(`[Community] ❌ Failed to create notification for user ${onlineUserId}:`, error);
+              }
+            }
+          }
+        }
+        
+        // Also broadcast to all sockets as fallback
+        req.io.emit('conversation:created', {
+          ...conversationData,
+          type: conversationData.type,
+          members: conversationData.members,
+          createdBy: userId
+        });
+      }
+
       res.status(201).json({ 
         message: 'Community created successfully',
         conversation 
@@ -160,6 +248,81 @@ export async function createConversation(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit real-time event to all conversation members and join them to the room
+    if (req.io) {
+      const conversationId = conversation._id.toString();
+      const conversationData = conversation.toObject();
+      
+      // Get onlineUsers from middleware
+      const onlineUsers = req.onlineUsers || new Map();
+      console.log(`[Conversation] Total online users: ${onlineUsers.size}`);
+      
+      // Join all members to the conversation room and notify them
+      for (const member of conversation.members) {
+        const memberId = member._id.toString();
+        
+        // Find the member's socket and join them to the conversation room
+        const memberSocket = Array.from(req.io.sockets.sockets.values()).find(socket => socket.userId === memberId);
+        if (memberSocket) {
+          memberSocket.join(conversationId);
+          console.log(`[Conversation] User ${memberId} joined room ${conversationId}`);
+        }
+        
+        // Notify ALL members using their socket ID for more reliable delivery
+        const onlineUser = onlineUsers.get(memberId);
+        console.log(`[Conversation] Processing member ${memberId}, online:`, !!onlineUser, 'socketId:', onlineUser?.socketId);
+        
+        if (onlineUser && onlineUser.socketId) {
+          const eventData = {
+            ...conversationData,
+            type: conversationData.type,
+            members: conversationData.members,
+            createdBy: userId
+          };
+          req.io.to(onlineUser.socketId).emit('conversation:created', eventData);
+          console.log(`[Conversation] ✅ Emitted conversation:created to user ${memberId} via socket ${onlineUser.socketId}`);
+          console.log(`[Conversation] Event data:`, JSON.stringify(eventData, null, 2));
+        } else {
+          // Fallback to user ID targeting
+          const eventData = {
+            ...conversationData,
+            type: conversationData.type,
+            members: conversationData.members,
+            createdBy: userId
+          };
+          req.io.to(memberId).emit('conversation:created', eventData);
+          console.log(`[Conversation] ⚠️  Emitted conversation:created to user ${memberId} (fallback method)`);
+        }
+
+        // Create notification for members (except creator)
+        if (memberId !== userId) {
+          try {
+            const notification = await createNotification(
+              memberId,
+              userId,
+              'conversation_created',
+              `New ${type}`,
+              `You were added to ${conversation.name || 'a new conversation'}`,
+              {
+                conversationId: conversation._id,
+                conversationType: type,
+                conversationName: conversation.name
+              }
+            );
+            
+            console.log(`[Conversation] ✅ Created notification for user ${memberId}:`, notification._id);
+            
+            // Send real-time notification if user is online
+            if (onlineUser && onlineUser.socketId) {
+              req.io.to(onlineUser.socketId).emit('notification:new', notification);
+            }
+          } catch (error) {
+            console.error(`[Conversation] ❌ Failed to create notification for user ${memberId}:`, error);
+          }
+        }
+      }
+    }
 
     res.status(201).json({ 
       message: 'Conversation created successfully',
@@ -194,22 +357,60 @@ export async function addMember(req, res, next) {
     const { userId } = req.body;
     const currentUserId = req.user.id;
 
-    const conversation = await Conversation.findById(conversationId);
+    // Validate request body
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const conversation = await Conversation.findById(conversationId).populate('members', 'username fullName avatarUrl');
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
     // Check if user is admin (for groups/communities) or member (for DMs)
-    if (conversation.type !== 'dm' && !conversation.admins.includes(currentUserId)) {
+    if (conversation.type !== 'dm' && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only admins can add members' });
     }
 
-    if (conversation.members.includes(userId)) {
+    if (conversation.members.some(memberId => memberId.toString() === userId)) {
       return res.status(400).json({ message: 'User is already a member' });
     }
 
     conversation.members.push(userId);
     await conversation.save();
+
+    // Get added user info and adder info for notifications
+    const addedUser = await User.findById(userId).select('username fullName avatarUrl');
+    const adderUser = await User.findById(currentUserId).select('username fullName avatarUrl');
+
+    // Emit socket event for real-time updates with enhanced data
+    if (req.io) {
+      const eventData = {
+        conversationId,
+        conversationName: conversation.name,
+        conversationType: conversation.type,
+        userId,
+        addedBy: currentUserId,
+        addedUser: {
+          _id: addedUser._id,
+          username: addedUser.username,
+          fullName: addedUser.fullName,
+          avatarUrl: addedUser.avatarUrl
+        },
+        adderUser: {
+          _id: adderUser._id,
+          username: adderUser.username,
+          fullName: adderUser.fullName,
+          avatarUrl: adderUser.avatarUrl
+        }
+      };
+
+      // Emit to conversation members
+      req.io.to(conversationId).emit('conversation:memberAdded', eventData);
+
+      // Also emit to the added user specifically (in case they're not in the room yet)
+      req.io.to(userId).emit('conversation:memberAdded', eventData);
+    }
 
     res.json({ message: 'Member added successfully', conversation });
   } catch (err) {
@@ -223,19 +424,23 @@ export async function removeMember(req, res, next) {
     const { conversationId, userId } = req.params;
     const currentUserId = req.user.id;
 
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findById(conversationId).populate('members', 'username fullName avatarUrl');
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
     // Check if user is admin (for groups/communities) or member (for DMs)
-    if (conversation.type !== 'dm' && !conversation.admins.includes(currentUserId)) {
+    if (conversation.type !== 'dm' && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only admins can remove members' });
     }
 
-    if (!conversation.members.includes(userId)) {
+    if (!conversation.members.some(memberId => memberId.toString() === userId)) {
       return res.status(400).json({ message: 'User is not a member' });
     }
+
+    // Get removed user info and remover info for notifications before removing
+    const removedUser = await User.findById(userId).select('username fullName avatarUrl');
+    const removerUser = await User.findById(currentUserId).select('username fullName avatarUrl');
 
     conversation.members = conversation.members.filter(id => id.toString() !== userId);
     // Also remove from admins if they were an admin
@@ -244,6 +449,35 @@ export async function removeMember(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit socket event for real-time updates with enhanced data
+    if (req.io) {
+      const eventData = {
+        conversationId,
+        conversationName: conversation.name,
+        conversationType: conversation.type,
+        userId,
+        removedBy: currentUserId,
+        removedUser: {
+          _id: removedUser._id,
+          username: removedUser.username,
+          fullName: removedUser.fullName,
+          avatarUrl: removedUser.avatarUrl
+        },
+        removerUser: {
+          _id: removerUser._id,
+          username: removerUser.username,
+          fullName: removerUser.fullName,
+          avatarUrl: removerUser.avatarUrl
+        }
+      };
+
+      // Emit to conversation members (they should still see this update)
+      req.io.to(conversationId).emit('conversation:memberRemoved', eventData);
+
+      // Also emit to the removed user specifically (they need to know they were removed)
+      req.io.to(userId).emit('conversation:memberRemoved', eventData);
+    }
 
     res.json({ message: 'Member removed successfully', conversation });
   } catch (err) {
@@ -275,11 +509,79 @@ export async function deleteConversation(req, res, next) {
       }
     }
 
+    // Store conversation info before deletion for real-time notifications
+    const conversationName = conversation.name || 'Conversation';
+    const conversationType = conversation.type;
+    const conversationMembers = conversation.members.map(member => 
+      typeof member === 'string' ? member : member._id.toString()
+    );
+
     // Delete all messages in the conversation
     await Message.deleteMany({ conversation: conversationId });
 
     // Delete the conversation
     await conversation.deleteOne();
+
+    // Emit real-time event to all conversation members
+    if (req.io) {
+      // Get onlineUsers from middleware
+      const onlineUsers = req.onlineUsers || new Map();
+      console.log(`[Conversation-Delete] Total online users: ${onlineUsers.size}`);
+      
+      // Notify all members about conversation deletion
+      for (const memberId of conversationMembers) {
+        const onlineUser = onlineUsers.get(memberId);
+        console.log(`[Conversation-Delete] Processing member ${memberId}, online:`, !!onlineUser, 'socketId:', onlineUser?.socketId);
+        
+        if (onlineUser && onlineUser.socketId) {
+          const eventData = {
+            conversationId,
+            deletedBy: userId,
+            conversationName,
+            conversationType
+          };
+          req.io.to(onlineUser.socketId).emit('conversation:deleted', eventData);
+          console.log(`[Conversation-Delete] ✅ Emitted conversation:deleted to user ${memberId} via socket ${onlineUser.socketId}`);
+        } else {
+          // Fallback to user ID targeting
+          const eventData = {
+            conversationId,
+            deletedBy: userId,
+            conversationName,
+            conversationType
+          };
+          req.io.to(memberId).emit('conversation:deleted', eventData);
+          console.log(`[Conversation-Delete] ⚠️  Emitted conversation:deleted to user ${memberId} (fallback method)`);
+        }
+
+        // Create notification for members (except deleter)
+        if (memberId !== userId) {
+          try {
+            const notification = await createNotification(
+              memberId,
+              userId,
+              'conversation_deleted',
+              `${conversationType} Deleted`,
+              `${conversationName} was deleted`,
+              {
+                conversationId,
+                conversationType,
+                conversationName
+              }
+            );
+            
+            console.log(`[Conversation-Delete] ✅ Created notification for user ${memberId}:`, notification._id);
+            
+            // Send real-time notification if user is online
+            if (onlineUser && onlineUser.socketId) {
+              req.io.to(onlineUser.socketId).emit('notification:new', notification);
+            }
+          } catch (error) {
+            console.error(`[Conversation-Delete] ❌ Failed to create notification for user ${memberId}:`, error);
+          }
+        }
+      }
+    }
 
     res.json({ message: 'Conversation deleted successfully' });
   } catch (err) {
@@ -355,23 +657,28 @@ export async function addAdmin(req, res, next) {
     const { userId: newAdminId } = req.body;
     const currentUserId = req.user.id;
 
+    // Validate request body
+    if (!newAdminId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
     // Check if user is owner or admin
-    if (conversation.createdBy !== currentUserId && !conversation.admins.includes(currentUserId)) {
+    if (conversation.createdBy.toString() !== currentUserId && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only owners and admins can add admins' });
     }
 
     // Check if user is a member
-    if (!conversation.members.includes(newAdminId)) {
+    if (!conversation.members.some(memberId => memberId.toString() === newAdminId)) {
       return res.status(400).json({ message: 'User must be a member to become admin' });
     }
 
     // Check if user is already an admin
-    if (conversation.admins.includes(newAdminId)) {
+    if (conversation.admins.some(adminId => adminId.toString() === newAdminId)) {
       return res.status(400).json({ message: 'User is already an admin' });
     }
 
@@ -380,6 +687,15 @@ export async function addAdmin(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:adminAdded', {
+        conversationId,
+        userId: newAdminId,
+        adminId: currentUserId
+      });
+    }
 
     res.json({ 
       message: 'Admin added successfully',
@@ -402,17 +718,17 @@ export async function removeAdmin(req, res, next) {
     }
 
     // Check if user is owner or admin
-    if (conversation.createdBy !== currentUserId && !conversation.admins.includes(currentUserId)) {
+    if (conversation.createdBy.toString() !== currentUserId && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
       return res.status(403).json({ message: 'Only owners and admins can remove admins' });
     }
 
     // Check if user is an admin
-    if (!conversation.admins.includes(userId)) {
+    if (!conversation.admins.some(adminId => adminId.toString() === userId)) {
       return res.status(400).json({ message: 'User is not an admin' });
     }
 
     // Cannot remove the owner from admin
-    if (userId === conversation.createdBy) {
+    if (userId === conversation.createdBy.toString()) {
       return res.status(400).json({ message: 'Cannot remove the owner from admin' });
     }
 
@@ -421,6 +737,15 @@ export async function removeAdmin(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Emit socket event for real-time updates
+    if (req.io) {
+      req.io.to(conversationId).emit('conversation:adminRemoved', {
+        conversationId,
+        userId,
+        adminId: currentUserId
+      });
+    }
 
     res.json({ message: 'Admin removed successfully', conversation });
   } catch (err) {
