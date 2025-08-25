@@ -735,7 +735,7 @@ io.on('connection', async socket => {
   // Handle disconnections
   socket.on('disconnect', () => {
     const rid = socket.currentRoom;
-    
+    if (!rid) return;
     // Remove user from online users
     onlineUsers.delete(socket.userId);
     io.emit('user:offline', { userId: socket.userId });
