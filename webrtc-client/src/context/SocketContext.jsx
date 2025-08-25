@@ -36,7 +36,7 @@ export function SocketProvider({ children }) {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const sfuRoot = (window.SFU_SERVER_URL || import.meta.env.VITE_SFU_SERVER_URL);
+      const sfuRoot = import.meta.env.VITE_API_URL.replace(/\/api$/, '');
       const sfuSocket = io(sfuRoot, {
         auth: { token },
         transports: ['websocket'],
