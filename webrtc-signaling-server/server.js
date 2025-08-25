@@ -60,6 +60,7 @@ const whitelist = (process.env.CORS_WHITELIST || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+whitelist.push('https://360-five-nu.vercel.app');
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -575,6 +576,7 @@ const sendNotification = sendNotificationToUser;
 // Make sendNotification available to routes
 app.locals.sendNotification = sendNotification;
 app.locals.io = io;
+app.locals.onlineUsers = onlineUsers;
 
 // Socket.io logic
 io.on('connection', async socket => {
@@ -738,22 +740,24 @@ io.on('connection', async socket => {
     onlineUsers.delete(socket.userId);
     io.emit('user:offline', { userId: socket.userId });
     console.log('[Signaling] 🔔 disconnect handler on server for', socket.id);
+    
     if (rid) {
       socket.to(rid).emit('hangup', socket.id);
-    }
-    // Clean up the same way as hangup
-    if (rid && rooms[rid]) {
-      rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
-      rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       
-      // Broadcast updated participants to room
-      io.to(rid).emit('roomParticipants', rooms[rid].participants);
-      io.to(rid).emit('availableOffers', rooms[rid].offers);
-      
-      // If room is empty, clean it up
-      if (rooms[rid].participants.length === 0) {
-        io.emit('roomClosed', rid);
-        delete rooms[rid];
+      // Clean up the same way as hangup
+      if (rooms[rid]) {
+        rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
+        rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
+        
+        // Broadcast updated participants to room
+        io.to(rid).emit('roomParticipants', rooms[rid].participants);
+        io.to(rid).emit('availableOffers', rooms[rid].offers);
+        
+        // If room is empty, clean it up
+        if (rooms[rid].participants.length === 0) {
+          io.emit('roomClosed', rid);
+          delete rooms[rid];
+        }
       }
     }
     
@@ -811,105 +815,143 @@ io.on('connection', async socket => {
   });
 
   // Send a new message
-  socket.on('chat:send', async ({ conversationId, text, file, replyTo }) => {
+  socket.on('chat:send', async ({ conversationId, text, file, replyTo, tempId }) => {
+    const userId = socket.userId;
+    const session = await mongoose.startSession();
+    let populatedMessage;
+    
     try {
-      const userId = socket.userId;
-      const message = new Message({
-        conversation: conversationId,
-        sender: userId,
-        text,
-        file,
-        replyTo,
+      await session.withTransaction(async () => {
+        // Create and save the message
+        const message = new Message({
+          conversation: conversationId,
+          sender: userId,
+          text,
+          file,
+          replyTo,
+        });
+        
+        await message.save({ session });
+        
+        // Update conversation's last message
+        await Conversation.findByIdAndUpdate(
+          conversationId,
+          { lastMessage: message._id },
+          { session }
+        );
+        
+        // Populate sender and replyTo references
+        populatedMessage = await Message.populate(message, [
+          { path: 'sender', select: 'username fullName avatarUrl' },
+          { path: 'replyTo', select: 'text file' }
+        ]);
       });
-      await message.save();
-      await Conversation.findByIdAndUpdate(conversationId, { lastMessage: message._id });
       
-      const populated = await message.populate([
-        { path: 'sender', select: 'username fullName avatarUrl' },
-        { path: 'replyTo', select: 'text file' }
-      ]);
+      // Get the conversation with members
+      const conversation = await Conversation.findById(conversationId).populate('members');
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
       
-      // Transform the message object to match client expectations
+      // Get all member IDs except the sender
+      const recipientIds = conversation.members
+        .filter(member => member._id.toString() !== userId)
+        .map(member => member._id.toString());
+      
+      // Track online recipients for delivery status
+      const onlineRecipients = recipientIds.filter(id => onlineUsers.has(id));
+      
+      // Update delivery status for online recipients
+      if (onlineRecipients.length > 0) {
+        await Message.findByIdAndUpdate(
+          populatedMessage._id,
+          { $addToSet: { deliveredTo: { $each: onlineRecipients } } }
+        );
+        
+        // Emit delivery status to sender
+        socket.emit('chat:delivered', {
+          messageId: populatedMessage._id.toString(),
+          recipients: onlineRecipients
+        });
+      }
+      
+      // Send the message to all conversation members
       const messageForClient = {
-        _id: populated._id,
-        conversation: populated.conversation,
+        ...populatedMessage.toObject(),
         conversationId: conversationId,
-        sender: populated.sender,
-        senderId: populated.sender._id,
-        text: populated.text,
-        file: populated.file,
-        reactions: populated.reactions || [],
-        replyTo: populated.replyTo,
-        edited: populated.edited,
-        createdAt: populated.createdAt,
-        updatedAt: populated.updatedAt,
-        senderName: populated.sender.fullName || populated.sender.username
+        senderId: userId,
+        senderName: populatedMessage.sender.fullName || populatedMessage.sender.username,
+        tempId: tempId // Include tempId for client-side deduplication
       };
       
-      // Track message status
-      const messageId = message._id.toString();
-      messageStatus.set(messageId, {
-        sent: true,
-        delivered: false,
-        read: false,
-        recipients: []
+      // Send to all online members except sender
+      recipientIds.forEach(recipientId => {
+        const recipient = onlineUsers.get(recipientId);
+        if (recipient) {
+          io.to(recipient.socketId).emit('chat:new', messageForClient);
+        }
       });
       
+      // Also send to the conversation room for anyone currently viewing it
       io.to(conversationId).emit('chat:new', messageForClient);
       
-      // ✅ ALWAYS CREATE NOTIFICATIONS (regardless of online status)
-      const conversation = await Conversation.findById(conversationId).populate('members');
-      if (conversation) {
-        const sender = populated.sender;
-        const messagePreview = text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) 
-                                    : file ? `📎 ${file.originalName}` : 'New message';
-        
-        // Create notifications for all members except the sender
-        const recipientIds = conversation.members
-          .filter(member => member._id.toString() !== userId)
-          .map(member => member._id.toString());
-        
-        console.log(`📢 Creating notifications for ${recipientIds.length} recipients:`, recipientIds);
-        
-        for (const recipientId of recipientIds) {
-          try {
-            // ✅ Always create notification in database
-            const notification = await createNotification(
-              recipientId,
-              userId,
-              'message',
-              `${sender.fullName || sender.username}`,
-              messagePreview,
-              { 
-                conversationId: conversationId,
-                messageId: messageId,
-                senderAvatar: sender.avatarUrl 
-              }
-            );
+      // Create and send notifications
+      const messagePreview = text 
+        ? (text.length > 50 ? text.substring(0, 50) + '...' : text)
+        : file ? `📎 ${file.originalName || 'Attachment'}` : 'New message';
+      
+      for (const recipientId of recipientIds) {
+        try {
+          // Skip notification for sender
+          if (recipientId === userId) continue;
+          
+          // Create notification
+          const notification = await createNotification(
+            recipientId,
+            userId,
+            'message',
+            `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+            messagePreview,
+            {
+              conversationId: conversationId,
+              messageId: populatedMessage._id.toString(),
+              senderAvatar: populatedMessage.sender.avatarUrl
+            }
+          );
+          
+          console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
+          
+          // Send real-time notification if user is online
+          const recipientSocket = onlineUsers.get(recipientId);
+          if (recipientSocket) {
+            io.to(recipientSocket.socketId).emit('notification:new', notification);
             
-            console.log(`📢 Created notification for user ${recipientId}:`, notification._id);
-            
-            // ✅ Try to send real-time notification (don't depend on online status)
-            sendNotificationToUser(recipientId, notification);
-            
-          } catch (error) {
-            console.error('Error creating notification for user:', recipientId, error);
+            // Also send browser notification
+            io.to(recipientSocket.socketId).emit('notify-message', {
+              title: `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+              body: messagePreview,
+              conversationId: conversationId,
+              messageId: populatedMessage._id.toString(),
+              type: 'message'
+            });
           }
-        }
-        
-        // Mark as delivered for online users in the conversation
-        const onlineRecipients = recipientIds.filter(id => onlineUsers.has(id));
-        
-        if (onlineRecipients.length > 0) {
-          const status = messageStatus.get(messageId);
-          status.delivered = true;
-          status.recipients = onlineRecipients;
-          io.to(conversationId).emit('chat:delivered', { messageId, recipients: onlineRecipients });
+        } catch (error) {
+          console.error(`Error creating notification for user ${recipientId}:`, error);
         }
       }
+      
+      // Send success acknowledgment to sender
+      socket.emit('chat:sent', {
+        success: true,
+        messageId: populatedMessage._id.toString(),
+        tempId: tempId || `${conversationId}-${Date.now()}`
+      });
+      
     } catch (error) {
-      console.error('Error in chat:send:', error);
-      socket.emit('chat:error', { message: 'Failed to send message' });
+      console.error('Error sending message:', error);
+      socket.emit('chat:send:error', { message: 'Failed to send message', tempId });
+    } finally {
+      await session.endSession();
     }
   });
 
@@ -917,14 +959,53 @@ io.on('connection', async socket => {
   // Mark message as read
   socket.on('chat:read', async ({ messageId }) => {
     const userId = socket.userId;
-    const status = messageStatus.get(messageId);
-    if (status && !status.read) {
-      status.read = true;
-      // Get the conversation ID for this message
-      const message = await Message.findById(messageId);
-      if (message) {
-        io.to(message.conversation.toString()).emit('chat:read', { messageId, userId });
-      }
+    const session = await mongoose.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        // Update the message to mark it as read by this user
+        const message = await Message.findOneAndUpdate(
+          { _id: messageId, readBy: { $ne: userId } }, // Only update if not already read by this user
+          { $addToSet: { readBy: userId } },
+          { new: true, session }
+        );
+        
+        if (message) {
+          // Get the conversation to find other members
+          const conversation = await Conversation.findById(message.conversation).populate('members');
+          if (conversation) {
+            // Emit read receipt to all conversation members
+            const readData = {
+              messageId: message._id.toString(),
+              userId: userId,
+              readAt: new Date()
+            };
+            
+            // Send to all online members of the conversation
+            conversation.members.forEach(member => {
+              const memberId = member._id.toString();
+              const memberSocket = onlineUsers.get(memberId);
+              if (memberSocket) {
+                io.to(memberSocket.socketId).emit('chat:read', readData);
+              }
+            });
+            
+            // Also send to the conversation room for anyone currently viewing it
+            io.to(conversation._id.toString()).emit('chat:read', readData);
+            
+            // Update in-memory status if it exists
+            const status = messageStatus.get(messageId);
+            if (status) {
+              status.read = true;
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      socket.emit('chat:read:error', { message: 'Failed to mark message as read' });
+    } finally {
+      await session.endSession();
     }
   });
 
@@ -1039,6 +1120,13 @@ app.post('/api/broadcast/newProducer', express.json(), (req, res) => {
     console.log(`[Signaling] ⚠️ No sockets found in room ${roomId}`);
     res.json({ success: true, socketCount: 0 });
   }
+});
+
+// Middleware to make io instance and onlineUsers available to controllers
+app.use((req, res, next) => {
+  req.io = io;
+  req.onlineUsers = onlineUsers;
+  next();
 });
 
 // Register new conversation and message routes

@@ -16,7 +16,6 @@ export const useSocket = () => {
 export function SocketProvider({ children }) {
   const { user } = useContext(AuthContext);
   const [socket, setSocket] = useState(null);
-  const [chatSocket, setChatSocket] = useState(null);
   const [sfuSocket,  setSfuSocket]  = useState(null);
   const [isSFUConnected, setIsSFUConnected] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -27,7 +26,6 @@ export function SocketProvider({ children }) {
   const [offerObj, setOfferObj] = useState(null);
   const [iceCandidate, setIceCandidate] = useState(null);
   const [userHungUp, setUserHungUp] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [avatarOutput, setAvatarOutput] = useState(null);
   const [avatarNavigate, setAvatarNavigate] = useState(null);
   const [participantMap, setParticipantMap] = useState({});
@@ -38,23 +36,10 @@ export function SocketProvider({ children }) {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const chatRoot = import.meta.env.VITE_API_URL.replace(/\/api$/, '');
-      const chatSocket = io(chatRoot, {
-        auth: { token },
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-      });
-
       const sfuRoot = import.meta.env.VITE_API_URL.replace(/\/api$/, '');
       const sfuSocket = io(sfuRoot, {
         auth: { token },
         transports: ['websocket'],
-      });
-
-      chatSocket.on('connect', () => {
-        console.log('[SocketContext] 🔌 chat socket connected', chatSocket.id);
       });
 
       sfuSocket.on('connect', () => {
@@ -66,12 +51,7 @@ export function SocketProvider({ children }) {
         }
       });
 
-      chatSocket.connect();
       sfuSocket.connect();
-
-      chatSocket.on('disconnect', () => {
-        setIsSFUConnected(false);
-      });
 
       sfuSocket.on('connect_error', (err) => {
         setError('SFU connection failed: ' + err.message);
@@ -109,9 +89,6 @@ export function SocketProvider({ children }) {
         setUserHungUp(userName);
       });
 
-      chatSocket.on('chat-message', ({ userName, message }) => {
-        setMessages(prev => [...prev, { userName, message }]);
-      });
 
       sfuSocket.on('avatarOutput', (json) => {
         setAvatarOutput(json);
@@ -131,11 +108,9 @@ export function SocketProvider({ children }) {
         setRecordingStatus({ isRecording: false, recordedBy: null });
       });
 
-      setChatSocket(chatSocket);
       setSfuSocket(sfuSocket);
 
       return () => {
-        chatSocket.disconnect();
         sfuSocket.disconnect();
       };
     }
@@ -195,11 +170,6 @@ export function SocketProvider({ children }) {
     }
   };
 
-  const sendMessage = (message) => {
-    if (chatSocket) {
-      chatSocket.emit('sendMessage', message);
-    }
-  };
 
   const sendAvatarOutput = (json) => {
     if (sfuSocket) {
@@ -227,7 +197,6 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
-      chatSocket,
       sfuSocket,
       isSFUConnected,
       currentRoom,
@@ -239,7 +208,6 @@ export function SocketProvider({ children }) {
       sendOffer,
       sendAnswer,
       sendIceCandidate,
-      sendMessage,
       sendAvatarOutput,
       sendAvatarNavigate,
       avatarOutput,

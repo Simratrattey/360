@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Paperclip, Smile, X, Send, AlertCircle } from 'lucide-react';
+import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Camera, Image as ImageIcon, FileText } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
@@ -14,6 +14,8 @@ export default function ChatInput({
   onShowEmojiPicker,
   onTyping,
   members = [],
+  isSending = false,
+  uploadProgress = 0,
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
@@ -21,6 +23,8 @@ export default function ChatInput({
   const textareaRef = useRef(null);
   const [mentionDropdown, setMentionDropdown] = useState({ open: false, query: '', start: 0 });
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const attachmentMenuRef = useRef(null);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -75,6 +79,55 @@ export default function ChatInput({
     onSend();
   };
 
+
+  const handleAttachmentSelect = (type) => {
+    setShowAttachmentMenu(false);
+    
+    // Create file input with appropriate accept types
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.style.display = 'none';
+    
+    switch (type) {
+      case 'image':
+        input.accept = 'image/*';
+        break;
+      case 'video':
+        input.accept = 'video/*';
+        break;
+      case 'document':
+        input.accept = '.pdf,.doc,.docx,.txt,.rtf';
+        break;
+      default:
+        input.accept = '*/*';
+    }
+    
+    input.onchange = (e) => {
+      handleFileChange(e);
+      // Clean up the input element
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
+    };
+    
+    input.oncancel = () => {
+      // Clean up if user cancels the file dialog
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
+    };
+    
+    document.body.appendChild(input);
+    input.click();
+    
+    // Fallback cleanup after a timeout
+    setTimeout(() => {
+      if (document.body.contains(input)) {
+        document.body.removeChild(input);
+      }
+    }, 10000);
+  };
+
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
@@ -82,6 +135,23 @@ export default function ChatInput({
       }
     };
   }, []);
+
+  // Close attachment menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target)) {
+        setShowAttachmentMenu(false);
+      }
+    };
+
+    if (showAttachmentMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAttachmentMenu]);
 
   // Insert emoji at cursor position (emoji-mart v5+)
   const handleEmojiSelect = (emoji) => {
@@ -141,10 +211,10 @@ export default function ChatInput({
   };
 
   return (
-    <div className="p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
+    <div className="p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
       {/* File error message */}
       {fileError && (
-        <div className="mb-4 p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
+        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
           <AlertCircle className="h-4 w-4" />
           <span className="text-sm font-medium">{fileError}</span>
           <button 
@@ -158,7 +228,7 @@ export default function ChatInput({
 
       {/* File preview */}
       {uploadFile && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-gray-200">
+        <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {uploadFile.type && uploadFile.type.startsWith('image/') ? (
@@ -185,25 +255,84 @@ export default function ChatInput({
             <button 
               onClick={onRemoveFile} 
               className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-200"
+              disabled={isSending}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
+          
+          {/* Upload progress bar */}
+          {isSending && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                <span>Uploading...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Input area */}
-      <div className="flex items-end space-x-3 relative">
-        {/* File upload button */}
-        <label className="cursor-pointer p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105" title="Upload any file type (max 50MB)">
-          <Paperclip className="h-5 w-5" />
-          <input 
-            type="file" 
-            className="hidden" 
-            onChange={handleFileChange}
-            accept="*/*"
-          />
-        </label>
+      <div className="flex items-end space-x-2 sm:space-x-3 relative">
+        {/* Enhanced attachment menu */}
+        <div className="relative" ref={attachmentMenuRef}>
+          <button
+            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+            disabled={isSending}
+            className={`cursor-pointer p-2 sm:p-3 rounded-xl transition-all duration-200 shadow-lg transform ${
+              isSending 
+                ? 'bg-gray-300 cursor-not-allowed transform-none' 
+                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 hover:shadow-xl hover:scale-105'
+            }`}
+            title="Attach files or record voice"
+          >
+            <Paperclip className="h-4 w-4 sm:h-5 sm:w-5" />
+          </button>
+          
+          {/* Attachment menu */}
+          {showAttachmentMenu && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-2 min-w-[180px] z-50">
+              <button
+                onClick={() => handleAttachmentSelect('image')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <ImageIcon className="h-4 w-4 text-green-500" />
+                <span>Photos</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('video')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <Camera className="h-4 w-4 text-red-500" />
+                <span>Videos</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('document')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <FileText className="h-4 w-4 text-blue-500" />
+                <span>Documents</span>
+              </button>
+              
+              <button
+                onClick={() => handleAttachmentSelect('any')}
+                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+              >
+                <Paperclip className="h-4 w-4 text-gray-500" />
+                <span>Any File</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Text input */}
         <div className="flex-1 relative">
@@ -220,7 +349,7 @@ export default function ChatInput({
             }}
             placeholder="Type a message..."
             rows={1}
-            className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none shadow-sm"
+            className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 sm:pr-12 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none shadow-sm text-sm sm:text-base"
             style={{ minHeight: '48px', maxHeight: '120px' }}
           />
           
@@ -228,10 +357,10 @@ export default function ChatInput({
           <button 
             type="button"
             onClick={() => setShowEmojiPicker(v => !v)} 
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full hover:bg-gray-100 transition-all duration-200 text-gray-400 hover:text-gray-600"
+            className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-all duration-200 text-gray-400 hover:text-gray-600"
             tabIndex={-1}
           >
-            <Smile className="h-5 w-5" />
+            <Smile className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
           {/* Emoji picker popover (emoji-mart v5+) */}
           {showEmojiPicker && (
@@ -269,16 +398,27 @@ export default function ChatInput({
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={!input.trim() && !uploadFile}
-          className="p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
+          disabled={(!input.trim() && !uploadFile) || isSending}
+          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
         >
-          <Send className="h-5 w-5" />
+          {isSending ? (
+            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4 sm:h-5 sm:w-5" />
+          )}
+          
+          {/* Upload progress indicator for files */}
+          {isSending && uploadFile && uploadProgress > 0 && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
         </button>
       </div>
 
       {/* Helper text */}
-      <div className="mt-2 text-center">
-        <p className="text-xs text-gray-500">
+      <div className="mt-1 sm:mt-2 text-center">
+        <p className="text-xs text-gray-500 px-2">
           Press Enter to send, Shift+Enter for new line • Max file size: 50MB
         </p>
       </div>

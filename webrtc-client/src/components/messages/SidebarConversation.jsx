@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, Trash2, MessageCircle, Users, Hash } from 'lucide-react';
+import { Star, MessageCircle, Users, Hash, Pin, VolumeX, Edit3, Check, CheckCheck } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
 
 function getConversationDisplayName(conversation, currentUserId) {
@@ -45,14 +45,15 @@ export default function SidebarConversation({
   isActive,
   onSelect,
   onStar,
-  onDelete,
   starred,
   getInitials,
   currentUserId,
-  canDelete,
+  onPin,
+  onMute,
+  typing = {},
+  draftMessage,
 }) {
   const { onlineUsers } = useChatSocket();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   const displayName = getConversationDisplayName(conv, currentUserId);
   const initials = getInitials(displayName);
@@ -66,7 +67,7 @@ export default function SidebarConversation({
   };
 
   const otherUser = getOtherUser();
-  const isOnline = otherUser && onlineUsers.has(otherUser._id);
+  // Online status tracking removed for a more compact layout
 
   // Get conversation type config
   const getTypeConfig = (type) => {
@@ -95,118 +96,256 @@ export default function SidebarConversation({
 
   const typeConfig = getTypeConfig(conv.type);
   
+  // Helper functions for modern messaging features
+  const getMessageStatusIcon = () => {
+    if (!conv.lastMessage || conv.lastMessage.senderId !== currentUserId) return null;
+    
+    const status = conv.lastMessage.status || 'sent';
+    switch (status) {
+      case 'sending':
+        return <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />;
+      case 'sent':
+        return <Check className="w-3 h-3 text-gray-400" />;
+      case 'delivered':
+        return <CheckCheck className="w-3 h-3 text-gray-400" />;
+      case 'read':
+        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTypingIndicator = () => {
+    const typingUsers = Object.entries(typing)
+      .filter(([userId, isTyping]) => isTyping && userId !== currentUserId)
+      .map(([userId]) => {
+        // Get user name from conversation members
+        const user = conv.members?.find(m => m._id === userId);
+        return user?.fullName || user?.username || 'Someone';
+      });
+
+    if (typingUsers.length === 0) return null;
+    
+    const displayText = typingUsers.length === 1 
+      ? `${typingUsers[0]} is typing...`
+      : typingUsers.length === 2
+      ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+      : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`;
+
+    return (
+      <div className="flex items-center text-xs text-blue-600">
+        <div className="flex space-x-1 mr-2">
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce"></div>
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+          <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+        </div>
+        <span className="font-medium">{displayText}</span>
+      </div>
+    );
+  };
+
+  const getLastActiveTime = () => {
+    if (!conv.lastMessageAt) return null;
+    
+    const date = new Date(conv.lastMessageAt);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInMinutes < 1) return 'now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    if (diffInHours < 24) return `${diffInHours}h`;
+    if (diffInDays < 7) return `${diffInDays}d`;
+    
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
   return (
     <div
-      className={`group relative mx-2 md:mx-3 mb-2 p-3 md:p-4 rounded-xl cursor-pointer transition-all duration-300 ${
-        isActive 
-          ? `bg-gradient-to-r ${typeConfig.bgGradient} border-2 ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
-          : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200 hover:shadow-md'
+      className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-xl cursor-pointer transition-all duration-300 ${
+        conv.isDeleted
+          ? 'bg-red-50 bg-opacity-50 border border-red-200 opacity-80'
+          : isActive 
+            ? `bg-gradient-to-r ${typeConfig.bgGradient} border ${typeConfig.borderColor} shadow-lg transform scale-[1.02]` 
+            : 'hover:bg-white hover:bg-opacity-60 border border-transparent hover:border-gray-200 hover:border-opacity-50 hover:shadow-md backdrop-blur-sm'
       }`}
       onClick={onSelect}
     >
-      <div className="flex items-center space-x-2 md:space-x-3">
-        {/* Avatar/Icon */}
+      <div className="flex items-center space-x-2">
+        {/* Avatar/Icon - Smaller size for better space utilization */}
         <div className="relative flex-shrink-0">
           {conv?.avatar ? (
-            <img src={conv.avatar} alt={displayName} className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-md" />
+            <img 
+              src={conv.avatar} 
+              alt={displayName} 
+              className={`h-9 w-9 md:h-10 md:w-10 rounded-full object-cover shadow-md ring-1 ring-white ring-opacity-50 ${conv.isDeleted ? 'grayscale' : ''}`} 
+            />
           ) : (
-            <div className={`h-10 w-10 md:h-12 md:w-12 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg`}>
-              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-4 w-4 md:h-6 md:w-6" />}
+            <div className={`h-9 w-9 md:h-10 md:w-10 rounded-full flex items-center justify-center text-white font-medium text-xs shadow-md ${
+              conv.isDeleted 
+                ? 'bg-gray-400' 
+                : `bg-gradient-to-br ${typeConfig.gradient}`
+            }`}>
+              {conv.type === 'dm' ? initials : <typeConfig.icon className="h-3 w-3 md:h-4 md:w-4" />}
             </div>
           )}
           
-          {/* Online status indicator */}
-          {(conv?.status === 'online' || (conv.type === 'dm' && isOnline)) && (
-            <span className="absolute -bottom-1 -right-1 h-3 w-3 md:h-4 md:w-4 rounded-full border-2 md:border-3 border-white bg-green-500 shadow-md"></span>
+          {/* Online status indicator for DMs */}
+          {conv.type === 'dm' && otherUser && onlineUsers.has && onlineUsers.has(otherUser._id) && (
+            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
           )}
           
           {/* Type indicator for groups/communities */}
           {conv.type !== 'dm' && (
-            <div className={`absolute -top-1 -right-1 h-4 w-4 md:h-5 md:w-5 rounded-full bg-gradient-to-r ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-md`}>
-              <typeConfig.icon className="h-2 w-2 md:h-3 md:w-3 text-white" />
+            <div className={`absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-gradient-to-br ${typeConfig.gradient} flex items-center justify-center border-2 border-white shadow-sm`}>
+              <typeConfig.icon className="h-2 w-2 text-white" />
             </div>
           )}
 
-          {/* Blue dot for unread messages */}
+          {/* Unread indicator - Modern minimalist */}
           {conv?.unread > 0 && (
-            <span className="absolute -top-1 -left-1 h-2.5 w-2.5 md:h-3 md:w-3 rounded-full bg-blue-500 border-2 border-white shadow-md z-10"></span>
+            <span className="absolute -top-1 -left-1 h-4 w-4 rounded-full bg-blue-500 border-2 border-white shadow-sm z-10 flex items-center justify-center">
+              {conv.unread > 9 && (
+                <span className="text-xs font-bold text-white">9+</span>
+              )}
+            </span>
           )}
         </div>
 
-        {/* Content */}
+        {/* Content - More compact layout */}
         <div className="flex-1 min-w-0 flex items-center justify-between">
-          <div>
-            <h3 className={`font-semibold truncate text-sm md:text-base ${isActive ? 'text-gray-900' : 'text-gray-800'} flex items-center`}>
-              {displayName}
-              {/* Notification badge right next to name */}
-              {conv?.unread > 0 && (
-                <span className="ml-2 inline-flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 shadow-md border-2 border-white">
-                  {conv.unread > 99 ? '99+' : conv.unread}
-                </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <h3 className={`font-medium truncate text-xs md:text-sm flex items-center ${
+                conv.isDeleted 
+                  ? 'text-gray-500 line-through' 
+                  : isActive 
+                    ? 'text-gray-900' 
+                    : 'text-gray-800'
+              }`}>
+                {conv.isDeleted ? `${displayName} (Deleted)` : displayName}
+                
+                {/* Status indicators */}
+                <div className="flex items-center ml-1.5 space-x-1">
+                  {/* Pinned indicator */}
+                  {conv.isPinned && (
+                    <Pin className="w-3 h-3 text-blue-500" />
+                  )}
+                  {/* Muted indicator */}
+                  {conv.isMuted && (
+                    <VolumeX className="w-3 h-3 text-gray-400" />
+                  )}
+                  {/* Unread badge */}
+                  {conv?.unread > 0 && !conv.isDeleted && (
+                    <span className="inline-flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full min-w-[16px] h-[16px] px-1 shadow-sm">
+                      {conv.unread > 99 ? '99+' : conv.unread}
+                    </span>
+                  )}
+                  {/* Deleted indicator */}
+                  {conv.isDeleted && (
+                    <span className="inline-flex items-center justify-center bg-red-400 text-white text-xs font-medium rounded-full px-1.5 py-0.5 shadow-sm">
+                      Deleted
+                    </span>
+                  )}
+                </div>
+              </h3>
+              
+              {/* Time and message status */}
+              <div className="flex items-center space-x-1 ml-2">
+                {getMessageStatusIcon()}
+                <span className="text-xs text-gray-400">{getLastActiveTime()}</span>
+              </div>
+            </div>
+            {/* Status indicators: typing, draft, or last message */}
+            <div className="mt-0.5">
+              {getTypingIndicator() || (
+                draftMessage ? (
+                  <p className="text-xs text-red-600 truncate flex items-center">
+                    <Edit3 className="w-3 h-3 mr-1" />
+                    <span className="font-medium">Draft:</span>
+                    <span className="ml-1">{draftMessage.length > 35 ? draftMessage.substring(0, 35) + '...' : draftMessage}</span>
+                  </p>
+                ) : conv?.lastMessage ? (
+                  <p className="text-xs text-gray-500 truncate">
+                    {/* Sender name for groups */}
+                    {conv.type !== 'dm' && conv.lastMessage.senderName && (
+                      <span className="font-medium text-gray-600">{conv.lastMessage.senderName}: </span>
+                    )}
+                    {conv.lastMessage.text ? (
+                      conv.lastMessage.text.length > 35 ? 
+                        conv.lastMessage.text.substring(0, 35) + '...' : 
+                        conv.lastMessage.text
+                    ) : conv.lastMessage.file ? (
+                      <span className="italic flex items-center">
+                        <span className="mr-1">📎</span>
+                        {conv.lastMessage.file.name || 'File'}
+                      </span>
+                    ) : (
+                      <span className="italic">No messages yet</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">No messages yet</p>
+                )
               )}
-            </h3>
-            {/* Subtitle */}
-            <p className="text-xs md:text-sm text-gray-500 truncate">
-              {conv.type === 'dm' ? (isOnline ? 'Online' : 'Offline') : 
-               conv.type === 'group' ? `${conv.members?.length || 0} members` :
-               `${conv.members?.length || 0} members`}
-            </p>
+            </div>
           </div>
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-0.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Pin button */}
+            <button 
+              onClick={e => { 
+                e.stopPropagation(); 
+                if (onPin) onPin(); 
+              }} 
+              className={`p-1 rounded-full transition-all duration-200 ${
+                conv.isPinned 
+                  ? 'text-blue-500 bg-blue-50 hover:bg-blue-100' 
+                  : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+              }`}
+              title={conv.isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            >
+              <Pin className="h-3 w-3" />
+            </button>
+            
+            {/* Mute button */}
+            <button 
+              onClick={e => { 
+                e.stopPropagation(); 
+                if (onMute) onMute(); 
+              }} 
+              className={`p-1 rounded-full transition-all duration-200 ${
+                conv.isMuted 
+                  ? 'text-gray-600 bg-gray-100 hover:bg-gray-200' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+              }`}
+              title={conv.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+            >
+              <VolumeX className="h-3 w-3" />
+            </button>
+            
             {/* Star button */}
             <button 
               onClick={e => { e.stopPropagation(); onStar(); }} 
-              className={`p-1 md:p-1.5 rounded-full transition-all duration-200 ${
+              className={`p-1 rounded-full transition-all duration-200 ${
                 starred 
                   ? 'text-yellow-500 bg-yellow-50 hover:bg-yellow-100' 
                   : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'
               }`}
+              title={starred ? 'Unstar conversation' : 'Star conversation'}
             >
-              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3 md:h-4 md:w-4" />
+              <Star fill={starred ? 'currentColor' : 'none'} className="h-3 w-3" />
             </button>
-            {/* Delete button */}
-            {canDelete && (
-              <button 
-                onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }} 
-                className="p-1 md:p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 opacity-0 group-hover:opacity-100"
-                title="Delete conversation"
-              >
-                <Trash2 className="h-3 w-3 md:h-4 md:w-4" />
-              </button>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Active indicator */}
+      {/* Active indicator - Thinner */}
       {isActive && (
-        <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
+        <div className={`absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b ${typeConfig.gradient} rounded-r-full`}></div>
       )}
 
-      {/* Delete confirmation dialog */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-xs w-full flex flex-col items-center">
-            <Trash2 className="h-6 w-6 md:h-8 md:w-8 text-red-500 mb-2" />
-            <h3 className="text-base md:text-lg font-bold mb-2 text-gray-900 text-center">Delete Conversation?</h3>
-            <p className="text-sm md:text-base text-gray-600 mb-4 text-center">Are you sure you want to delete this conversation? This action cannot be undone.</p>
-            <div className="flex gap-3 md:gap-4 w-full">
-              <button
-                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium text-sm md:text-base"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold hover:from-red-600 hover:to-pink-600 shadow text-sm md:text-base"
-                onClick={() => { setShowDeleteConfirm(false); onDelete(); }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 } 
