@@ -120,7 +120,7 @@ router.post('/produce', async (req, res) => {
         
         // Call signaling server endpoint to broadcast the event
         const signalingContainer = process.env.SIGNALING_CONTAINER_NAME || 'comm360-signaling-production';
-        const signalingPort = process.env.PORT || '5050';
+        const signalingPort = process.env.SIGNALING_SERVER_PORT || '5050';
         const broadcastResponse = await fetch(`http://${signalingContainer}:${signalingPort}/api/broadcast/newProducer`, {
           method: 'POST',
           headers: {

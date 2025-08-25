@@ -99,8 +99,8 @@ import mediasoup from 'mediasoup';
 let worker, router;
 async function initMediasoup() {
   worker = await mediasoup.createWorker({ 
-    rtcMinPort : 10000,
-    rtcMaxPort : 10100,
+    rtcMinPort : parseInt(process.env.RTC_MIN_PORT) || 10000,
+    rtcMaxPort : parseInt(process.env.RTC_MAX_PORT) || 10100,
     logLevel   : 'debug',
     logTags    : [
       'ice',   // ICE candidate gathering & checks
