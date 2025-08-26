@@ -42,7 +42,6 @@ export default function MeetingPage() {
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
-  const [recordingMethod, setRecordingMethod] = useState('screen'); // 'screen' or 'canvas'
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
@@ -537,39 +536,13 @@ export default function MeetingPage() {
 
   const startRecording = async () => {
     try {
-      console.log('Starting meeting recording with method:', recordingMethod);
+      console.log('Starting meeting recording with canvas method');
       
       let captureStream;
       
-      if (recordingMethod === 'canvas') {
-        // Use canvas recording (no screen sharing required)
-        console.log('Using canvas-based recording...');
-        captureStream = await createCanvasRecording();
-      } else {
-        // Use screen capture method
-        console.log('Using screen capture...');
-        try {
-          captureStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 },
-              frameRate: { ideal: 30, max: 60 }
-            },
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              sampleRate: 48000
-            },
-            preferCurrentTab: true
-          });
-          
-          console.log('Screen capture successful');
-        } catch (screenError) {
-          console.log('Screen capture failed, falling back to canvas:', screenError);
-          captureStream = await createCanvasRecording();
-        }
-      }
+      // Always use canvas recording (no screen sharing required)
+      console.log('Using canvas-based recording...');
+      captureStream = await createCanvasRecording();
       
       if (!captureStream) {
         console.error('No capture stream available');
@@ -1996,40 +1969,6 @@ To convert to MP4:
             <div className="absolute bottom-full mb-2 right-0 bg-gray-800 text-white rounded-lg py-3 px-4 shadow-xl border border-gray-600 z-50 min-w-64">
               <h3 className="text-sm font-semibold mb-3 text-gray-200">Meeting Settings</h3>
               
-              {/* Recording Settings */}
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording Method</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="canvas"
-                      checked={recordingMethod === 'canvas'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">
-                      📹 Direct Capture <span className="text-green-400 text-xs">(Recommended)</span>
-                    </span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="screen"
-                      checked={recordingMethod === 'screen'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">🖥️ Screen Share</span>
-                  </label>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Direct Capture records only meeting participants without screen sharing.
-                  </p>
-                </div>
-              </div>
-
               {/* Host Controls */}
               {roomSettings.isHost && (
                 <div className="mb-4">
