@@ -1923,6 +1923,7 @@ To convert to MP4:
           {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
         </button>
         
+        {/* Temporarily commented out - will re-enable later
         <button 
           onClick={isScreenSharing ? stopScreenShare : startScreenShare} 
           className={`p-3 rounded-full ${isScreenSharing ? 'bg-green-600' : 'bg-gray-600'} text-white`}
@@ -1930,6 +1931,7 @@ To convert to MP4:
         >
           {isScreenSharing ? <MonitorSpeaker size={20}/> : <Monitor size={20}/>} 
         </button>
+        */}
         
         {recordedChunks.length > 0 && (
           <button 
