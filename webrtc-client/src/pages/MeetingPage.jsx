@@ -1671,28 +1671,32 @@ To convert to MP4:
 
   // Subtitle drag handlers
   const handleSubtitleMouseDown = (e) => {
+    e.preventDefault();
     setIsDraggingSubtitles(true);
+    
     const rect = subtitleRef.current.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const offsetY = e.clientY - rect.top;
     
     const handleMouseMove = (e) => {
-      if (!isDraggingSubtitles) return;
+      e.preventDefault();
       
       const newX = e.clientX - offsetX;
       const newY = e.clientY - offsetY;
       
-      // Keep subtitles within viewport bounds
-      const maxX = window.innerWidth - rect.width;
-      const maxY = window.innerHeight - rect.height;
+      // Keep subtitles within viewport bounds with some padding
+      const padding = 10;
+      const maxX = window.innerWidth - rect.width - padding;
+      const maxY = window.innerHeight - rect.height - padding;
       
       setSubtitlePosition({
-        x: Math.max(0, Math.min(maxX, newX)),
-        y: Math.max(0, Math.min(maxY, newY))
+        x: Math.max(padding, Math.min(maxX, newX)),
+        y: Math.max(padding, Math.min(maxY, newY))
       });
     };
     
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
+      e.preventDefault();
       setIsDraggingSubtitles(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -1933,13 +1937,14 @@ To convert to MP4:
       {subtitlesEnabled && subtitleHistory.length > 0 && (
         <div 
           ref={subtitleRef}
-          className={`absolute z-10 ${isDraggingSubtitles ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`absolute z-10 ${isDraggingSubtitles ? 'cursor-grabbing' : 'cursor-grab'} select-none`}
           style={{
             left: subtitlePosition.x === 0 ? '50%' : `${subtitlePosition.x}px`,
-            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
             top: subtitlePosition.y === 0 ? 'auto' : `${subtitlePosition.y}px`,
-            transform: subtitlePosition.x === 0 ? 'translateX(-50%)' : 'none',
-            pointerEvents: 'auto'
+            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
+            transform: subtitlePosition.x === 0 && subtitlePosition.y === 0 ? 'translateX(-50%)' : 'none',
+            pointerEvents: 'auto',
+            userSelect: 'none'
           }}
           onMouseDown={handleSubtitleMouseDown}
         >
@@ -1948,8 +1953,12 @@ To convert to MP4:
               <div className="flex items-center justify-between mb-1">
                 <span className="font-medium text-blue-300">{subtitle.speaker}</span>
                 <button 
-                  onClick={resetSubtitlePosition}
-                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetSubtitlePosition();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100 cursor-pointer"
                   title="Reset position"
                 >
                   ⌂
