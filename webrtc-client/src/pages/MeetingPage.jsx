@@ -30,7 +30,8 @@ export default function MeetingPage() {
     notifyRecordingStarted, 
     notifyRecordingStopped,
     roomSettings,
-    avatarApiError
+    avatarApiError,
+    toggleAvatarApi
   } = useContext(SocketContext);
 
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
