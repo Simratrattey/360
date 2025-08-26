@@ -12,7 +12,6 @@ import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
 import AvatarSidebar from '../components/AvatarSidebar';
-import HostControls from '../components/HostControls';
 
 export default function MeetingPage() {
   const { roomId } = useParams();
@@ -79,6 +78,14 @@ export default function MeetingPage() {
   const [avatarIndex, setAvatarIndex]           = useState(0);
   const [avatarQuery, setAvatarQuery]           = useState('');
   const [avatarTranscript, setAvatarTranscript] = useState('');
+
+  // Function to reset avatar state
+  const resetAvatarState = useCallback(() => {
+    setAvatarClips([]);
+    setAvatarIndex(0);
+    setAvatarQuery('');
+    setAvatarTranscript('');
+  }, []);
   const [isAvatarRecording, setIsAvatarRecording] = useState(false);
 
   // Screen sharing state
@@ -2002,12 +2009,39 @@ To convert to MP4:
                 </div>
               </div>
 
+              {/* Host Controls */}
+              {roomSettings.isHost && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">Host Controls</h4>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={roomSettings.avatarApiEnabled}
+                        onChange={(e) => toggleAvatarApi(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <span className="text-sm">Enable Avatar API</span>
+                    </label>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {roomSettings.avatarApiEnabled 
+                        ? 'Participants can interact with the avatar' 
+                        : 'Avatar interactions are disabled for all participants'
+                      }
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Features Settings */}
               <div className="mb-4">
                 <h4 className="text-xs font-medium text-gray-300 mb-2">Features</h4>
                 <div className="space-y-2">
                   <button
                     onClick={() => {
+                      if (showAvatar) {
+                        resetAvatarState();
+                      }
                       setShowAvatar(!showAvatar);
                       setShowSettings(false);
                     }}
@@ -2125,13 +2159,13 @@ To convert to MP4:
           isRecording={isAvatarRecording}
           onPrev={handlePrev}
           onNext={handleNext}
-          onClose={() => setShowAvatar(false)}
+          onClose={() => {
+            setShowAvatar(false);
+            resetAvatarState();
+          }}
           avatarApiEnabled={roomSettings.avatarApiEnabled}
         />
       )}
-      
-      {/* Host Controls */}
-      <HostControls />
       
       {/* Avatar API Error Message */}
       {avatarApiError && (
