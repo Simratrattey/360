@@ -828,11 +828,14 @@ io.on('connection', async socket => {
     
     rooms[rid].avatarApiEnabled = enabled;
     
-    // Broadcast the change to all participants
-    io.to(rid).emit('roomSettingsUpdated', {
+    // Broadcast the change to all participants including the host
+    const settingsUpdate = {
       avatarApiEnabled: enabled,
       host: rooms[rid].host
-    });
+    };
+    
+    io.to(rid).emit('roomSettingsUpdated', settingsUpdate);
+    socket.emit('roomSettingsUpdated', settingsUpdate); // Ensure host gets the update too
     
     console.log(`[Room ${rid}] Avatar API ${enabled ? 'enabled' : 'disabled'} by host ${socket.userId}`);
   });
