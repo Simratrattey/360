@@ -12,6 +12,7 @@ import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
 import AvatarSidebar from '../components/AvatarSidebar';
+import MeetingStatsBar from '../components/MeetingStatsBar';
 
 export default function MeetingPage() {
   const { roomId } = useParams();
@@ -92,6 +93,9 @@ export default function MeetingPage() {
   // Screen sharing state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
+  
+  // Meeting stats
+  const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
 
@@ -324,6 +328,10 @@ export default function MeetingPage() {
         .then(() => {
           console.log('✅ [MeetingPage] Join meeting completed successfully');
           setIsJoining(false);
+          // Set meeting start time when successfully joining
+          if (!meetingStartTime) {
+            setMeetingStartTime(new Date());
+          }
         })
         .catch((error) => {
           console.error('❌ [MeetingPage] Join meeting failed:', error);
@@ -1743,6 +1751,13 @@ To convert to MP4:
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
+      {/* Meeting Stats Bar */}
+      <MeetingStatsBar 
+        participantCount={Object.keys(participantMap).length + 1} // +1 for current user
+        meetingStartTime={meetingStartTime}
+        roomId={roomId}
+      />
+      
       {/* Recording notification banner */}
       {recordingStatus.isRecording && (
         <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
