@@ -615,17 +615,31 @@ io.on('connection', async socket => {
     console.log(`[Signaling] socket ${socket.id} joined room ${roomId}`);
     socket.currentRoom = roomId;
 
-    if (!rooms[roomId]) rooms[roomId] = { offers: [], participants: [] };
+    if (!rooms[roomId]) {
+      rooms[roomId] = { 
+        offers: [], 
+        participants: [], 
+        host: socket.userId, // First person to join becomes host
+        avatarApiEnabled: true // Default to enabled
+      };
+    }
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
     // Only add if not already present
     if (!rooms[roomId].participants.some(p => p.socketId === socket.id)) {
-      rooms[roomId].participants.push({ socketId: socket.id, userName });
+      rooms[roomId].participants.push({ socketId: socket.id, userName, userId: socket.userId });
     }
     connectedSockets.push({ socketId: socket.id, userName, roomId });
 
     io.to(roomId).emit('roomParticipants', rooms[roomId].participants);
     socket.emit('availableOffers', rooms[roomId].offers);
+    
+    // Send room settings to the joining user
+    socket.emit('roomSettings', {
+      host: rooms[roomId].host,
+      avatarApiEnabled: rooms[roomId].avatarApiEnabled,
+      isHost: socket.userId === rooms[roomId].host
+    });
     
     // 🔥 NEW: Broadcast existing producers in the room to the newly joined participant
     // This ensures they receive newProducer events for existing participants
@@ -777,12 +791,50 @@ io.on('connection', async socket => {
 
   socket.on('avatarOutput', json => {
     const rid = socket.currentRoom;
-    if (rid) io.to(rid).emit('avatarOutput', json);
+    if (!rid || !rooms[rid]) return;
+    
+    // Check if avatar API is enabled for this room
+    if (!rooms[rid].avatarApiEnabled) {
+      socket.emit('avatarApiDisabled', { message: 'Avatar API is disabled by the host' });
+      return;
+    }
+    
+    io.to(rid).emit('avatarOutput', json);
   });
 
   socket.on('avatarNavigate', ({ index }) => {
     const rid = socket.currentRoom;
-    if (rid) io.to(rid).emit('avatarNavigate', { index });
+    if (!rid || !rooms[rid]) return;
+    
+    // Check if avatar API is enabled for this room
+    if (!rooms[rid].avatarApiEnabled) {
+      socket.emit('avatarApiDisabled', { message: 'Avatar API is disabled by the host' });
+      return;
+    }
+    
+    io.to(rid).emit('avatarNavigate', { index });
+  });
+
+  // Host control for avatar API
+  socket.on('toggleAvatarApi', ({ enabled }) => {
+    const rid = socket.currentRoom;
+    if (!rid || !rooms[rid]) return;
+    
+    // Only host can toggle avatar API
+    if (socket.userId !== rooms[rid].host) {
+      socket.emit('unauthorizedAction', { message: 'Only the host can control avatar API access' });
+      return;
+    }
+    
+    rooms[rid].avatarApiEnabled = enabled;
+    
+    // Broadcast the change to all participants
+    io.to(rid).emit('roomSettingsUpdated', {
+      avatarApiEnabled: enabled,
+      host: rooms[rid].host
+    });
+    
+    console.log(`[Room ${rid}] Avatar API ${enabled ? 'enabled' : 'disabled'} by host ${socket.userId}`);
   });
 
   // Recording notifications

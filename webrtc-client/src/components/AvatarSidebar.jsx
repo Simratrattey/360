@@ -13,7 +13,8 @@ export default function AvatarSidebar({
   isRecording,
   onPrev,
   onNext,
-  onClose
+  onClose,
+  avatarApiEnabled = true
 }) {
   const clipUrl = clips[index]?.videoUrl;
 
@@ -52,16 +53,27 @@ export default function AvatarSidebar({
           {transcript || <span className="text-gray-400">Transcript will appear here…</span>}
         </div>
 
+        {/* Avatar API Status */}
+        {!avatarApiEnabled && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded text-center">
+            <div className="text-sm font-medium text-red-800">Avatar API Disabled</div>
+            <div className="text-xs text-red-600 mt-1">The host has disabled avatar interactions</div>
+          </div>
+        )}
+
         {/* Text‑ask */}
         <textarea
-          className="w-full h-20 p-2 border rounded resize-none focus:outline-none focus:ring"
+          className={`w-full h-20 p-2 border rounded resize-none focus:outline-none focus:ring ${
+            !avatarApiEnabled ? 'bg-gray-100 cursor-not-allowed' : ''
+          }`}
           value={askText}
-          onChange={e => setAskText(e.target.value)}
-          placeholder="Type your question…"
+          onChange={e => avatarApiEnabled && setAskText(e.target.value)}
+          placeholder={avatarApiEnabled ? "Type your question…" : "Avatar interactions disabled"}
+          disabled={!avatarApiEnabled}
         />
         <button
           onClick={onAskText}
-          disabled={!askText.trim()}
+          disabled={!askText.trim() || !avatarApiEnabled}
           className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
         >
           Ask Avatar
@@ -71,14 +83,14 @@ export default function AvatarSidebar({
         <div className="flex space-x-2">
           <button
             onClick={onStartAudio}
-            disabled={isRecording}
+            disabled={isRecording || !avatarApiEnabled}
             className="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600 disabled:opacity-50"
           >
             Start Talking
           </button>
           <button
             onClick={onStopAudio}
-            disabled={!isRecording}
+            disabled={!isRecording || !avatarApiEnabled}
             className="flex-1 bg-red-500 text-white py-2 rounded hover:bg-red-600 disabled:opacity-50"
           >
             Stop Talking
