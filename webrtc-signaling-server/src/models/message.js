@@ -22,6 +22,12 @@ const messageSchema = new mongoose.Schema({
   reactions: [reactionSchema],
   replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
   edited: { type: Boolean, default: false },
+  // Track which users have received and read this message
+  deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
+
+// Create a compound index on conversation and createdAt to accelerate queries and sorting
+messageSchema.index({ conversation: 1, createdAt: 1 });
 
 export default mongoose.model('Message', messageSchema); 

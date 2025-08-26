@@ -12,14 +12,28 @@ import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
 import AvatarSidebar from '../components/AvatarSidebar';
+import MeetingStatsBar from '../components/MeetingStatsBar';
 
 export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
-  const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate, sfuSocket, isSFUConnected } = useContext(SocketContext);
-  const { participantMap, recordingStatus, notifyRecordingStarted, notifyRecordingStopped } = useContext(SocketContext);
+  const { 
+    avatarOutput, 
+    avatarNavigate, 
+    sendAvatarOutput, 
+    sendAvatarNavigate, 
+    sfuSocket, 
+    isSFUConnected,
+    participantMap, 
+    recordingStatus, 
+    notifyRecordingStarted, 
+    notifyRecordingStopped,
+    roomSettings,
+    avatarApiError,
+    toggleAvatarApi
+  } = useContext(SocketContext);
 
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -28,7 +42,6 @@ export default function MeetingPage() {
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [recordingStream, setRecordingStream] = useState(null);
-  const [recordingMethod, setRecordingMethod] = useState('screen'); // 'screen' or 'canvas'
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
@@ -66,11 +79,32 @@ export default function MeetingPage() {
   const [avatarIndex, setAvatarIndex]           = useState(0);
   const [avatarQuery, setAvatarQuery]           = useState('');
   const [avatarTranscript, setAvatarTranscript] = useState('');
+
+  // Function to reset avatar state
+  const resetAvatarState = useCallback(() => {
+    setAvatarClips([]);
+    setAvatarIndex(0);
+    setAvatarQuery('');
+    setAvatarTranscript('');
+  }, []);
   const [isAvatarRecording, setIsAvatarRecording] = useState(false);
 
   // Screen sharing state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
+  
+  // Meeting stats
+  const [meetingStartTime, setMeetingStartTime] = useState(null);
+  
+  // Subtitle positioning
+  const [subtitlePosition, setSubtitlePosition] = useState({ x: 0, y: 0 });
+  const [isDraggingSubtitles, setIsDraggingSubtitles] = useState(false);
+  const subtitleRef = useRef(null);
+  
+  // Debug participant map changes
+  useEffect(() => {
+    console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
+  }, [participantMap]);
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
 
@@ -303,6 +337,10 @@ export default function MeetingPage() {
         .then(() => {
           console.log('✅ [MeetingPage] Join meeting completed successfully');
           setIsJoining(false);
+          // Set meeting start time when successfully joining
+          if (!meetingStartTime) {
+            setMeetingStartTime(new Date());
+          }
         })
         .catch((error) => {
           console.error('❌ [MeetingPage] Join meeting failed:', error);
@@ -503,39 +541,13 @@ export default function MeetingPage() {
 
   const startRecording = async () => {
     try {
-      console.log('Starting meeting recording with method:', recordingMethod);
+      console.log('Starting meeting recording with canvas method');
       
       let captureStream;
       
-      if (recordingMethod === 'canvas') {
-        // Use canvas recording (no screen sharing required)
-        console.log('Using canvas-based recording...');
-        captureStream = await createCanvasRecording();
-      } else {
-        // Use screen capture method
-        console.log('Using screen capture...');
-        try {
-          captureStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 },
-              frameRate: { ideal: 30, max: 60 }
-            },
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              sampleRate: 48000
-            },
-            preferCurrentTab: true
-          });
-          
-          console.log('Screen capture successful');
-        } catch (screenError) {
-          console.log('Screen capture failed, falling back to canvas:', screenError);
-          captureStream = await createCanvasRecording();
-        }
-      }
+      // Always use canvas recording (no screen sharing required)
+      console.log('Using canvas-based recording...');
+      captureStream = await createCanvasRecording();
       
       if (!captureStream) {
         console.error('No capture stream available');
@@ -1657,6 +1669,48 @@ To convert to MP4:
     }
   };
 
+  // Subtitle drag handlers
+  const handleSubtitleMouseDown = (e) => {
+    e.preventDefault();
+    setIsDraggingSubtitles(true);
+    
+    const rect = subtitleRef.current.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    
+    const handleMouseMove = (e) => {
+      e.preventDefault();
+      
+      const newX = e.clientX - offsetX;
+      const newY = e.clientY - offsetY;
+      
+      // Keep subtitles within viewport bounds with some padding
+      const padding = 10;
+      const maxX = window.innerWidth - rect.width - padding;
+      const maxY = window.innerHeight - rect.height - padding;
+      
+      setSubtitlePosition({
+        x: Math.max(padding, Math.min(maxX, newX)),
+        y: Math.max(padding, Math.min(maxY, newY))
+      });
+    };
+    
+    const handleMouseUp = (e) => {
+      e.preventDefault();
+      setIsDraggingSubtitles(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Reset subtitle position to center bottom
+  const resetSubtitlePosition = () => {
+    setSubtitlePosition({ x: 0, y: 0 });
+  };
+
   const handleLeave = () => {
     console.log('[MeetingPage] 👋 User clicked leave meeting button');
     // Stop recording if active before leaving
@@ -1722,15 +1776,14 @@ To convert to MP4:
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
-      {/* Recording notification banner */}
-      {recordingStatus.isRecording && (
-        <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
-          <CircleDot size={16} className="animate-pulse" />
-          <span>
-            This meeting is being recorded by {recordingStatus.recordedBy}
-          </span>
-        </div>
-      )}
+      {/* Meeting Stats Bar */}
+      <MeetingStatsBar 
+        participantCount={Object.keys(participantMap).length || 1} // Ensure minimum of 1 (current user)
+        meetingStartTime={meetingStartTime}
+        roomId={roomId}
+        recordingStatus={recordingStatus}
+      />
+      
       
       {/* Screen Sharing Toggle Ribbon */}
       {screenSharingUserId && (
@@ -1880,12 +1933,41 @@ To convert to MP4:
           </div>
         )}
       </div>
-      {/* Simplified Subtitles */}
+      {/* Draggable Subtitles */}
       {subtitlesEnabled && subtitleHistory.length > 0 && (
-        <div className="absolute bottom-20 left-4 right-4 pointer-events-none z-10">
+        <div 
+          ref={subtitleRef}
+          className={`absolute z-10 ${isDraggingSubtitles ? 'cursor-grabbing' : 'cursor-grab'} select-none`}
+          style={{
+            left: subtitlePosition.x === 0 ? '50%' : `${subtitlePosition.x}px`,
+            top: subtitlePosition.y === 0 ? 'auto' : `${subtitlePosition.y}px`,
+            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
+            transform: subtitlePosition.x === 0 && subtitlePosition.y === 0 ? 'translateX(-50%)' : 'none',
+            pointerEvents: 'auto',
+            userSelect: 'none'
+          }}
+          onMouseDown={handleSubtitleMouseDown}
+        >
           {subtitleHistory.slice(-1).map((subtitle) => (
-            <div key={subtitle.id} className="bg-black/80 text-white rounded px-3 py-2 text-sm max-w-md">
-              <span className="font-medium">{subtitle.speaker}:</span> {subtitle.text}
+            <div key={subtitle.id} className="bg-black/90 text-white rounded-lg px-4 py-2 text-sm shadow-lg border border-gray-600 select-none">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-blue-300">{subtitle.speaker}</span>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetSubtitlePosition();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100 cursor-pointer"
+                  title="Reset position"
+                >
+                  ⌂
+                </button>
+              </div>
+              <div className="text-white">{subtitle.text}</div>
+              <div className="text-xs text-gray-400 mt-1 flex items-center">
+                <span>💬 Drag to move • Click ⌂ to center</span>
+              </div>
             </div>
           ))}
         </div>
@@ -1917,6 +1999,7 @@ To convert to MP4:
           {isRecording ? <StopCircle size={20}/> : <CircleDot size={20}/>} 
         </button>
         
+        {/* Temporarily commented out - will re-enable later
         <button 
           onClick={isScreenSharing ? stopScreenShare : startScreenShare} 
           className={`p-3 rounded-full ${isScreenSharing ? 'bg-green-600' : 'bg-gray-600'} text-white`}
@@ -1924,6 +2007,7 @@ To convert to MP4:
         >
           {isScreenSharing ? <MonitorSpeaker size={20}/> : <Monitor size={20}/>} 
         </button>
+        */}
         
         {recordedChunks.length > 0 && (
           <button 
@@ -1955,39 +2039,29 @@ To convert to MP4:
             <div className="absolute bottom-full mb-2 right-0 bg-gray-800 text-white rounded-lg py-3 px-4 shadow-xl border border-gray-600 z-50 min-w-64">
               <h3 className="text-sm font-semibold mb-3 text-gray-200">Meeting Settings</h3>
               
-              {/* Recording Settings */}
-              <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording Method</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="canvas"
-                      checked={recordingMethod === 'canvas'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">
-                      📹 Direct Capture <span className="text-green-400 text-xs">(Recommended)</span>
-                    </span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="screen"
-                      checked={recordingMethod === 'screen'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">🖥️ Screen Share</span>
-                  </label>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Direct Capture records only meeting participants without screen sharing.
-                  </p>
+              {/* Host Controls */}
+              {roomSettings.isHost && (
+                <div className="mb-4">
+                  <h4 className="text-xs font-medium text-gray-300 mb-2">Host Controls</h4>
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={roomSettings.avatarApiEnabled}
+                        onChange={(e) => toggleAvatarApi(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <span className="text-sm">Enable Avatar API</span>
+                    </label>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {roomSettings.avatarApiEnabled 
+                        ? 'Participants can interact with the avatar' 
+                        : 'Avatar interactions are disabled for all participants'
+                      }
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Features Settings */}
               <div className="mb-4">
@@ -1995,6 +2069,9 @@ To convert to MP4:
                 <div className="space-y-2">
                   <button
                     onClick={() => {
+                      if (showAvatar) {
+                        resetAvatarState();
+                      }
                       setShowAvatar(!showAvatar);
                       setShowSettings(false);
                     }}
@@ -2015,6 +2092,7 @@ To convert to MP4:
                   >
                     💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
                   </button>
+                  {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
                       toggleMultilingual();
@@ -2026,6 +2104,7 @@ To convert to MP4:
                   >
                     🌐 Multilingual Audio {multilingualEnabled ? '(Active)' : ''}
                   </button>
+                  */}
                 </div>
               </div>
 
@@ -2071,12 +2150,14 @@ To convert to MP4:
                           {subtitlesEnabled ? 'ON' : 'OFF'}
                         </span>
                       </div>
+                      {/* Temporarily commented out - will re-enable later
                       <div className="flex items-center justify-between">
                         <span>🌐 Multilingual Audio:</span>
                         <span className={multilingualEnabled ? 'text-purple-400' : 'text-gray-500'}>
                           {multilingualEnabled ? 'ON' : 'OFF'}
                         </span>
                       </div>
+                      */}
                       {multilingualEnabled && (
                         <div className="mt-1 text-xs text-orange-300">
                           ⚠️ Audio translation may have 2-3 second delay
@@ -2087,14 +2168,6 @@ To convert to MP4:
                 </div>
               )}
 
-              {/* Video Settings */}
-              <div className="border-t border-gray-700 pt-3">
-                <h4 className="text-xs font-medium text-gray-300 mb-2">Video</h4>
-                <div className="text-xs text-gray-400">
-                  ✅ Local video mirroring enabled<br/>
-                  📺 Recording quality: 1920x1080 @ 30fps
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -2112,8 +2185,20 @@ To convert to MP4:
           isRecording={isAvatarRecording}
           onPrev={handlePrev}
           onNext={handleNext}
-          onClose={() => setShowAvatar(false)}
+          onClose={() => {
+            setShowAvatar(false);
+            resetAvatarState();
+          }}
+          avatarApiEnabled={roomSettings.avatarApiEnabled}
         />
+      )}
+      
+      {/* Avatar API Error Message */}
+      {avatarApiError && (
+        <div className="absolute top-20 left-4 bg-red-600 text-white p-3 rounded-lg shadow-lg z-30">
+          <div className="text-sm font-medium">Avatar API Disabled</div>
+          <div className="text-xs">{avatarApiError}</div>
+        </div>
       )}
     </div>
   );
