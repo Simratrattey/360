@@ -200,8 +200,14 @@ export default function RegisterPage() {
               disabled={isLoading}
               className="w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white py-4 px-6 rounded-xl font-semibold hover:from-primary-700 hover:to-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center space-x-3 group disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? <Loader className="animate-spin h-5 w-5" /> : 'Sign up'}
-              <span>{isLoading ? 'Creating Account...' : 'Create Account'}</span>
+              {isLoading ? (
+                <>
+                  <Loader className="animate-spin h-5 w-5" />
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <span>Create Account</span>
+              )}
             </button>
           </form>
           
