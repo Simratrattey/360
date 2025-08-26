@@ -1,11 +1,23 @@
 import API from './client';
 
-export const getMessages = (conversationId) => API.get(`/messages/conversation/${conversationId}`);
+/**
+ * Fetch messages for a conversation.
+ *
+ * @param {string} conversationId The ID of the conversation to fetch.
+ * @param {Object} [params] Optional query parameters for pagination (e.g. { limit, skip }).
+ * @returns {Promise} The API response promise.
+ */
+export const getMessages = (conversationId, params = {}) => {
+  // When params is provided, pass it to axios so that query parameters are included in the request.
+  // If no params are given, axios will simply ignore the empty params object.
+  return API.get(`/messages/conversation/${conversationId}`, { params });
+};
 export const sendMessage = (conversationId, data) => API.post(`/messages/conversation/${conversationId}`, data);
 export const editMessage = (messageId, data) => API.put(`/messages/${messageId}`, data);
 export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`);
 export const reactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/react`, { emoji });
 export const unreactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/unreact`, { emoji });
+export const searchMessages = (conversationId, params = {}) => API.get(`/messages/conversation/${conversationId}/search`, { params });
 export const uploadMessageFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -19,6 +31,40 @@ export const uploadMessageFile = (file) => {
 };
 export const getFileUrl = (filename) => {
   return `${import.meta.env.VITE_API_URL}/uploads/messages/${filename}`;
+};
+
+// Helper function to construct proper file URL from file object
+export const constructFileUrl = (fileObj) => {
+  if (!fileObj) {
+    console.warn('[File URL] No file object provided');
+    return null;
+  }
+  
+  if (!fileObj.url) {
+    console.warn('[File URL] No URL in file object:', fileObj);
+    return null;
+  }
+  
+  let url = fileObj.url;
+  const baseUrl = import.meta.env.VITE_API_URL;
+  
+  if (!baseUrl) {
+    console.error('[File URL] VITE_API_URL not defined! Make sure .env file exists with VITE_API_URL=http://localhost:8181/api');
+    return null;
+  }
+  
+  // If it's already a complete URL, return as-is
+  if (url.startsWith('http') || url.startsWith('blob:')) {
+    return url;
+  }
+  
+  // If it starts with /, it's an absolute path
+  if (url.startsWith('/')) {
+    return `${baseUrl}${url}`;
+  }
+  
+  // If it's just a filename, construct full URL
+  return `${baseUrl}/uploads/messages/${url}`;
 };
 
 // File type utilities
@@ -301,22 +347,7 @@ export const getPreviewUrl = (file) => {
     return null;
   }
 
-  // For images, videos, and audio, return the direct URL
-  if (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/')) {
-    return file.url;
-  }
-
-  // For PDFs, return the URL for iframe embedding
-  if (file.type === 'application/pdf') {
-    return file.url;
-  }
-
-  // For text files, we might want to fetch and display content
-  if (file.type.startsWith('text/') || file.type === 'application/json' || file.type === 'application/xml') {
-    return file.url;
-  }
-
-  return null;
+  return constructFileUrl(file);
 };
 
 // File validation
