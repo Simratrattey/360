@@ -12,14 +12,27 @@ import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import SubtitleService from '../api/subtitleService';
 import AvatarSidebar from '../components/AvatarSidebar';
+import HostControls from '../components/HostControls';
 
 export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
-  const { avatarOutput, avatarNavigate, sendAvatarOutput, sendAvatarNavigate, sfuSocket, isSFUConnected } = useContext(SocketContext);
-  const { participantMap, recordingStatus, notifyRecordingStarted, notifyRecordingStopped } = useContext(SocketContext);
+  const { 
+    avatarOutput, 
+    avatarNavigate, 
+    sendAvatarOutput, 
+    sendAvatarNavigate, 
+    sfuSocket, 
+    isSFUConnected,
+    participantMap, 
+    recordingStatus, 
+    notifyRecordingStarted, 
+    notifyRecordingStopped,
+    roomSettings,
+    avatarApiError
+  } = useContext(SocketContext);
 
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
@@ -2113,7 +2126,19 @@ To convert to MP4:
           onPrev={handlePrev}
           onNext={handleNext}
           onClose={() => setShowAvatar(false)}
+          avatarApiEnabled={roomSettings.avatarApiEnabled}
         />
+      )}
+      
+      {/* Host Controls */}
+      <HostControls />
+      
+      {/* Avatar API Error Message */}
+      {avatarApiError && (
+        <div className="absolute top-20 left-4 bg-red-600 text-white p-3 rounded-lg shadow-lg z-30">
+          <div className="text-sm font-medium">Avatar API Disabled</div>
+          <div className="text-xs">{avatarApiError}</div>
+        </div>
       )}
     </div>
   );

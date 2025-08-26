@@ -30,6 +30,8 @@ export function SocketProvider({ children }) {
   const [avatarNavigate, setAvatarNavigate] = useState(null);
   const [participantMap, setParticipantMap] = useState({});
   const [recordingStatus, setRecordingStatus] = useState({ isRecording: false, recordedBy: null });
+  const [roomSettings, setRoomSettings] = useState({ host: null, avatarApiEnabled: true, isHost: false });
+  const [avatarApiError, setAvatarApiError] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -106,6 +108,29 @@ export function SocketProvider({ children }) {
       sfuSocket.on('recordingStopped', ({ recordedBy }) => {
         console.log('[SocketContext] Recording stopped by:', recordedBy);
         setRecordingStatus({ isRecording: false, recordedBy: null });
+      });
+
+      // Room settings events
+      sfuSocket.on('roomSettings', (settings) => {
+        console.log('[SocketContext] Room settings received:', settings);
+        setRoomSettings(settings);
+      });
+
+      sfuSocket.on('roomSettingsUpdated', (settings) => {
+        console.log('[SocketContext] Room settings updated:', settings);
+        setRoomSettings(prev => ({ ...prev, ...settings }));
+      });
+
+      sfuSocket.on('avatarApiDisabled', ({ message }) => {
+        console.log('[SocketContext] Avatar API disabled:', message);
+        setAvatarApiError(message);
+        // Clear error after 5 seconds
+        setTimeout(() => setAvatarApiError(null), 5000);
+      });
+
+      sfuSocket.on('unauthorizedAction', ({ message }) => {
+        console.log('[SocketContext] Unauthorized action:', message);
+        setError(message);
       });
 
       setSfuSocket(sfuSocket);
@@ -195,6 +220,12 @@ export function SocketProvider({ children }) {
     }
   };
 
+  const toggleAvatarApi = (enabled) => {
+    if (sfuSocket && roomSettings.isHost) {
+      sfuSocket.emit('toggleAvatarApi', { enabled });
+    }
+  };
+
   return (
     <SocketContext.Provider value={{
       sfuSocket,
@@ -216,6 +247,9 @@ export function SocketProvider({ children }) {
       recordingStatus,
       notifyRecordingStarted,
       notifyRecordingStopped,
+      roomSettings,
+      avatarApiError,
+      toggleAvatarApi,
     }}>
       {children}
     </SocketContext.Provider>
