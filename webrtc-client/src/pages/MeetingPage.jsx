@@ -96,6 +96,11 @@ export default function MeetingPage() {
   
   // Meeting stats
   const [meetingStartTime, setMeetingStartTime] = useState(null);
+  
+  // Debug participant map changes
+  useEffect(() => {
+    console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
+  }, [participantMap]);
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
 
@@ -1753,7 +1758,7 @@ To convert to MP4:
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Meeting Stats Bar */}
       <MeetingStatsBar 
-        participantCount={Object.keys(participantMap).length + 1} // +1 for current user
+        participantCount={Object.keys(participantMap).length || 1} // Ensure minimum of 1 (current user)
         meetingStartTime={meetingStartTime}
         roomId={roomId}
       />
