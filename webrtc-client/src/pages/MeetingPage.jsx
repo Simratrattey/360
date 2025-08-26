@@ -2022,6 +2022,7 @@ To convert to MP4:
                   >
                     💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
                   </button>
+                  {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
                       toggleMultilingual();
@@ -2033,6 +2034,7 @@ To convert to MP4:
                   >
                     🌐 Multilingual Audio {multilingualEnabled ? '(Active)' : ''}
                   </button>
+                  */}
                 </div>
               </div>
 
@@ -2078,12 +2080,14 @@ To convert to MP4:
                           {subtitlesEnabled ? 'ON' : 'OFF'}
                         </span>
                       </div>
+                      {/* Temporarily commented out - will re-enable later
                       <div className="flex items-center justify-between">
                         <span>🌐 Multilingual Audio:</span>
                         <span className={multilingualEnabled ? 'text-purple-400' : 'text-gray-500'}>
                           {multilingualEnabled ? 'ON' : 'OFF'}
                         </span>
                       </div>
+                      */}
                       {multilingualEnabled && (
                         <div className="mt-1 text-xs text-orange-300">
                           ⚠️ Audio translation may have 2-3 second delay
