@@ -1736,12 +1736,14 @@ To convert to MP4:
         roomId={roomId}
       />
       
-      {/* Recording notification banner */}
+      {/* Recording indicator dot */}
       {recordingStatus.isRecording && (
-        <div className="bg-red-600 text-white px-4 py-2 text-center font-medium flex items-center justify-center space-x-2">
-          <CircleDot size={16} className="animate-pulse" />
-          <span>
-            This meeting is being recorded by {recordingStatus.recordedBy}
+        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">
+          <div className="bg-red-600 rounded-full p-2 shadow-lg animate-pulse">
+            <CircleDot size={12} className="text-white" />
+          </div>
+          <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">
+            REC
           </span>
         </div>
       )}
