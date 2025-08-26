@@ -3,6 +3,11 @@ import { Clock, Users } from 'lucide-react';
 
 export default function MeetingStatsBar({ participantCount, meetingStartTime, roomId }) {
   const [duration, setDuration] = useState('0:00');
+  
+  // Debug logging for participant count
+  useEffect(() => {
+    console.log('[MeetingStatsBar] Participant count updated:', participantCount);
+  }, [participantCount]);
 
   useEffect(() => {
     if (!meetingStartTime) return;
