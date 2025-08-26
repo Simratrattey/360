@@ -2134,14 +2134,6 @@ To convert to MP4:
                 </div>
               )}
 
-              {/* Video Settings */}
-              <div className="border-t border-gray-700 pt-3">
-                <h4 className="text-xs font-medium text-gray-300 mb-2">Video</h4>
-                <div className="text-xs text-gray-400">
-                  ✅ Local video mirroring enabled<br/>
-                  📺 Recording quality: 1920x1080 @ 30fps
-                </div>
-              </div>
             </div>
           )}
         </div>

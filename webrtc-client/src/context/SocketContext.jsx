@@ -118,7 +118,12 @@ export function SocketProvider({ children }) {
 
       sfuSocket.on('roomSettingsUpdated', (settings) => {
         console.log('[SocketContext] Room settings updated:', settings);
-        setRoomSettings(prev => ({ ...prev, ...settings }));
+        console.log('[SocketContext] Previous room settings:', roomSettings);
+        setRoomSettings(prev => {
+          const newSettings = { ...prev, ...settings };
+          console.log('[SocketContext] New room settings:', newSettings);
+          return newSettings;
+        });
       });
 
       sfuSocket.on('avatarApiDisabled', ({ message }) => {
@@ -222,7 +227,13 @@ export function SocketProvider({ children }) {
 
   const toggleAvatarApi = (enabled) => {
     if (sfuSocket && roomSettings.isHost) {
+      console.log('[SocketContext] Toggling avatar API:', enabled);
       sfuSocket.emit('toggleAvatarApi', { enabled });
+    } else {
+      console.log('[SocketContext] Cannot toggle avatar API - not host or no socket:', { 
+        hasSocket: !!sfuSocket, 
+        isHost: roomSettings.isHost 
+      });
     }
   };
 
