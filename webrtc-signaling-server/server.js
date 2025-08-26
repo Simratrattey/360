@@ -620,7 +620,9 @@ io.on('connection', async socket => {
         offers: [], 
         participants: [], 
         host: socket.userId, // First person to join becomes host
-        avatarApiEnabled: true // Default to enabled
+        avatarApiEnabled: true, // Default to enabled
+        isRecording: false, // Track recording status
+        recordedBy: null // Who started the recording
       };
     }
     // Remove any legacy username-only entries
@@ -640,6 +642,12 @@ io.on('connection', async socket => {
       avatarApiEnabled: rooms[roomId].avatarApiEnabled,
       isHost: socket.userId === rooms[roomId].host
     });
+    
+    // Send recording status to the joining user if recording is active
+    if (rooms[roomId].isRecording) {
+      console.log(`[Signaling] 🔴 Sending recording status to new joiner ${socket.id} - recorded by ${rooms[roomId].recordedBy}`);
+      socket.emit('recordingStarted', { recordedBy: rooms[roomId].recordedBy });
+    }
     
     // 🔥 NEW: Broadcast existing producers in the room to the newly joined participant
     // This ensures they receive newProducer events for existing participants
@@ -843,16 +851,22 @@ io.on('connection', async socket => {
   // Recording notifications
   socket.on('recordingStarted', ({ recordedBy }) => {
     const rid = socket.currentRoom;
-    if (rid) {
+    if (rid && rooms[rid]) {
       console.log(`[Signaling] Recording started by ${recordedBy} in room ${rid}`);
+      // Update room recording status
+      rooms[rid].isRecording = true;
+      rooms[rid].recordedBy = recordedBy;
       io.to(rid).emit('recordingStarted', { recordedBy });
     }
   });
 
   socket.on('recordingStopped', ({ recordedBy }) => {
     const rid = socket.currentRoom;
-    if (rid) {
+    if (rid && rooms[rid]) {
       console.log(`[Signaling] Recording stopped by ${recordedBy} in room ${rid}`);
+      // Update room recording status
+      rooms[rid].isRecording = false;
+      rooms[rid].recordedBy = null;
       io.to(rid).emit('recordingStopped', { recordedBy });
     }
   });

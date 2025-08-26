@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users } from 'lucide-react';
+import { Clock, Users, CircleDot } from 'lucide-react';
 
-export default function MeetingStatsBar({ participantCount, meetingStartTime, roomId }) {
+export default function MeetingStatsBar({ participantCount, meetingStartTime, roomId, recordingStatus }) {
   const [duration, setDuration] = useState('0:00');
   
   // Debug logging for participant count
@@ -53,10 +53,22 @@ export default function MeetingStatsBar({ participantCount, meetingStartTime, ro
         <span className="text-gray-300">Room:</span> <span className="text-white font-mono">{roomId || 'Unknown'}</span>
       </div>
       
-      {/* Participant Count */}
-      <div className="flex items-center space-x-2 text-sm">
-        <Users size={16} className="text-blue-400" />
-        <span>{participantCount || 0}</span>
+      {/* Participant Count and Recording Status */}
+      <div className="flex items-center space-x-4 text-sm">
+        <div className="flex items-center space-x-2">
+          <Users size={16} className="text-blue-400" />
+          <span>{participantCount || 0}</span>
+        </div>
+        
+        {/* Recording Indicator */}
+        {recordingStatus?.isRecording && (
+          <div className="flex items-center space-x-2">
+            <div className="bg-red-600 rounded-full p-1 animate-pulse">
+              <CircleDot size={10} className="text-white" />
+            </div>
+            <span className="text-xs text-red-400 font-medium">REC</span>
+          </div>
+        )}
       </div>
     </div>
   );
