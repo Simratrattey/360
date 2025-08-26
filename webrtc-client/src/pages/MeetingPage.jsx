@@ -96,6 +96,11 @@ export default function MeetingPage() {
   // Meeting stats
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   
+  // Subtitle positioning
+  const [subtitlePosition, setSubtitlePosition] = useState({ x: 0, y: 0 });
+  const [isDraggingSubtitles, setIsDraggingSubtitles] = useState(false);
+  const subtitleRef = useRef(null);
+  
   // Debug participant map changes
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
@@ -1664,6 +1669,44 @@ To convert to MP4:
     }
   };
 
+  // Subtitle drag handlers
+  const handleSubtitleMouseDown = (e) => {
+    setIsDraggingSubtitles(true);
+    const rect = subtitleRef.current.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    
+    const handleMouseMove = (e) => {
+      if (!isDraggingSubtitles) return;
+      
+      const newX = e.clientX - offsetX;
+      const newY = e.clientY - offsetY;
+      
+      // Keep subtitles within viewport bounds
+      const maxX = window.innerWidth - rect.width;
+      const maxY = window.innerHeight - rect.height;
+      
+      setSubtitlePosition({
+        x: Math.max(0, Math.min(maxX, newX)),
+        y: Math.max(0, Math.min(maxY, newY))
+      });
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingSubtitles(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Reset subtitle position to center bottom
+  const resetSubtitlePosition = () => {
+    setSubtitlePosition({ x: 0, y: 0 });
+  };
+
   const handleLeave = () => {
     console.log('[MeetingPage] 👋 User clicked leave meeting button');
     // Stop recording if active before leaving
@@ -1886,12 +1929,36 @@ To convert to MP4:
           </div>
         )}
       </div>
-      {/* Simplified Subtitles */}
+      {/* Draggable Subtitles */}
       {subtitlesEnabled && subtitleHistory.length > 0 && (
-        <div className="absolute bottom-20 left-4 right-4 pointer-events-none z-10">
+        <div 
+          ref={subtitleRef}
+          className={`absolute z-10 ${isDraggingSubtitles ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{
+            left: subtitlePosition.x === 0 ? '50%' : `${subtitlePosition.x}px`,
+            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
+            top: subtitlePosition.y === 0 ? 'auto' : `${subtitlePosition.y}px`,
+            transform: subtitlePosition.x === 0 ? 'translateX(-50%)' : 'none',
+            pointerEvents: 'auto'
+          }}
+          onMouseDown={handleSubtitleMouseDown}
+        >
           {subtitleHistory.slice(-1).map((subtitle) => (
-            <div key={subtitle.id} className="bg-black/80 text-white rounded px-3 py-2 text-sm max-w-md">
-              <span className="font-medium">{subtitle.speaker}:</span> {subtitle.text}
+            <div key={subtitle.id} className="bg-black/90 text-white rounded-lg px-4 py-2 text-sm shadow-lg border border-gray-600 select-none">
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-blue-300">{subtitle.speaker}</span>
+                <button 
+                  onClick={resetSubtitlePosition}
+                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100"
+                  title="Reset position"
+                >
+                  ⌂
+                </button>
+              </div>
+              <div className="text-white">{subtitle.text}</div>
+              <div className="text-xs text-gray-400 mt-1 flex items-center">
+                <span>💬 Drag to move • Click ⌂ to center</span>
+              </div>
             </div>
           ))}
         </div>
