@@ -1734,19 +1734,9 @@ To convert to MP4:
         participantCount={Object.keys(participantMap).length || 1} // Ensure minimum of 1 (current user)
         meetingStartTime={meetingStartTime}
         roomId={roomId}
+        recordingStatus={recordingStatus}
       />
       
-      {/* Recording indicator dot */}
-      {recordingStatus.isRecording && (
-        <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">
-          <div className="bg-red-600 rounded-full p-2 shadow-lg animate-pulse">
-            <CircleDot size={12} className="text-white" />
-          </div>
-          <span className="text-xs text-white bg-black/50 px-2 py-1 rounded">
-            REC
-          </span>
-        </div>
-      )}
       
       {/* Screen Sharing Toggle Ribbon */}
       {screenSharingUserId && (
