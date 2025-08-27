@@ -2068,36 +2068,15 @@ To convert to MP4:
 
               {/* Recording Settings */}
               <div className="mb-4">
-                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording Method</h4>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="canvas"
-                      checked={recordingMethod === 'canvas'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">
-                      📹 Direct Capture <span className="text-green-400 text-xs">(Recommended)</span>
-                    </span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="recordingMethod"
-                      value="screen"
-                      checked={recordingMethod === 'screen'}
-                      onChange={(e) => setRecordingMethod(e.target.value)}
-                      className="text-blue-600"
-                    />
-                    <span className="text-sm">🖥️ Screen Share</span>
-                  </label>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Direct Capture records only meeting participants without screen sharing.
-                  </p>
-                </div>
+                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording</h4>
+                <select
+                  value={recordingMethod}
+                  onChange={(e) => setRecordingMethod(e.target.value)}
+                  className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                >
+                  <option value="canvas">📹 Direct Capture</option>
+                  <option value="screen">🖥️ Screen Share</option>
+                </select>
               </div>
               
               {/* Host Controls */}
