@@ -953,6 +953,13 @@ io.on('connection', async socket => {
         tempId: tempId // Include tempId for client-side deduplication
       };
       
+      console.log(`📢 Broadcasting message to conversation ${conversationId}:`, {
+        messageId: messageForClient._id,
+        tempId: messageForClient.tempId,
+        text: messageForClient.text?.substring(0, 50) + '...',
+        recipientCount: recipientIds.length
+      });
+      
       // Send to all online members except sender
       recipientIds.forEach(recipientId => {
         const recipient = onlineUsers.get(recipientId);
@@ -1010,6 +1017,7 @@ io.on('connection', async socket => {
       }
       
       // Send success acknowledgment to sender
+      console.log(`📤 Sending chat:sent acknowledgment - messageId: ${populatedMessage._id.toString()}, tempId: ${tempId}`);
       socket.emit('chat:sent', {
         success: true,
         messageId: populatedMessage._id.toString(),

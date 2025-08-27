@@ -647,32 +647,48 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
+      console.log(`📨 Received chat:new message:`, {
+        messageId: msg._id,
+        tempId: msg.tempId,
+        isMyMessage,
+        isCurrentConversation,
+        text: msg.text?.substring(0, 30) + '...',
+        conversationId
+      });
+      
       
       // 1. Update message cache
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
-        // Skip if message already exists (by _id or tempId)
-        const isDuplicate = convMessages.some(m => 
-          m._id === msg._id || 
-          (msg.tempId && m.tempId === msg.tempId) ||
-          (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
-        );
+        // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
+        const isDuplicate = convMessages.some(m => {
+          // Skip if we already have this exact server message (by _id)
+          if (m._id && msg._id && m._id === msg._id) {
+            return true;
+          }
+          return false;
+        });
         if (isDuplicate) {
+          console.log('Skipping duplicate message by _id:', msg._id);
           return prev;
         }
         
         // For my own messages, remove optimistic duplicates (messages with tempId that match the real message)
         let cleanMessages = convMessages;
-        if (isMyMessage) {
-          // Remove optimistic messages (pending/sending) and tempId matches
+        if (isMyMessage && msg.tempId) {
+          // Remove optimistic messages that match this server message
           cleanMessages = convMessages.filter(m => {
-            // Keep the message if it's not pending/sending and doesn't match the incoming message
-            if (!m.pending && !m.sending) return true;
             // Remove if tempIds match (this optimistic message is being replaced)
-            if (msg.tempId && m.tempId === msg.tempId) return false;
-            // Remove if it's a pending/sending message from this user
-            if (m.senderId === user.id && (m.pending || m.sending)) return false;
+            if (m.tempId === msg.tempId) {
+              console.log('Removing optimistic message:', m.tempId, 'for real message:', msg._id);
+              return false;
+            }
+            // Remove if it's a pending/sending message from this user with same tempId
+            if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
+              console.log('Removing pending message:', m.tempId, 'for real message:', msg._id);
+              return false;
+            }
             return true;
           });
         }
@@ -693,26 +709,33 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Skip if message already exists (by _id or tempId)
-          const isDuplicate = prev.some(m => 
-            m._id === msg._id || 
-            (msg.tempId && m.tempId === msg.tempId) ||
-            (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
-          );
+          // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
+          const isDuplicate = prev.some(m => {
+            // Skip if we already have this exact server message (by _id)
+            if (m._id && msg._id && m._id === msg._id) {
+              return true;
+            }
+            return false;
+          });
           if (isDuplicate) {
+            console.log('Skipping duplicate message in current view by _id:', msg._id);
             return prev;
           }
           
           // For my messages, remove optimistic versions
           let filtered = prev;
-          if (isMyMessage) {
+          if (isMyMessage && msg.tempId) {
             filtered = prev.filter(m => {
-              // Keep the message if it's not pending/sending and doesn't match the incoming message
-              if (!m.pending && !m.sending) return true;
               // Remove if tempIds match (this optimistic message is being replaced)
-              if (msg.tempId && m.tempId === msg.tempId) return false;
-              // Remove if it's a pending/sending message from this user
-              if (m.senderId === user.id && (m.pending || m.sending)) return false;
+              if (m.tempId === msg.tempId) {
+                console.log('Removing optimistic message from current view:', m.tempId, 'for real message:', msg._id);
+                return false;
+              }
+              // Remove if it's a pending/sending message from this user with same tempId
+              if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
+                console.log('Removing pending message from current view:', m.tempId, 'for real message:', msg._id);
+                return false;
+              }
               return true;
             });
           }
