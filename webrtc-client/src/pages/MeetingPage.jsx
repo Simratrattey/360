@@ -1780,7 +1780,7 @@ To convert to MP4:
       const dataArray = new Uint8Array(bufferLength);
       
       let silenceCount = 0;
-      const SPEAKING_THRESHOLD = 25; // Lowered threshold for better sensitivity
+      const SPEAKING_THRESHOLD = 35; // Slightly increased to reduce false positives
       const SILENCE_FRAMES = 30; // Increased from 5 to 30 frames (~1 second of silence)
 
       const checkAudio = () => {
@@ -1914,13 +1914,7 @@ To convert to MP4:
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
   }
 
-  console.log('[MeetingPage] 🎥 Video tiles:', videoTiles.map(tile => ({
-    id: tile.id,
-    isLocal: tile.isLocal,
-    label: tile.label,
-    hasVideo: tile.stream?.getVideoTracks().length > 0,
-    hasAudio: tile.stream?.getAudioTracks().length > 0
-  })));
+  // Removed excessive console logging for performance
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
