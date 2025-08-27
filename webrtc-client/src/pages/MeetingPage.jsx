@@ -1780,18 +1780,21 @@ To convert to MP4:
       const dataArray = new Uint8Array(bufferLength);
       
       let silenceCount = 0;
-      const SPEAKING_THRESHOLD = 35; // Slightly increased to reduce false positives
+      const SPEAKING_THRESHOLD = 50; // Increased to reduce sensitivity to ambient noise
       const SILENCE_FRAMES = 30; // Increased from 5 to 30 frames (~1 second of silence)
 
       const checkAudio = () => {
         analyzer.getByteFrequencyData(dataArray);
         
-        // Calculate both average and peak volume for better detection
+        // Calculate average volume focusing on speech frequencies
         const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
-        const peak = Math.max(...dataArray);
         
-        // Use either average or peak volume - whichever is higher for better sensitivity
-        const volume = Math.max(average, peak * 0.5);
+        // Focus on human voice frequency range (roughly indices 10-100 for speech)
+        const speechRange = dataArray.slice(10, Math.min(100, bufferLength));
+        const speechAverage = speechRange.reduce((sum, value) => sum + value, 0) / speechRange.length;
+        
+        // Use speech-focused average with higher weight on actual speech frequencies
+        const volume = (speechAverage * 0.7) + (average * 0.3);
         
         if (volume > SPEAKING_THRESHOLD) {
           // Speaking detected - reset silence counter and add to speaking set
