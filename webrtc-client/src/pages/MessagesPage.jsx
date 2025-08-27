@@ -734,8 +734,16 @@ export default function MessagesPage() {
             });
           }
           
-          console.log('Adding real message to current view:', msg._id, msg.tempId);
-          return [...filtered, { ...msg, conversationId }];
+          const newMessage = { 
+            ...msg, 
+            conversationId,
+            // Ensure these fields are properly set for rendering
+            pending: false,
+            sending: false
+          };
+          const newMessages = [...filtered, newMessage];
+          console.log('Adding real message to current view:', msg._id, msg.tempId, 'Total messages:', newMessages.length);
+          return newMessages;
         });
       }
       
