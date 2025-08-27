@@ -232,10 +232,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -271,10 +268,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -349,46 +343,8 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0) ? (
+        {(Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
-            {/* General notifications (conversation creation/deletion, etc.) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).map((notif, idx) => (
-              <motion.div
-                key={`general-${notif._id}-${idx}`}
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.07, duration: 0.5 }}
-                className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => {
-                  // Mark notification as read
-                  if (notif._id) {
-                    markAsRead(notif._id);
-                  }
-                  // Navigate to messages page for conversation notifications
-                  if (notif.data?.conversationId) {
-                    navigate(`/messages?conversation=${notif.data.conversationId}`);
-                  }
-                }}
-              >
-                <div className="relative">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                    {notif.type === 'conversation_created' ? '🎉' : 
-                     notif.type === 'community_created' ? '🌍' : 
-                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-primary-800">{notif.title}</h3>
-                  </div>
-                  <p className="text-secondary-600 text-sm">{notif.message}</p>
-                  <p className="text-secondary-500 text-xs">
-                    {new Date(notif.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
             
             {/* Message notifications */}
             {(Array.isArray(messageNotifications) ? messageNotifications : []).map((notif, idx) => (
@@ -396,7 +352,7 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: ((Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
+                transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => {
                   // Clear this message notification
