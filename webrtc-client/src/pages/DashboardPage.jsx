@@ -41,11 +41,11 @@ export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
-  const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
+  // Removed localGeneralNotifications to avoid duplicates - using only global notifications
   const [scheduling, setScheduling] = useState(false);
 
   useEffect(() => {
@@ -163,11 +163,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -199,11 +195,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -357,10 +349,10 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0 || (Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []).length > 0) ? (
+        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             {/* General notifications (conversation creation/deletion, etc.) */}
-            {[...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).map((notif, idx) => (
+            {(Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
@@ -368,6 +360,10 @@ export default function DashboardPage() {
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => {
+                  // Mark notification as read
+                  if (notif._id) {
+                    markAsRead(notif._id);
+                  }
                   // Navigate to messages page for conversation notifications
                   if (notif.data?.conversationId) {
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
@@ -400,9 +396,14 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: ([...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
+                transition={{ delay: ((Array.isArray(generalNotifications) ? generalNotifications : []).filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => navigate(`/messages?conversation=${notif.id}`)}
+                onClick={() => {
+                  // Clear this message notification
+                  setMessageNotifications(prev => prev.filter(n => n.id !== notif.id));
+                  // Navigate to messages
+                  navigate(`/messages?conversation=${notif.id}`);
+                }}
               >
                 <div className="relative">
                   {notif.avatar ? (
