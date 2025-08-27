@@ -41,6 +41,7 @@ export default function MeetingPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [mediaRecorder, setMediaRecorder]   = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
+  const [recordingMethod, setRecordingMethod] = useState('screen'); // 'screen' or 'canvas'
   const [recordingStream, setRecordingStream] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
@@ -100,6 +101,10 @@ export default function MeetingPage() {
   const [subtitlePosition, setSubtitlePosition] = useState({ x: 0, y: 0 });
   const [isDraggingSubtitles, setIsDraggingSubtitles] = useState(false);
   const subtitleRef = useRef(null);
+  
+  // Speaking indicators
+  const [speakingParticipants, setSpeakingParticipants] = useState(new Set());
+  const audioAnalyzers = useRef(new Map()); // Store audio analyzers for each participant
   
   // Debug participant map changes
   useEffect(() => {
@@ -367,10 +372,15 @@ export default function MeetingPage() {
     // if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, []);
 
-  // Ensure local video always gets the stream
+  // Ensure local video always gets the stream and start audio analysis
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      
+      // Start audio analyzer for local stream
+      if (localStream.getAudioTracks().length > 0 && !audioAnalyzers.current.has('local')) {
+        startAudioAnalyzer(localStream, 'local', true);
+      }
     }
   }, [localStream]);
 
@@ -383,6 +393,10 @@ export default function MeetingPage() {
     })));
     
     remoteStreams.forEach((stream, id) => {
+      // Start audio analyzer for speaking detection
+      if (stream.getAudioTracks().length > 0 && !audioAnalyzers.current.has(id)) {
+        startAudioAnalyzer(stream, id, false);
+      }
       const videoElement = document.getElementById(`remote-video-${id}`);
       if (videoElement && stream) {
         // Create a new stream for display
@@ -420,6 +434,15 @@ export default function MeetingPage() {
         const participantName = participantMap[id] || 'Guest';
         console.log(`Starting audio processing for ${participantName} (${id})`);
         startRemoteStreamRecognition(stream, id, participantName);
+      }
+    });
+    
+    // Cleanup audio analyzers for streams that are no longer present
+    const currentStreamIds = new Set(Array.from(remoteStreams.keys()));
+    audioAnalyzers.current.forEach((analyzer, id) => {
+      if (id !== 'local' && !currentStreamIds.has(id)) {
+        console.log(`[Audio Analyzer] Cleaning up removed participant ${id}`);
+        stopAudioAnalyzer(id);
       }
     });
   }, [remoteStreams, subtitlesEnabled, multilingualEnabled, participantMap]);
@@ -545,9 +568,35 @@ export default function MeetingPage() {
       
       let captureStream;
       
-      // Always use canvas recording (no screen sharing required)
-      console.log('Using canvas-based recording...');
-      captureStream = await createCanvasRecording();
+      if (recordingMethod === 'canvas') {
+        // Use canvas recording (no screen sharing required)
+        console.log('Using canvas-based recording...');
+        captureStream = await createCanvasRecording();
+      } else {
+        // Use screen capture method
+        console.log('Using screen capture...');
+        try {
+          captureStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              width: { ideal: 1920, max: 1920 },
+              height: { ideal: 1080, max: 1080 },
+              frameRate: { ideal: 30, max: 60 }
+            },
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              sampleRate: 48000
+            },
+            preferCurrentTab: true
+          });
+          
+          console.log('Screen capture successful');
+        } catch (screenError) {
+          console.log('Screen capture failed, falling back to canvas:', screenError);
+          captureStream = await createCanvasRecording();
+        }
+      }
       
       if (!captureStream) {
         console.error('No capture stream available');
@@ -1711,6 +1760,101 @@ To convert to MP4:
     setSubtitlePosition({ x: 0, y: 0 });
   };
 
+  // Audio activity detection for speaking indicators
+  const startAudioAnalyzer = (stream, participantId, isLocal = false) => {
+    try {
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) return;
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyzer = audioContext.createAnalyser();
+      
+      analyzer.fftSize = 1024; // Increased for better frequency resolution
+      analyzer.smoothingTimeConstant = 0.3; // Reduced for more responsive detection
+      analyzer.minDecibels = -90;
+      analyzer.maxDecibels = -10;
+      source.connect(analyzer);
+
+      const bufferLength = analyzer.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      let silenceCount = 0;
+      const SPEAKING_THRESHOLD = 45; // Increased to reduce sensitivity to ambient noise
+      const SILENCE_FRAMES = 30; // Increased from 5 to 30 frames (~1 second of silence)
+
+      const checkAudio = () => {
+        analyzer.getByteFrequencyData(dataArray);
+        
+        // Calculate both average and peak volume for better detection
+        const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
+        const peak = Math.max(...dataArray);
+        
+        // Use either average or peak volume - whichever is higher for better sensitivity
+        const volume = Math.max(average, peak * 0.5);
+        
+        if (volume > SPEAKING_THRESHOLD) {
+          // Speaking detected - reset silence counter and add to speaking set
+          silenceCount = 0;
+          setSpeakingParticipants(prev => {
+            const newSet = new Set(prev);
+            newSet.add(participantId);
+            return newSet;
+          });
+        } else {
+          // Silence detected - increment counter
+          silenceCount++;
+          
+          // Only remove speaking indicator after sustained silence
+          if (silenceCount >= SILENCE_FRAMES) {
+            setSpeakingParticipants(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(participantId);
+              return newSet;
+            });
+            silenceCount = 0; // Reset counter after removal
+          }
+        }
+
+        // Continue monitoring if the audio track is still active
+        if (audioTracks[0] && audioTracks[0].readyState === 'live') {
+          requestAnimationFrame(checkAudio);
+        }
+      };
+
+      // Start monitoring
+      checkAudio();
+
+      // Store analyzer for cleanup
+      audioAnalyzers.current.set(participantId, {
+        audioContext,
+        analyzer,
+        cleanup: () => {
+          audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+          setSpeakingParticipants(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(participantId);
+            return newSet;
+          });
+        }
+      });
+
+      console.log(`[Audio Analyzer] Started for ${isLocal ? 'local' : 'remote'} participant ${participantId}`);
+
+    } catch (error) {
+      console.error('Failed to start audio analyzer:', error);
+    }
+  };
+
+  // Clean up audio analyzer
+  const stopAudioAnalyzer = (participantId) => {
+    const analyzer = audioAnalyzers.current.get(participantId);
+    if (analyzer) {
+      analyzer.cleanup();
+      audioAnalyzers.current.delete(participantId);
+    }
+  };
+
   const handleLeave = () => {
     console.log('[MeetingPage] 👋 User clicked leave meeting button');
     // Stop recording if active before leaving
@@ -1725,6 +1869,10 @@ To convert to MP4:
     if (isScreenSharing) {
       stopScreenShare();
     }
+    // Clean up all audio analyzers
+    audioAnalyzers.current.forEach((analyzer, id) => {
+      stopAudioAnalyzer(id);
+    });
     leaveMeeting();
     
     // For standalone meeting windows, close the window instead of navigating
@@ -1766,13 +1914,7 @@ To convert to MP4:
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
   }
 
-  console.log('[MeetingPage] 🎥 Video tiles:', videoTiles.map(tile => ({
-    id: tile.id,
-    isLocal: tile.isLocal,
-    label: tile.label,
-    hasVideo: tile.stream?.getVideoTracks().length > 0,
-    hasAudio: tile.stream?.getAudioTracks().length > 0
-  })));
+  // Removed excessive console logging for performance
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
@@ -1836,8 +1978,14 @@ To convert to MP4:
 
             {/* Participant Sidebar */}
             <div className="w-64 bg-gray-800 p-2 flex flex-col space-y-2 overflow-y-auto">
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-700 rounded aspect-video overflow-hidden">
+              {videoTiles.map(({ id, stream, isLocal, label }) => {
+                const participantId = isLocal ? 'local' : id;
+                const isSpeaking = speakingParticipants.has(participantId);
+                
+                return (
+                <div key={id} className={`relative bg-gray-700 rounded aspect-video overflow-hidden transition-all duration-200 ${
+                  isSpeaking ? 'ring-2 ring-green-500 ring-opacity-80 shadow-md shadow-green-500/30' : ''
+                }`}>
                   {stream && stream.getVideoTracks().length > 0 ? (
                     <video
                       ref={isLocal && id === 'local' ? localVideoRef : undefined}
@@ -1863,7 +2011,8 @@ To convert to MP4:
                     {label} {isLocal && '(You)'}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -1876,8 +2025,14 @@ To convert to MP4:
                 gridTemplateRows: `repeat(${gridRows}, 1fr)`,
               }}
             >
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-800 rounded-lg overflow-hidden">
+              {videoTiles.map(({ id, stream, isLocal, label }) => {
+                const participantId = isLocal ? 'local' : id;
+                const isSpeaking = speakingParticipants.has(participantId);
+                
+                return (
+                <div key={id} className={`relative bg-gray-800 rounded-lg overflow-hidden transition-all duration-200 ${
+                  isSpeaking ? 'ring-4 ring-green-500 ring-opacity-80 shadow-lg shadow-green-500/30' : ''
+                }`}>
                   {stream && stream.getVideoTracks().length > 0 ? (
                     <video
                       ref={isLocal && id === 'local' ? localVideoRef : undefined}
@@ -1928,7 +2083,8 @@ To convert to MP4:
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -2038,6 +2194,19 @@ To convert to MP4:
           {showSettings && (
             <div className="absolute bottom-full mb-2 right-0 bg-gray-800 text-white rounded-lg py-3 px-4 shadow-xl border border-gray-600 z-50 min-w-64">
               <h3 className="text-sm font-semibold mb-3 text-gray-200">Meeting Settings</h3>
+
+              {/* Recording Settings */}
+              <div className="mb-4">
+                <h4 className="text-xs font-medium text-gray-300 mb-2">Recording</h4>
+                <select
+                  value={recordingMethod}
+                  onChange={(e) => setRecordingMethod(e.target.value)}
+                  className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                >
+                  <option value="canvas">📹 Direct Capture</option>
+                  <option value="screen">🖥️ Screen Share</option>
+                </select>
+              </div>
               
               {/* Host Controls */}
               {roomSettings.isHost && (
