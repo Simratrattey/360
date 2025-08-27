@@ -647,14 +647,7 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
-      console.log(`📨 Received chat:new message:`, {
-        messageId: msg._id,
-        tempId: msg.tempId,
-        isMyMessage,
-        isCurrentConversation,
-        text: msg.text?.substring(0, 30) + '...',
-        conversationId
-      });
+      console.log(`📨 Received chat:new message:`, msg._id);
       
       
       // 1. Update message cache
