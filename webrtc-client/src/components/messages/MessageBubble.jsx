@@ -774,7 +774,7 @@ function MessageBubble({
 
               {/* Message text - show after files */}
               {msg.text && (
-                <div className={`text-sm sm:text-base leading-relaxed break-words break-all ${isOwn ? 'text-white' : 'text-gray-800'} ${msg.file ? 'mt-3' : ''}`}>
+                <div className={`text-sm sm:text-base leading-relaxed break-words ${isOwn ? 'text-white' : 'text-gray-800'} ${msg.file ? 'mt-3' : ''}`}>
                   {renderTextWithMentions(msg.text)}
                 </div>
               )}
