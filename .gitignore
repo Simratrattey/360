@@ -136,3 +136,4 @@ recordings/
 
 # Claude Code 
 CLAUDE.md
+.env.staging
