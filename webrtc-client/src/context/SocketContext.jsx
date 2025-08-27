@@ -239,6 +239,7 @@ export function SocketProvider({ children }) {
 
   return (
     <SocketContext.Provider value={{
+      socket: sfuSocket, // Alias for compatibility
       sfuSocket,
       isSFUConnected,
       currentRoom,
