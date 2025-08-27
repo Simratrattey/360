@@ -177,6 +177,21 @@ export function ChatSocketProvider({ children }) {
       });
     });
 
+    // Handle message sent acknowledgments globally
+    s.on('chat:sent', ({ success, messageId, tempId }) => {
+      console.log('Global chat:sent handler:', { success, messageId, tempId });
+      if (success && tempId && messageId) {
+        try {
+          if (messageStatusService && typeof messageStatusService.markAsSent === 'function') {
+            messageStatusService.markAsSent(tempId, messageId);
+            console.log('Message marked as sent via global handler:', tempId, '->', messageId);
+          }
+        } catch (error) {
+          console.error('Error in global chat:sent handler:', error);
+        }
+      }
+    });
+
     // Note: conversation:created, conversation:deleted, and conversation:updated events
     // are handled in MessagesPage component to update UI directly
 

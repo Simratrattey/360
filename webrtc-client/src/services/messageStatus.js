@@ -82,7 +82,12 @@ class MessageStatusService {
   // Set message status by tempId (for optimistic messages)
   setMessageStatus(tempId, status, additionalData = {}) {
     const previousStatus = this.messageStatuses.get(tempId);
-    this.messageStatuses.set(tempId, status);
+    const statusObject = {
+      status,
+      timestamp: Date.now(),
+      ...additionalData
+    };
+    this.messageStatuses.set(tempId, statusObject);
     this.persistStatus();
     
     
@@ -97,7 +102,11 @@ class MessageStatusService {
 
   // Get message status
   getMessageStatus(tempId) {
-    return this.messageStatuses.get(tempId) || MESSAGE_STATUS.SENDING;
+    const statusObj = this.messageStatuses.get(tempId);
+    if (statusObj && typeof statusObj === 'object') {
+      return statusObj.status;
+    }
+    return statusObj || MESSAGE_STATUS.SENDING;
   }
 
   // Update status when message gets real ID from server
@@ -184,7 +193,8 @@ class MessageStatusService {
     }
     // Look for tempId that maps to this messageId
     return Array.from(this.messageStatuses.keys()).find(tempId => {
-      return this.messageStatuses.get(messageId) !== undefined;
+      const status = this.messageStatuses.get(tempId);
+      return status && typeof status === 'object' && status.messageId === messageId;
     });
   }
 

@@ -1197,12 +1197,10 @@ export default function MessagesPage() {
           if (messageQueue && typeof messageQueue.removeFromQueues === 'function') {
             messageQueue.removeFromQueues(messageData.tempId);
           }
-          // Small delay to ensure queue cleanup completes first
-          setTimeout(() => {
-            if (messageStatus && typeof messageStatus.markAsSent === 'function') {
-              messageStatus.markAsSent(messageData.tempId, response.messageId);
-            }
-          }, 50);
+          // Mark as sent immediately 
+          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+            messageStatus.markAsSent(messageData.tempId, response.messageId);
+          }
         } catch (error) {
           console.error('Error updating message status:', error);
         }
