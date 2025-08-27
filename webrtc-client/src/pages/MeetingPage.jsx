@@ -102,6 +102,10 @@ export default function MeetingPage() {
   const [isDraggingSubtitles, setIsDraggingSubtitles] = useState(false);
   const subtitleRef = useRef(null);
   
+  // Speaking indicators
+  const [speakingParticipants, setSpeakingParticipants] = useState(new Set());
+  const audioAnalyzers = useRef(new Map()); // Store audio analyzers for each participant
+  
   // Debug participant map changes
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
@@ -368,10 +372,15 @@ export default function MeetingPage() {
     // if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, []);
 
-  // Ensure local video always gets the stream
+  // Ensure local video always gets the stream and start audio analysis
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      
+      // Start audio analyzer for local stream
+      if (localStream.getAudioTracks().length > 0 && !audioAnalyzers.current.has('local')) {
+        startAudioAnalyzer(localStream, 'local', true);
+      }
     }
   }, [localStream]);
 
@@ -384,6 +393,10 @@ export default function MeetingPage() {
     })));
     
     remoteStreams.forEach((stream, id) => {
+      // Start audio analyzer for speaking detection
+      if (stream.getAudioTracks().length > 0 && !audioAnalyzers.current.has(id)) {
+        startAudioAnalyzer(stream, id, false);
+      }
       const videoElement = document.getElementById(`remote-video-${id}`);
       if (videoElement && stream) {
         // Create a new stream for display
@@ -421,6 +434,15 @@ export default function MeetingPage() {
         const participantName = participantMap[id] || 'Guest';
         console.log(`Starting audio processing for ${participantName} (${id})`);
         startRemoteStreamRecognition(stream, id, participantName);
+      }
+    });
+    
+    // Cleanup audio analyzers for streams that are no longer present
+    const currentStreamIds = new Set(Array.from(remoteStreams.keys()));
+    audioAnalyzers.current.forEach((analyzer, id) => {
+      if (id !== 'local' && !currentStreamIds.has(id)) {
+        console.log(`[Audio Analyzer] Cleaning up removed participant ${id}`);
+        stopAudioAnalyzer(id);
       }
     });
   }, [remoteStreams, subtitlesEnabled, multilingualEnabled, participantMap]);
@@ -1738,6 +1760,92 @@ To convert to MP4:
     setSubtitlePosition({ x: 0, y: 0 });
   };
 
+  // Audio activity detection for speaking indicators
+  const startAudioAnalyzer = (stream, participantId, isLocal = false) => {
+    try {
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) return;
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyzer = audioContext.createAnalyser();
+      
+      analyzer.fftSize = 512;
+      analyzer.smoothingTimeConstant = 0.8;
+      source.connect(analyzer);
+
+      const bufferLength = analyzer.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      let silenceCount = 0;
+      const SPEAKING_THRESHOLD = 30; // Adjust this value to fine-tune sensitivity
+      const SILENCE_FRAMES = 5; // How many silent frames before removing speaking indicator
+
+      const checkAudio = () => {
+        analyzer.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume
+        const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
+        
+        if (average > SPEAKING_THRESHOLD) {
+          // Speaking detected
+          silenceCount = 0;
+          setSpeakingParticipants(prev => {
+            const newSet = new Set(prev);
+            newSet.add(participantId);
+            return newSet;
+          });
+        } else {
+          // Silence detected
+          silenceCount++;
+          if (silenceCount >= SILENCE_FRAMES) {
+            setSpeakingParticipants(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(participantId);
+              return newSet;
+            });
+          }
+        }
+
+        // Continue monitoring if the audio track is still active
+        if (audioTracks[0] && audioTracks[0].readyState === 'live') {
+          requestAnimationFrame(checkAudio);
+        }
+      };
+
+      // Start monitoring
+      checkAudio();
+
+      // Store analyzer for cleanup
+      audioAnalyzers.current.set(participantId, {
+        audioContext,
+        analyzer,
+        cleanup: () => {
+          audioContext.close().catch(err => console.warn('AudioContext close error:', err));
+          setSpeakingParticipants(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(participantId);
+            return newSet;
+          });
+        }
+      });
+
+      console.log(`[Audio Analyzer] Started for ${isLocal ? 'local' : 'remote'} participant ${participantId}`);
+
+    } catch (error) {
+      console.error('Failed to start audio analyzer:', error);
+    }
+  };
+
+  // Clean up audio analyzer
+  const stopAudioAnalyzer = (participantId) => {
+    const analyzer = audioAnalyzers.current.get(participantId);
+    if (analyzer) {
+      analyzer.cleanup();
+      audioAnalyzers.current.delete(participantId);
+    }
+  };
+
   const handleLeave = () => {
     console.log('[MeetingPage] 👋 User clicked leave meeting button');
     // Stop recording if active before leaving
@@ -1752,6 +1860,10 @@ To convert to MP4:
     if (isScreenSharing) {
       stopScreenShare();
     }
+    // Clean up all audio analyzers
+    audioAnalyzers.current.forEach((analyzer, id) => {
+      stopAudioAnalyzer(id);
+    });
     leaveMeeting();
     
     // For standalone meeting windows, close the window instead of navigating
@@ -1863,8 +1975,14 @@ To convert to MP4:
 
             {/* Participant Sidebar */}
             <div className="w-64 bg-gray-800 p-2 flex flex-col space-y-2 overflow-y-auto">
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-700 rounded aspect-video overflow-hidden">
+              {videoTiles.map(({ id, stream, isLocal, label }) => {
+                const participantId = isLocal ? 'local' : id;
+                const isSpeaking = speakingParticipants.has(participantId);
+                
+                return (
+                <div key={id} className={`relative bg-gray-700 rounded aspect-video overflow-hidden transition-all duration-200 ${
+                  isSpeaking ? 'ring-2 ring-green-500 ring-opacity-80 shadow-md shadow-green-500/30' : ''
+                }`}>
                   {stream && stream.getVideoTracks().length > 0 ? (
                     <video
                       ref={isLocal && id === 'local' ? localVideoRef : undefined}
@@ -1890,7 +2008,8 @@ To convert to MP4:
                     {label} {isLocal && '(You)'}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -1903,8 +2022,14 @@ To convert to MP4:
                 gridTemplateRows: `repeat(${gridRows}, 1fr)`,
               }}
             >
-              {videoTiles.map(({ id, stream, isLocal, label }) => (
-                <div key={id} className="relative bg-gray-800 rounded-lg overflow-hidden">
+              {videoTiles.map(({ id, stream, isLocal, label }) => {
+                const participantId = isLocal ? 'local' : id;
+                const isSpeaking = speakingParticipants.has(participantId);
+                
+                return (
+                <div key={id} className={`relative bg-gray-800 rounded-lg overflow-hidden transition-all duration-200 ${
+                  isSpeaking ? 'ring-4 ring-green-500 ring-opacity-80 shadow-lg shadow-green-500/30' : ''
+                }`}>
                   {stream && stream.getVideoTracks().length > 0 ? (
                     <video
                       ref={isLocal && id === 'local' ? localVideoRef : undefined}
@@ -1955,7 +2080,8 @@ To convert to MP4:
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
