@@ -693,6 +693,7 @@ export default function MessagesPage() {
           });
         }
         
+        console.log('Adding real message to cache:', msg._id, msg.tempId);
         const newCache = [...cleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
         const MAX_CACHED_MESSAGES = 50;
@@ -740,6 +741,7 @@ export default function MessagesPage() {
             });
           }
           
+          console.log('Adding real message to current view:', msg._id, msg.tempId);
           return [...filtered, { ...msg, conversationId }];
         });
       }
