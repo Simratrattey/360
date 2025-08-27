@@ -1770,25 +1770,31 @@ To convert to MP4:
       const source = audioContext.createMediaStreamSource(stream);
       const analyzer = audioContext.createAnalyser();
       
-      analyzer.fftSize = 512;
-      analyzer.smoothingTimeConstant = 0.8;
+      analyzer.fftSize = 1024; // Increased for better frequency resolution
+      analyzer.smoothingTimeConstant = 0.3; // Reduced for more responsive detection
+      analyzer.minDecibels = -90;
+      analyzer.maxDecibels = -10;
       source.connect(analyzer);
 
       const bufferLength = analyzer.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
       let silenceCount = 0;
-      const SPEAKING_THRESHOLD = 30; // Adjust this value to fine-tune sensitivity
-      const SILENCE_FRAMES = 5; // How many silent frames before removing speaking indicator
+      const SPEAKING_THRESHOLD = 25; // Lowered threshold for better sensitivity
+      const SILENCE_FRAMES = 30; // Increased from 5 to 30 frames (~1 second of silence)
 
       const checkAudio = () => {
         analyzer.getByteFrequencyData(dataArray);
         
-        // Calculate average volume
+        // Calculate both average and peak volume for better detection
         const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
+        const peak = Math.max(...dataArray);
         
-        if (average > SPEAKING_THRESHOLD) {
-          // Speaking detected
+        // Use either average or peak volume - whichever is higher for better sensitivity
+        const volume = Math.max(average, peak * 0.5);
+        
+        if (volume > SPEAKING_THRESHOLD) {
+          // Speaking detected - reset silence counter and add to speaking set
           silenceCount = 0;
           setSpeakingParticipants(prev => {
             const newSet = new Set(prev);
@@ -1796,14 +1802,17 @@ To convert to MP4:
             return newSet;
           });
         } else {
-          // Silence detected
+          // Silence detected - increment counter
           silenceCount++;
+          
+          // Only remove speaking indicator after sustained silence
           if (silenceCount >= SILENCE_FRAMES) {
             setSpeakingParticipants(prev => {
               const newSet = new Set(prev);
               newSet.delete(participantId);
               return newSet;
             });
+            silenceCount = 0; // Reset counter after removal
           }
         }
 
