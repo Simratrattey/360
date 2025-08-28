@@ -229,11 +229,14 @@ export default function MessagesPage() {
           
           // Set unread to 0 for this conversation in the sidebar
           setAllConversations(prev =>
-            prev.map(conv => 
-              conv._id === conversationId 
-                ? { ...conv, unread: 0 }
-                : conv
-            )
+            prev.map(section => ({
+              ...section,
+              items: section.items.map(conv => 
+                conv._id === conversationId 
+                  ? { ...conv, unread: 0 }
+                  : conv
+              )
+            }))
           );
           
           // Remove from set after 5 seconds to allow re-marking if needed
