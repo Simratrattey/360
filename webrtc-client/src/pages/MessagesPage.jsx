@@ -1442,7 +1442,7 @@ export default function MessagesPage() {
         new Date().toISOString()
       );
       
-      // Prepare message data for sending
+      // Prepare message data for sending (capture input before clearing)
       const messageData = {
         tempId,
         conversationId: selected._id,
@@ -1454,6 +1454,12 @@ export default function MessagesPage() {
         createdAt: new Date().toISOString()
       };
 
+      // Clear input fields immediately after preparing message data for better UX
+      setInput('');
+      setUploadFile(null);
+      setReplyTo(null);
+      setShowEmojiPicker(false);
+
       // Send message with network resilience
       try {
         await sendMessageWithRetry(messageData);
@@ -1461,12 +1467,6 @@ export default function MessagesPage() {
         console.error('Failed to send message:', error);
         // Message will be queued by sendMessageWithRetry
       }
-      
-      // Reset input fields immediately for better UX
-      setInput('');
-      setUploadFile(null);
-      setReplyTo(null);
-      setShowEmojiPicker(false);
       
       // Show success notification for file uploads
       if (uploadFile) {
