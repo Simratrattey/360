@@ -578,6 +578,62 @@ app.locals.sendNotification = sendNotification;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
 
+// Helper function to transfer host when current host leaves
+function transferHost(roomId, leavingUserId) {
+  const room = rooms[roomId];
+  if (!room || room.host !== leavingUserId) {
+    return; // Not the host leaving, no transfer needed
+  }
+  
+  // Find the next participant in line (first person who joined after the host)
+  const remainingParticipants = room.participants.filter(p => p.userId !== leavingUserId);
+  
+  if (remainingParticipants.length === 0) {
+    console.log(`[Host Transfer] No remaining participants in room ${roomId}, room will be deleted`);
+    return;
+  }
+  
+  // Transfer host to the first remaining participant
+  const newHost = remainingParticipants[0];
+  room.host = newHost.userId;
+  
+  console.log(`[Host Transfer] 👑 Host transferred from ${leavingUserId} to ${newHost.userId} (${newHost.userName}) in room ${roomId}`);
+  
+  // Notify all remaining participants about the host change
+  const newRoomSettings = {
+    host: room.host,
+    avatarApiEnabled: room.avatarApiEnabled
+  };
+  
+  // Send updated room settings to all participants
+  remainingParticipants.forEach(participant => {
+    const participantSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.id === participant.socketId);
+    
+    if (participantSocket) {
+      participantSocket.emit('roomSettingsUpdated', {
+        ...newRoomSettings,
+        isHost: participant.userId === room.host
+      });
+      
+      // Special notification for the new host
+      if (participant.userId === room.host) {
+        participantSocket.emit('hostTransferred', {
+          message: 'You are now the host of this meeting',
+          previousHost: leavingUserId
+        });
+      }
+    }
+  });
+  
+  // Broadcast host change to all participants in the room
+  io.to(roomId).emit('hostChanged', {
+    newHostId: newHost.userId,
+    newHostName: newHost.userName,
+    previousHostId: leavingUserId
+  });
+}
+
 // Socket.io logic
 io.on('connection', async socket => {
   console.log('[Signaling] 🆕 client connected:', socket.id);
@@ -757,6 +813,9 @@ io.on('connection', async socket => {
     console.log('[Signaling] Emitting hangup to room', rid, 'with peerId:', peerId, 'participants:', rooms[rid]?.participants);
     socket.to(rid).emit('hangup', peerId);
     if (rooms[rid]) {
+      // Check if host is leaving and transfer if needed (before removing from participants)
+      transferHost(rid, socket.userId);
+      
       rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
       rooms[rid].offers = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       io.to(rid).emit('availableOffers', rooms[rid].offers);
@@ -787,6 +846,9 @@ io.on('connection', async socket => {
       
       // Clean up the same way as hangup
       if (rooms[rid]) {
+        // Check if host is leaving and transfer if needed (before removing from participants)
+        transferHost(rid, socket.userId);
+        
         rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
         rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
         
