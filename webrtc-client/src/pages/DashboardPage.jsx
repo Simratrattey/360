@@ -45,11 +45,11 @@ export default function DashboardPage() {
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [messageNotifications, setMessageNotifications] = useState([]);
-  const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
+  // Removed localGeneralNotifications to avoid duplicates - using only global notifications
   const [scheduling, setScheduling] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
@@ -112,45 +112,42 @@ export default function DashboardPage() {
         (typeof msg.sender === 'string' && msg.sender !== user.id) ||
         (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
       ) {
-        setMessageNotifications(prev => {
-          // Find if this conversation already exists
-          const idx = prev.findIndex(n => n.id === msg.conversationId);
-          if (idx !== -1) {
-            // Update unread count and move to top
-            const updated = [...prev];
-            updated[idx] = {
-              ...updated[idx],
-              unread: (updated[idx].unread || 0) + 1,
-              lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-              lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-            };
-            // Move to top
-            const [item] = updated.splice(idx, 1);
-            return [item, ...updated];
-          } else {
-            // New conversation notification
-            return [
-              {
-                id: msg.conversationId,
-                type: msg.conversationType || 'dm',
-                name: msg.conversationName || msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-                unread: 1,
-                avatar: msg.conversationAvatar || '',
-                icon: msg.conversationType === 'group' ? Users : msg.conversationType === 'community' ? Hash : User,
-                lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-                lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-              },
-              ...prev
-            ];
+        console.log('📨 New message received on dashboard, refreshing notification counts from server');
+        
+        // Instead of manually updating counts, refresh from server to get accurate counts
+        // This prevents double counting and ensures consistency
+        setTimeout(() => {
+          // Fetch fresh unread data from server
+          async function refreshUnread() {
+            try {
+              const res = await conversationAPI.getConversations();
+              const conversations = res.data.conversations || res.data || [];
+              const messageNotifs = conversations
+                .filter(c => c.unread > 0)
+                .map(c => ({
+                  id: c._id,
+                  type: c.type,
+                  name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
+                  unread: c.unread,
+                  avatar: c.avatar,
+                  icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash,
+                  lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
+                  lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
+                }));
+              setMessageNotifications(messageNotifs);
+            } catch (err) {
+              console.error('Error refreshing unread messages:', err);
+            }
           }
-        });
+          refreshUnread();
+        }, 100); // Small delay to ensure server has processed the message
       }
     };
     chatSocket.on('chat:new', handleNewMessage);
     return () => {
       chatSocket.off('chat:new', handleNewMessage);
     };
-  }, [chatSocket, user.id]);
+  }, [chatSocket, user.id, user]);
 
   // Real-time conversation creation/deletion updates for dashboard
   useEffect(() => {
@@ -176,11 +173,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -212,11 +205,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -253,10 +242,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -292,10 +278,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -426,42 +409,8 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0 || (Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []).length > 0) ? (
+        {(Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
-            {/* General notifications (conversation creation/deletion, etc.) */}
-            {[...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).map((notif, idx) => (
-              <motion.div
-                key={`general-${notif._id}-${idx}`}
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.07, duration: 0.5 }}
-                className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => {
-                  // Navigate to messages page for conversation notifications
-                  if (notif.data?.conversationId) {
-                    navigate(`/messages?conversation=${notif.data.conversationId}`);
-                  }
-                }}
-              >
-                <div className="relative">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                    {notif.type === 'conversation_created' ? '🎉' : 
-                     notif.type === 'community_created' ? '🌍' : 
-                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-primary-800">{notif.title}</h3>
-                  </div>
-                  <p className="text-secondary-600 text-sm">{notif.message}</p>
-                  <p className="text-secondary-500 text-xs">
-                    {new Date(notif.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
             
             {/* Message notifications */}
             {(Array.isArray(messageNotifications) ? messageNotifications : []).map((notif, idx) => (
@@ -469,9 +418,14 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: ([...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
+                transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => navigate(`/messages?conversation=${notif.id}`)}
+                onClick={() => {
+                  // Clear this message notification
+                  setMessageNotifications(prev => prev.filter(n => n.id !== notif.id));
+                  // Navigate immediately - message merging logic will handle synchronization
+                  navigate(`/messages?conversation=${notif.id}`);
+                }}
               >
                 <div className="relative">
                   {notif.avatar ? (

@@ -10,6 +10,7 @@ export async function listMessages(req, res, next) {
     const messages = await Message.find({ conversation: conversationId })
       .populate('sender', 'username fullName avatarUrl')
       .populate('replyTo', 'text file')
+      .populate('reactions.user', 'username fullName')
       .sort({ createdAt: 1 })
       .skip(parseInt(skip))
       .limit(parseInt(limit))
@@ -117,6 +118,7 @@ export async function reactMessage(req, res, next) {
     
     const updatedMessage = await message.save();
     await updatedMessage.populate('sender', 'username fullName avatarUrl');
+    await updatedMessage.populate('reactions.user', 'username fullName');
     
     res.json({ message: updatedMessage });
   } catch (err) {
@@ -134,7 +136,10 @@ export async function removeReaction(req, res, next) {
       messageId,
       { $pull: { reactions: { user: userId, emoji } } },
       { new: true }
-    );
+    )
+    .populate('sender', 'username fullName avatarUrl')
+    .populate('reactions.user', 'username fullName');
+    
     res.json({ message });
   } catch (err) {
     next(err);
@@ -250,6 +255,7 @@ export async function searchMessages(req, res, next) {
       Message.find(searchFilter)
         .populate('sender', 'username fullName avatarUrl')
         .populate('replyTo', 'text file')
+        .populate('reactions.user', 'username fullName')
         .sort({ createdAt: -1 })
         .skip(parseInt(skip))
         .limit(parseInt(limit))
