@@ -140,11 +140,19 @@ const inputValidation = {
   // Sanitize emoji reactions
   sanitizeEmoji: (req, res, next) => {
     if (req.body.emoji) {
-      // Basic emoji validation - allow common emoji characters
-      const emojiRegex = /^[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]$/u;
+      // Define allowed emoji list that matches frontend
+      const allowedEmojis = ['👍', '❤️', '😂', '😮', '😢', '😡', '👏', '🙏', '🔥', '💯', '✨', '🎉', '🤔', '😎', '🥳', '😴'];
       
-      if (!emojiRegex.test(req.body.emoji)) {
-        // If not a valid emoji, use a default one
+      console.log('🎭 Emoji validation:', {
+        emoji: req.body.emoji,
+        length: req.body.emoji.length,
+        charCodes: Array.from(req.body.emoji).map(char => char.charCodeAt(0).toString(16)),
+        isAllowed: allowedEmojis.includes(req.body.emoji)
+      });
+      
+      if (!allowedEmojis.includes(req.body.emoji)) {
+        console.log('⚠️ Invalid emoji detected, replacing with thumbs up:', req.body.emoji);
+        // If not in allowed list, use a default one
         req.body.emoji = '👍';
       }
     }
