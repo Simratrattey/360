@@ -1173,9 +1173,9 @@ export default function MessagesPage() {
   // Mark messages as read when conversation is selected
   useEffect(() => {
     if (selected && messages.length > 0) {
-      // Mark all messages as read
+      // Mark all messages as read (only real messages, not temp ones)
       messages.forEach(msg => {
-        if (msg.sender !== user.id) {
+        if (msg.sender !== user.id && msg._id && !msg._id.startsWith('temp-')) {
           chatSocket.markAsRead(msg._id);
         }
       });

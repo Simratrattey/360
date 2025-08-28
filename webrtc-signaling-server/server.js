@@ -1212,6 +1212,13 @@ io.on('connection', async socket => {
   // Mark message as read
   socket.on('chat:read', async ({ messageId }) => {
     const userId = socket.userId;
+    
+    // Validate messageId is a proper ObjectId
+    if (!messageId || messageId.startsWith('temp-') || !mongoose.Types.ObjectId.isValid(messageId)) {
+      console.warn('Invalid messageId for read operation:', messageId);
+      return;
+    }
+    
     const session = await mongoose.startSession();
     
     try {
