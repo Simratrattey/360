@@ -354,10 +354,8 @@ export default function DashboardPage() {
                 onClick={() => {
                   // Clear this message notification
                   setMessageNotifications(prev => prev.filter(n => n.id !== notif.id));
-                  // Small delay to ensure any recent messages are properly processed by server
-                  setTimeout(() => {
-                    navigate(`/messages?conversation=${notif.id}`);
-                  }, 200);
+                  // Navigate immediately - message merging logic will handle synchronization
+                  navigate(`/messages?conversation=${notif.id}`);
                 }}
               >
                 <div className="relative">

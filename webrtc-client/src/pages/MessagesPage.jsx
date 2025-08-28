@@ -158,6 +158,46 @@ export default function MessagesPage() {
   const messagesCacheRef = useRef(messagesCache);
   const allConversationsRef = useRef(allConversations);
   const isMobile = useMediaQuery({ maxWidth: 767 });
+
+  // Utility function to merge server messages with cached messages
+  const mergeMessages = (serverMessages, cachedMessages) => {
+    const messageMap = new Map();
+    
+    // Add server messages first (they are the source of truth)
+    serverMessages.forEach(msg => {
+      messageMap.set(msg._id, msg);
+    });
+    
+    // Add cached messages that aren't in server messages
+    // This preserves real-time messages that might not be in server yet
+    cachedMessages.forEach(msg => {
+      if (msg._id && !messageMap.has(msg._id)) {
+        // Only add if it's not already in server messages
+        messageMap.set(msg._id, msg);
+      } else if (!msg._id && msg.tempId) {
+        // Handle temporary messages (optimistic updates)
+        const existingByTempId = Array.from(messageMap.values()).find(m => m.tempId === msg.tempId);
+        if (!existingByTempId) {
+          messageMap.set(msg.tempId || `temp-${Date.now()}`, msg);
+        }
+      }
+    });
+    
+    // Convert back to array and sort by timestamp
+    const merged = Array.from(messageMap.values()).sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.timestamp || 0);
+      const dateB = new Date(b.createdAt || b.timestamp || 0);
+      return dateA - dateB;
+    });
+    
+    console.log('📨 Merged messages:', {
+      server: serverMessages.length,
+      cached: cachedMessages.length,
+      merged: merged.length
+    });
+    
+    return merged;
+  };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
   // Keep refs in sync with state
@@ -357,13 +397,9 @@ export default function MessagesPage() {
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
         
-        // Force refresh messages when navigating from notification to ensure latest messages are loaded
-        console.log('📨 Navigating from notification - forcing message refresh for:', conversationId);
-        setMessagesCache(prev => {
-          const newCache = { ...prev };
-          delete newCache[conversationId]; // Clear cache to force refresh
-          return newCache;
-        });
+        // Don't clear cache when navigating from notification - this causes message loss
+        // Instead, let the normal message loading logic merge cached and fresh messages
+        console.log('📨 Navigating from notification to:', conversationId);
         
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -598,46 +634,49 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
-    // First, immediately show cached messages for instant loading
-    const cachedMessages = messagesCache[convId];
-    if (cachedMessages && cachedMessages.length > 0) {
+    // Always fetch fresh messages from server, but show cached ones immediately for better UX
+    const cachedMessages = messagesCache[convId] || [];
+    
+    // Show cached messages immediately for instant loading
+    if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
       setMessagesLoading(false);
-      setMessageOffset(cachedMessages.length);
-      setHasMoreMessages(cachedMessages.length >= 50); // Assume more if we have full batch
-      chatSocket.joinConversation(convId);
     } else {
-      // No cache - show loading and fetch from server
       setMessages([]);
       setMessagesLoading(true);
-      
-      messageAPI.getMessages(convId, { limit: 50 })
-        .then(res => {
-          const serverMessages = res.data.messages || [];
-          setMessages(serverMessages);
-          setMessageOffset(serverMessages.length);
-          setHasMoreMessages(serverMessages.length === 50); // If we got full batch, there might be more
-          
-          // Update cache if we don't have newer real-time messages
-          setMessagesCache(prev => {
-            const existingCache = prev[convId];
-            if (existingCache && existingCache.length > serverMessages.length) {
-              return prev;
-            }
-            return { ...prev, [convId]: serverMessages };
-          });
-          
-          chatSocket.joinConversation(convId);
-        })
-        .catch(error => {
-          console.error('Failed to load messages:', error);
-          setMessages([]);
-          chatSocket.joinConversation(convId);
-        })
-        .finally(() => {
-          setMessagesLoading(false);
-        });
     }
+    
+    // Always fetch from server to ensure we have latest messages
+    messageAPI.getMessages(convId, { limit: 50 })
+      .then(res => {
+        const serverMessages = res.data.messages || [];
+        
+        // Merge server messages with cached ones to avoid losing any messages
+        const mergedMessages = mergeMessages(serverMessages, cachedMessages);
+        
+        setMessages(mergedMessages);
+        setMessageOffset(mergedMessages.length);
+        setHasMoreMessages(serverMessages.length === 50);
+        
+        // Update cache with merged results
+        setMessagesCache(prev => ({
+          ...prev,
+          [convId]: mergedMessages
+        }));
+        
+        chatSocket.joinConversation(convId);
+      })
+      .catch(error => {
+        console.error('Failed to load messages:', error);
+        // If server fetch fails, keep cached messages if available
+        if (cachedMessages.length === 0) {
+          setMessages([]);
+        }
+        chatSocket.joinConversation(convId);
+      })
+      .finally(() => {
+        setMessagesLoading(false);
+      });
     
     // Always leave previous room when switching
     return () => {
