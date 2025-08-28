@@ -108,6 +108,7 @@ export default function MeetingPage() {
   
   // Join request system
   const [joinRequests, setJoinRequests] = useState([]);
+  const [showJoinRequests, setShowJoinRequests] = useState(false);
   
   // Debug participant map changes
   useEffect(() => {
@@ -501,20 +502,20 @@ export default function MeetingPage() {
       }
     };
 
-    // Join request handler for hosts
-    const handleJoinRequest = (requestData) => {
-      console.log('[MeetingPage] Received join request:', requestData);
-      setJoinRequests(prev => [...prev, requestData]);
+    // Join request handler for hosts - updated to use joinRequestsUpdated
+    const handleJoinRequestsUpdated = ({ pendingRequests, count }) => {
+      console.log('[MeetingPage] Join requests updated:', { pendingRequests, count });
+      setJoinRequests(pendingRequests || []);
     };
 
     sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
     sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
-    sfuSocket.on('joinRequest', handleJoinRequest);
+    sfuSocket.on('joinRequestsUpdated', handleJoinRequestsUpdated);
 
     return () => {
       sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
       sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
-      sfuSocket.off('joinRequest', handleJoinRequest);
+      sfuSocket.off('joinRequestsUpdated', handleJoinRequestsUpdated);
     };
   }, [sfuSocket, user?.id, screenSharingUserId]);
 
@@ -524,11 +525,14 @@ export default function MeetingPage() {
       if (showSettings && !event.target.closest('[data-settings-panel]')) {
         setShowSettings(false);
       }
+      if (showJoinRequests && !event.target.closest('.join-requests-dropdown') && !event.target.closest('.participants-badge')) {
+        setShowJoinRequests(false);
+      }
     };
     
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showSettings]);
+  }, [showSettings, showJoinRequests]);
 
   const handlePrev = () => {
     const i = Math.max(0, avatarIndex - 1);
@@ -1785,8 +1789,7 @@ To convert to MP4:
       roomId: request.roomId
     });
 
-    // Remove the request from the list
-    setJoinRequests(prev => prev.filter(r => r.requestId !== requestId));
+    // No need to remove locally - server will send updated list via joinRequestsUpdated
   };
 
   const approveJoinRequest = (requestId) => {
@@ -1961,6 +1964,12 @@ To convert to MP4:
         meetingStartTime={meetingStartTime}
         roomId={roomId}
         recordingStatus={recordingStatus}
+        joinRequests={joinRequests}
+        showJoinRequests={showJoinRequests}
+        onToggleJoinRequests={() => setShowJoinRequests(!showJoinRequests)}
+        isHost={roomSettings?.isHost}
+        onApproveJoinRequest={approveJoinRequest}
+        onDenyJoinRequest={denyJoinRequest}
       />
       
       
@@ -2407,43 +2416,6 @@ To convert to MP4:
         </div>
       )}
 
-      {/* Join Request Popups */}
-      {joinRequests.map((request, index) => (
-        <div 
-          key={request.requestId}
-          className="absolute top-20 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-xl z-40 min-w-80"
-          style={{ top: `${80 + (index * 120)}px` }} // Stack multiple requests
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-semibold">🚪 Join Request</div>
-            <div className="text-xs opacity-75">Host approval required</div>
-          </div>
-          
-          <div className="mb-4">
-            <div className="text-sm">
-              <strong>{request.requesterName}</strong> wants to join this meeting
-            </div>
-            <div className="text-xs opacity-75 mt-1">
-              This meeting requires host approval to join
-            </div>
-          </div>
-          
-          <div className="flex space-x-2">
-            <button
-              onClick={() => approveJoinRequest(request.requestId)}
-              className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-medium transition-colors"
-            >
-              ✓ Allow
-            </button>
-            <button
-              onClick={() => denyJoinRequest(request.requestId)}
-              className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-medium transition-colors"
-            >
-              ✗ Deny
-            </button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

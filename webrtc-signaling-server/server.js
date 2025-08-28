@@ -633,7 +633,9 @@ io.on('connection', async socket => {
         // Enhanced meeting info
         name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
         visibility: storedMeetingInfo?.visibility || 'public',
-        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString()
+        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+        // Join request tracking
+        pendingJoinRequests: new Map() // userId -> request info
       };
       
       console.log(`[Signaling] ✅ Created room ${roomId} with info:`, {
@@ -880,22 +882,39 @@ io.on('connection', async socket => {
       return;
     }
     
+    // Check for duplicate request
+    if (room.pendingJoinRequests.has(requesterUserId)) {
+      socket.emit('joinRequestResult', { success: false, message: 'You already have a pending join request' });
+      return;
+    }
+    
     // Find the host socket
     const hostSocket = Array.from(io.sockets.sockets.values())
       .find(s => s.userId === room.host && s.currentRoom === roomId);
     
     if (hostSocket) {
-      // Send join request to host
-      hostSocket.emit('joinRequest', {
+      const requestData = {
         requestId: `${Date.now()}-${requesterUserId}`,
         roomId,
         requesterName,
         requesterUserId,
-        requesterSocketId: socket.id
+        requesterSocketId: socket.id,
+        requestTime: new Date().toISOString()
+      };
+      
+      // Store the pending request
+      room.pendingJoinRequests.set(requesterUserId, requestData);
+      
+      // Send updated join request list to host
+      const pendingRequests = Array.from(room.pendingJoinRequests.values());
+      hostSocket.emit('joinRequestsUpdated', { 
+        roomId,
+        pendingRequests,
+        count: pendingRequests.length
       });
       
       socket.emit('joinRequestResult', { success: true, message: 'Join request sent to host' });
-      console.log(`[Signaling] ✅ Join request sent to host ${room.host}`);
+      console.log(`[Signaling] ✅ Join request added to pending list for room ${roomId}`);
     } else {
       socket.emit('joinRequestResult', { success: false, message: 'Host is not available' });
       console.log(`[Signaling] ❌ Host not found for room ${roomId}`);
@@ -905,6 +924,28 @@ io.on('connection', async socket => {
   // Host response to join request
   socket.on('respondToJoinRequest', ({ requestId, approved, requesterSocketId, roomId }) => {
     console.log(`[Signaling] Host ${socket.userId} ${approved ? 'approved' : 'denied'} join request ${requestId}`);
+    
+    const room = rooms[roomId];
+    if (!room) {
+      console.log(`[Signaling] ❌ Room ${roomId} not found for join request response`);
+      return;
+    }
+    
+    // Find and remove the request from pending list
+    const requesterUserId = Array.from(room.pendingJoinRequests.entries())
+      .find(([userId, request]) => request.requestId === requestId)?.[0];
+    
+    if (requesterUserId) {
+      room.pendingJoinRequests.delete(requesterUserId);
+      
+      // Send updated request count to host
+      const pendingRequests = Array.from(room.pendingJoinRequests.values());
+      socket.emit('joinRequestsUpdated', { 
+        roomId,
+        pendingRequests,
+        count: pendingRequests.length
+      });
+    }
     
     const requesterSocket = io.sockets.sockets.get(requesterSocketId);
     if (requesterSocket) {
