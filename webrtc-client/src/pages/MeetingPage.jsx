@@ -2455,48 +2455,61 @@ To convert to MP4:
         </div>
       )}
 
-      {/* Host Transfer Notification */}
+      {/* Host Transfer Notification - Sleek slide-in from top right */}
       {hostTransferNotification && (
-        <div className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 p-6 rounded-lg shadow-2xl border-2 max-w-md text-center ${
-          hostTransferNotification.type === 'newHost'
-            ? 'bg-gradient-to-r from-blue-600 to-purple-600 border-blue-400 text-white'
-            : 'bg-gradient-to-r from-green-500 to-blue-500 border-green-400 text-white'
-        }`}>
-          <div className="flex items-center justify-center mb-3">
-            {hostTransferNotification.type === 'newHost' ? (
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                <div className="text-2xl">👑</div>
+        <div 
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 max-w-sm animate-slide-in-right ${
+            hostTransferNotification.type === 'newHost'
+              ? 'bg-white border-blue-500 text-gray-800'
+              : 'bg-white border-green-500 text-gray-800'
+          }`}
+        >
+          <style>{`
+            .animate-slide-in-right {
+              animation: slideInFromRight 0.5s ease-out forwards;
+            }
+            @keyframes slideInFromRight {
+              0% {
+                transform: translateX(100%);
+                opacity: 0;
+              }
+              100% {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
+          
+          <div className="flex items-start space-x-3">
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+              hostTransferNotification.type === 'newHost'
+                ? 'bg-blue-100 text-blue-600'
+                : 'bg-green-100 text-green-600'
+            }`}>
+              {hostTransferNotification.type === 'newHost' ? '👑' : '🔄'}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {hostTransferNotification.type === 'newHost' ? 'You\'re now the host' : 'New host'}
               </div>
-            ) : (
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                <div className="text-2xl">🔄</div>
+              <div className="text-xs text-gray-600 mt-1">
+                {hostTransferNotification.type === 'newHost' 
+                  ? 'You can now manage meeting settings'
+                  : hostTransferNotification.message
+                }
               </div>
-            )}
+            </div>
+            
+            <button
+              onClick={() => setHostTransferNotification(null)}
+              className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          
-          <div className="mb-3">
-            <div className="text-lg font-bold">
-              {hostTransferNotification.type === 'newHost' ? 'You are now the Host!' : 'New Host'}
-            </div>
-            <div className="text-sm opacity-90 mt-1">
-              {hostTransferNotification.message}
-            </div>
-          </div>
-          
-          {hostTransferNotification.type === 'newHost' && (
-            <div className="text-xs opacity-80 bg-black/20 rounded p-2">
-              <div>• You can now manage meeting settings</div>
-              <div>• Control participant permissions</div>
-              <div>• Manage join requests</div>
-            </div>
-          )}
-          
-          <button
-            onClick={() => setHostTransferNotification(null)}
-            className="absolute top-2 right-2 w-6 h-6 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors"
-          >
-            ×
-          </button>
         </div>
       )}
 
