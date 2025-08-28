@@ -1801,24 +1801,32 @@ export default function MessagesPage() {
       const olderMessages = response.data.messages || [];
       
       if (olderMessages.length > 0) {
-        // Prepend older messages to existing messages
-        setMessages(prev => [...olderMessages, ...prev]);
-        setMessageOffset(prev => prev + olderMessages.length);
+        // Use mergeMessages to properly deduplicate and merge older messages
+        setMessages(prev => {
+          const mergedMessages = mergeMessages(olderMessages, prev);
+          return mergedMessages;
+        });
+        
+        // Only increment offset by the number of unique new messages
+        const uniqueOlderMessages = olderMessages.filter(olderMsg => 
+          !messages.some(existingMsg => existingMsg._id === olderMsg._id)
+        );
+        setMessageOffset(prev => prev + uniqueOlderMessages.length);
         setHasMoreMessages(olderMessages.length === 50);
         
         // Update reactions state for newly loaded older messages
         const olderReactions = {};
-        olderMessages.forEach(msg => {
+        uniqueOlderMessages.forEach(msg => {
           if (msg.reactions && msg.reactions.length > 0) {
             olderReactions[msg._id] = msg.reactions;
           }
         });
         setReactions(prev => ({ ...olderReactions, ...prev })); // Add older reactions first
         
-        // Update cache
+        // Update cache with proper merging
         setMessagesCache(prev => ({
           ...prev,
-          [selected._id]: [...olderMessages, ...(prev[selected._id] || [])]
+          [selected._id]: mergeMessages(olderMessages, prev[selected._id] || [])
         }));
       } else {
         setHasMoreMessages(false);
