@@ -165,7 +165,9 @@ export default function MessagesPage() {
     
     // Add server messages first (they are the source of truth)
     serverMessages.forEach(msg => {
-      messageMap.set(msg._id, msg);
+      if (msg._id) {
+        messageMap.set(msg._id, msg);
+      }
     });
     
     // Add cached messages that aren't in server messages
@@ -188,12 +190,6 @@ export default function MessagesPage() {
       const dateA = new Date(a.createdAt || a.timestamp || 0);
       const dateB = new Date(b.createdAt || b.timestamp || 0);
       return dateA - dateB;
-    });
-    
-    console.log('📨 Merged messages:', {
-      server: serverMessages.length,
-      cached: cachedMessages.length,
-      merged: merged.length
     });
     
     return merged;
@@ -621,7 +617,7 @@ export default function MessagesPage() {
     }
   };
 
-  // WHATSAPP-STYLE: Instant Conversation Loading
+  // WHATSAPP-STYLE: Instant Conversation Loading  
   useEffect(() => {
     if (!selected?._id) {
       setMessages([]);
@@ -637,7 +633,10 @@ export default function MessagesPage() {
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
     const cachedMessages = messagesCache[convId] || [];
     
-    // Show cached messages immediately for instant loading
+    // Set loading state initially
+    setMessagesLoading(true);
+    
+    // Show cached messages immediately for better UX, but only if we have them
     if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
       
@@ -649,12 +648,10 @@ export default function MessagesPage() {
         }
       });
       setReactions(cachedReactions);
-      
       setMessagesLoading(false);
     } else {
       setMessages([]);
       setReactions({});
-      setMessagesLoading(true);
     }
     
     // Always fetch from server to ensure we have latest messages
@@ -662,26 +659,32 @@ export default function MessagesPage() {
       .then(res => {
         const serverMessages = res.data.messages || [];
         
-        // Merge server messages with cached ones to avoid losing any messages
-        const mergedMessages = mergeMessages(serverMessages, cachedMessages);
+        // Only merge if we have cached messages that might contain newer real-time messages
+        // Otherwise, just use server messages directly to avoid potential duplication
+        let finalMessages;
+        if (cachedMessages.length > 0) {
+          finalMessages = mergeMessages(serverMessages, cachedMessages);
+        } else {
+          finalMessages = serverMessages;
+        }
         
-        setMessages(mergedMessages);
-        setMessageOffset(mergedMessages.length);
+        setMessages(finalMessages);
+        setMessageOffset(finalMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
         
         // Initialize reactions state from loaded messages
         const initialReactions = {};
-        mergedMessages.forEach(msg => {
+        finalMessages.forEach(msg => {
           if (msg.reactions && msg.reactions.length > 0) {
             initialReactions[msg._id] = msg.reactions;
           }
         });
         setReactions(initialReactions);
         
-        // Update cache with merged results
+        // Update cache with final results
         setMessagesCache(prev => ({
           ...prev,
-          [convId]: mergedMessages
+          [convId]: finalMessages
         }));
         
         chatSocket.joinConversation(convId);
@@ -702,7 +705,7 @@ export default function MessagesPage() {
     return () => {
       chatSocket.leaveConversation(convId);
     };
-  }, [selected]);
+  }, [selected?._id]); // Only re-run when conversation ID changes, not when selected object changes
 
   // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
 
