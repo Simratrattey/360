@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users, CircleDot } from 'lucide-react';
+import { Clock, Users, CircleDot, Check, X } from 'lucide-react';
 
-export default function MeetingStatsBar({ participantCount, meetingStartTime, roomId, recordingStatus }) {
+export default function MeetingStatsBar({ 
+  participantCount, 
+  meetingStartTime, 
+  roomId, 
+  recordingStatus, 
+  joinRequests = [], 
+  showJoinRequests, 
+  onToggleJoinRequests,
+  isHost,
+  onApproveJoinRequest,
+  onDenyJoinRequest
+}) {
   const [duration, setDuration] = useState('0:00');
   
   // Debug logging for participant count
@@ -54,10 +65,59 @@ export default function MeetingStatsBar({ participantCount, meetingStartTime, ro
       </div>
       
       {/* Participant Count and Recording Status */}
-      <div className="flex items-center space-x-4 text-sm">
-        <div className="flex items-center space-x-2">
-          <Users size={16} className="text-blue-400" />
-          <span>{participantCount || 0}</span>
+      <div className="flex items-center space-x-4 text-sm relative">
+        <div className="relative">
+          <div 
+            className={`participants-badge flex items-center space-x-2 ${isHost && joinRequests.length > 0 ? 'cursor-pointer hover:bg-gray-700 rounded px-2 py-1' : ''}`}
+            onClick={isHost && joinRequests.length > 0 ? onToggleJoinRequests : undefined}
+          >
+            <Users size={16} className="text-blue-400" />
+            <span>{participantCount || 0}</span>
+            {/* Red badge for pending join requests */}
+            {isHost && joinRequests.length > 0 && (
+              <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
+                {joinRequests.length}
+              </div>
+            )}
+          </div>
+          
+          {/* Dropdown for join requests */}
+          {isHost && showJoinRequests && joinRequests.length > 0 && (
+            <div className="join-requests-dropdown absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
+              <div className="p-3 border-b border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900">Join Requests</h3>
+                <p className="text-xs text-gray-500">{joinRequests.length} pending request(s)</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {joinRequests.map((request) => (
+                  <div key={request.requestId} className="p-3 border-b border-gray-100 last:border-b-0">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{request.requesterName}</div>
+                        <div className="text-xs text-gray-500">Wants to join the meeting</div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => onApproveJoinRequest?.(request.requestId)}
+                          className="flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+                          title="Approve"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => onDenyJoinRequest?.(request.requestId)}
+                          className="flex items-center justify-center w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                          title="Deny"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Recording Indicator */}

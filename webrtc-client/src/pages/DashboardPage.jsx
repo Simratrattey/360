@@ -12,16 +12,19 @@ import {
   Activity,
   Sparkles,
   User,
-  Hash
+  Hash,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
+import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useSocket } from '../context/SocketContext';
 
 const stats = [
   { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
@@ -40,6 +43,7 @@ const recentMeetings = [
 export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
+  const { sfuSocket } = useSocket() || {};
   const navigate = useNavigate();
   const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead } = useNotifications();
   const [rooms, setRooms] = useState([]);
@@ -47,9 +51,13 @@ export default function DashboardPage() {
   const [messageNotifications, setMessageNotifications] = useState([]);
   // Removed localGeneralNotifications to avoid duplicates - using only global notifications
   const [scheduling, setScheduling] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  
+  // Join request system
+  const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
+  const [approvedRooms, setApprovedRooms] = useState(new Set());
 
-  useEffect(() => {
-    // Fetch active rooms
+  const loadRooms = () => {
     API.get('/rooms')
       .then(res => {
         setRooms(res.data.rooms || []);
@@ -59,6 +67,11 @@ export default function DashboardPage() {
         console.error('Error fetching rooms:', err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    // Fetch active rooms
+    loadRooms();
   }, []);
 
   // Fetch unread message notifications
@@ -292,12 +305,68 @@ export default function DashboardPage() {
   }, [chatSocket, user.id]);
 
   const createNewMeeting = () => {
-    const roomId = generateRoomId();
-    openMeetingWindow(roomId);
+    setIsCreateModalOpen(true);
   };
 
   const joinMeeting = (roomId) => {
     openMeetingWindow(roomId);
+  };
+
+  // Helper function to add custom notifications
+  const addJoinRequestNotification = (type, message, roomId = null) => {
+    const notification = {
+      id: Date.now(),
+      type, // 'success', 'error', 'approved', 'denied'
+      message,
+      roomId,
+      timestamp: new Date().toISOString()
+    };
+    
+    setJoinRequestNotifications(prev => [...prev, notification]);
+    
+    // Auto-remove after 5 seconds for success/error, 10 seconds for approved/denied
+    const timeout = type === 'approved' || type === 'denied' ? 10000 : 5000;
+    setTimeout(() => {
+      setJoinRequestNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, timeout);
+    
+    return notification.id;
+  };
+
+  const requestJoinMeeting = (roomId) => {
+    if (!sfuSocket || !user) {
+      addJoinRequestNotification('error', 'Unable to send join request. Please try again.');
+      return;
+    }
+
+    console.log('[Dashboard] Sending join request for room:', roomId);
+    
+    sfuSocket.emit('requestJoinRoom', {
+      roomId,
+      requesterName: user.fullName || user.username || user.email,
+      requesterUserId: user.id || user._id
+    });
+
+    // Listen for join request result
+    sfuSocket.once('joinRequestResult', (result) => {
+      if (result.success) {
+        addJoinRequestNotification('success', 'Join request sent to host successfully!');
+        
+        // Listen for host's response
+        sfuSocket.once('joinRequestApproved', () => {
+          addJoinRequestNotification('approved', 'Host approved your request! You can now join the meeting.', roomId);
+          // Mark room as approved so button changes to "Join"
+          setApprovedRooms(prev => new Set([...prev, roomId]));
+        });
+        
+        sfuSocket.once('joinRequestDenied', (data) => {
+          addJoinRequestNotification('denied', data.message || 'Host denied your join request.');
+        });
+        
+      } else {
+        addJoinRequestNotification('error', result.message || 'Failed to send join request.');
+      }
+    });
   };
 
   return (
@@ -447,14 +516,34 @@ export default function DashboardPage() {
                   key={room.roomId}
                   whileHover={{ scale: 1.03 }}
                   className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
-                  onClick={() => joinMeeting(room.roomId)}
+                  onClick={() => {
+                    if (room.visibility === 'approval' && !approvedRooms.has(room.roomId)) {
+                      requestJoinMeeting(room.roomId);
+                    } else {
+                      joinMeeting(room.roomId);
+                    }
+                  }}
                 >
-                  <div>
-                    <p className="font-bold text-primary-800">Room {room.roomId}</p>
-                    <p className="text-sm text-secondary-600">{room.participants || 0} participants</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-primary-800 truncate">{room.name}</p>
+                      {room.isRecording && (
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-secondary-600">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</p>
+                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                        {room.visibility === 'public' ? 'Public' : 'Approval Required'}
+                      </span>
+                    </div>
                   </div>
-                  <button className="btn-primary text-sm py-1 px-4 rounded-lg shadow">
-                    Join
+                  <button className={`text-sm py-1 px-4 rounded-lg shadow transition-colors ${
+                    room.visibility === 'approval' && !approvedRooms.has(room.roomId)
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'btn-primary'
+                  }`}>
+                    {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
                   </button>
                 </motion.div>
               ))}
@@ -551,6 +640,81 @@ export default function DashboardPage() {
         open={scheduling}
         onClose={() => setScheduling(false)}
       />
+      
+      <CreateMeetingModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onMeetingCreated={loadRooms}
+      />
+
+      {/* Custom Join Request Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {joinRequestNotifications.map((notification) => (
+          <motion.div
+            key={notification.id}
+            initial={{ opacity: 0, x: 300, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 300, scale: 0.8 }}
+            className={`p-4 rounded-lg shadow-lg border-l-4 max-w-md ${
+              notification.type === 'success'
+                ? 'bg-green-50 border-green-400 text-green-800'
+                : notification.type === 'error'
+                ? 'bg-red-50 border-red-400 text-red-800'
+                : notification.type === 'approved'
+                ? 'bg-blue-50 border-blue-400 text-blue-800'
+                : notification.type === 'denied'
+                ? 'bg-orange-50 border-orange-400 text-orange-800'
+                : 'bg-gray-50 border-gray-400 text-gray-800'
+            }`}
+          >
+            <div className="flex items-start">
+              <div className="flex-shrink-0 mr-3">
+                {notification.type === 'success' && (
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 bg-white rounded-full"></div>
+                  </div>
+                )}
+                {notification.type === 'error' && (
+                  <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+                    <div className="w-1 h-3 bg-white rounded-full"></div>
+                  </div>
+                )}
+                {notification.type === 'approved' && (
+                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-1 bg-white rounded-full rotate-45 relative">
+                      <div className="w-1 h-2 bg-white rounded-full absolute -top-0.5 left-1"></div>
+                    </div>
+                  </div>
+                )}
+                {notification.type === 'denied' && (
+                  <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-0.5 bg-white rounded-full"></div>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">{notification.message}</p>
+                {notification.type === 'approved' && notification.roomId && (
+                  <button
+                    onClick={() => joinMeeting(notification.roomId)}
+                    className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors"
+                  >
+                    Join Now
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setJoinRequestNotifications(prev => 
+                  prev.filter(n => n.id !== notification.id)
+                )}
+                className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 } 
