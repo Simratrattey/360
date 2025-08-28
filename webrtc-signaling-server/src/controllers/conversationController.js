@@ -777,6 +777,17 @@ export async function markConversationAsRead(req, res, next) {
       { upsert: true, new: true }
     );
 
+    // Also mark any message notifications for this conversation as read
+    await Notification.updateMany(
+      { 
+        recipient: userId, 
+        type: 'message',
+        'data.conversationId': conversationId,
+        read: false 
+      },
+      { read: true }
+    );
+
     res.json({ message: 'Conversation marked as read' });
   } catch (err) {
     next(err);
