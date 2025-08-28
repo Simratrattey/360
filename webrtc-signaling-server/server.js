@@ -16,7 +16,7 @@ import http    from 'http';
 import { Server as SocketIO } from 'socket.io';
 import User    from './src/models/user.js';
 import Message from './src/models/message.js';
-import Conversation from './src/models/conversation.js';
+import Conversation, { ReadReceipt } from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
 import { 
@@ -1254,6 +1254,24 @@ io.on('connection', async socket => {
         );
         
         if (message) {
+          // Sync ReadReceipt timestamp to keep conversation read status consistent
+          // Only update if this message is newer than the current lastReadAt
+          const existingReceipt = await ReadReceipt.findOne({
+            user: userId,
+            conversation: message.conversation
+          }).session(session);
+          
+          const shouldUpdate = !existingReceipt || 
+                              new Date(message.createdAt) > new Date(existingReceipt.lastReadAt);
+          
+          if (shouldUpdate) {
+            await ReadReceipt.findOneAndUpdate(
+              { user: userId, conversation: message.conversation },
+              { lastReadAt: message.createdAt },
+              { upsert: true, session }
+            );
+          }
+          
           // Get the conversation to find other members
           const conversation = await Conversation.findById(message.conversation).populate('members');
           if (conversation) {
