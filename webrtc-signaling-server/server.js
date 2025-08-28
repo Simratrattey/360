@@ -88,7 +88,7 @@ app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast')) {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/meeting-info') || req.path.startsWith('/rooms')) {
     return next();
   }
   return authMiddleware(req, res, next);
@@ -1183,27 +1183,35 @@ app.get('/api/rooms', (req, res) => {
 
 // API endpoint to create meeting info
 app.post('/api/meeting-info', express.json(), (req, res) => {
-  const { roomId, name, visibility } = req.body;
-  
-  if (!roomId || !name) {
-    return res.status(400).json({ error: 'Room ID and name are required' });
+  try {
+    console.log('[Meeting Info] POST /api/meeting-info received:', req.body);
+    
+    const { roomId, name, visibility } = req.body;
+    
+    if (!roomId || !name) {
+      console.error('[Meeting Info] Missing required fields:', { roomId: !!roomId, name: !!name });
+      return res.status(400).json({ error: 'Room ID and name are required' });
+    }
+    
+    // Initialize global meeting info cache if it doesn't exist
+    if (!global.meetingInfoCache) {
+      global.meetingInfoCache = {};
+    }
+    
+    // Store meeting info
+    global.meetingInfoCache[roomId] = {
+      name,
+      visibility: visibility || 'public',
+      createdAt: new Date().toISOString()
+    };
+    
+    console.log(`[Meeting Info] ✅ Stored info for room ${roomId}: ${name} (${visibility})`);
+    
+    res.json({ success: true, roomId, name, visibility });
+  } catch (error) {
+    console.error('[Meeting Info] ❌ Error storing meeting info:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  
-  // Initialize global meeting info cache if it doesn't exist
-  if (!global.meetingInfoCache) {
-    global.meetingInfoCache = {};
-  }
-  
-  // Store meeting info
-  global.meetingInfoCache[roomId] = {
-    name,
-    visibility: visibility || 'public',
-    createdAt: new Date().toISOString()
-  };
-  
-  console.log(`[Meeting Info] Stored info for room ${roomId}: ${name} (${visibility})`);
-  
-  res.json({ success: true, roomId, name, visibility });
 });
 
 // 🔥 NEW: Endpoint for SFU server to broadcast newProducer events

@@ -40,6 +40,9 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
       const roomId = generateRoomId();
       
       // Send meeting info to server
+      console.log('[CreateMeeting] Sending request to:', `${import.meta.env.VITE_API_URL}/meeting-info`);
+      console.log('[CreateMeeting] Request body:', { roomId, name: meetingName.trim(), visibility });
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/meeting-info`, {
         method: 'POST',
         headers: {
@@ -52,9 +55,16 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
         })
       });
 
+      console.log('[CreateMeeting] Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Failed to create meeting info');
+        const errorData = await response.text();
+        console.error('[CreateMeeting] Error response:', errorData);
+        throw new Error(`Failed to create meeting info: ${response.status} ${errorData}`);
       }
+      
+      const result = await response.json();
+      console.log('[CreateMeeting] Success:', result);
       
       // Open meeting window
       openMeetingWindow(roomId);
