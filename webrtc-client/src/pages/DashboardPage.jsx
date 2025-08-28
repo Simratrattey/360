@@ -45,7 +45,7 @@ export default function DashboardPage() {
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   // Using only global notifications to avoid duplicates
@@ -336,21 +336,25 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {(Array.isArray(generalNotifications) ? generalNotifications : []).length > 0 ? (
+        {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             
             {/* General notifications (group/conversation events) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications : []).map((notif, idx) => (
+            {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => {
+                onClick={async () => {
                   // Mark notification as read
                   if (markAsRead && notif._id) {
-                    markAsRead(notif._id);
+                    await markAsRead(notif._id);
+                    // Refresh notifications to ensure UI is in sync with server
+                    if (refreshNotifications) {
+                      refreshNotifications();
+                    }
                   }
                   // Navigate based on notification type
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
