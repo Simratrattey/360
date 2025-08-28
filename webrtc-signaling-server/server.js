@@ -616,13 +616,20 @@ io.on('connection', async socket => {
     socket.currentRoom = roomId;
 
     if (!rooms[roomId]) {
+      // Try to get meeting info from localStorage-style storage or use defaults
+      const meetingInfo = global.meetingInfoCache ? global.meetingInfoCache[roomId] : null;
+      
       rooms[roomId] = { 
         offers: [], 
         participants: [], 
         host: socket.userId, // First person to join becomes host
         avatarApiEnabled: true, // Default to enabled
         isRecording: false, // Track recording status
-        recordedBy: null // Who started the recording
+        recordedBy: null, // Who started the recording
+        // Enhanced meeting info
+        name: meetingInfo?.name || `Room ${roomId.slice(-6)}`,
+        visibility: meetingInfo?.visibility || 'public',
+        createdAt: meetingInfo?.createdAt || new Date().toISOString()
       };
     }
     // Remove any legacy username-only entries
@@ -1154,11 +1161,49 @@ io.on('connection', async socket => {
 
 // API endpoint to get active rooms
 app.get('/api/rooms', (req, res) => {
-  const activeRooms = Object.keys(rooms).map(roomId => ({
-    roomId,
-    participantCount: rooms[roomId].participants.length
-  }));
+  const activeRooms = Object.keys(rooms)
+    .filter(roomId => {
+      const room = rooms[roomId];
+      // Only return rooms that are not private and have participants
+      return room.visibility !== 'private' && room.participants.length > 0;
+    })
+    .map(roomId => ({
+      roomId,
+      name: rooms[roomId].name,
+      visibility: rooms[roomId].visibility,
+      participantCount: rooms[roomId].participants.length,
+      host: rooms[roomId].host,
+      createdAt: rooms[roomId].createdAt,
+      isRecording: rooms[roomId].isRecording
+    }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Sort by newest first
+  
   res.json({ rooms: activeRooms });
+});
+
+// API endpoint to create meeting info
+app.post('/api/meeting-info', express.json(), (req, res) => {
+  const { roomId, name, visibility } = req.body;
+  
+  if (!roomId || !name) {
+    return res.status(400).json({ error: 'Room ID and name are required' });
+  }
+  
+  // Initialize global meeting info cache if it doesn't exist
+  if (!global.meetingInfoCache) {
+    global.meetingInfoCache = {};
+  }
+  
+  // Store meeting info
+  global.meetingInfoCache[roomId] = {
+    name,
+    visibility: visibility || 'public',
+    createdAt: new Date().toISOString()
+  };
+  
+  console.log(`[Meeting Info] Stored info for room ${roomId}: ${name} (${visibility})`);
+  
+  res.json({ success: true, roomId, name, visibility });
 });
 
 // 🔥 NEW: Endpoint for SFU server to broadcast newProducer events

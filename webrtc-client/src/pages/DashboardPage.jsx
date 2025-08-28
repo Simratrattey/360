@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
+import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
@@ -47,9 +48,9 @@ export default function DashboardPage() {
   const [messageNotifications, setMessageNotifications] = useState([]);
   const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
   const [scheduling, setScheduling] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  useEffect(() => {
-    // Fetch active rooms
+  const loadRooms = () => {
     API.get('/rooms')
       .then(res => {
         setRooms(res.data.rooms || []);
@@ -59,6 +60,11 @@ export default function DashboardPage() {
         console.error('Error fetching rooms:', err);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    // Fetch active rooms
+    loadRooms();
   }, []);
 
   // Fetch unread message notifications
@@ -309,8 +315,7 @@ export default function DashboardPage() {
   }, [chatSocket, user.id]);
 
   const createNewMeeting = () => {
-    const roomId = generateRoomId();
-    openMeetingWindow(roomId);
+    setIsCreateModalOpen(true);
   };
 
   const joinMeeting = (roomId) => {
@@ -493,14 +498,35 @@ export default function DashboardPage() {
                   key={room.roomId}
                   whileHover={{ scale: 1.03 }}
                   className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
-                  onClick={() => joinMeeting(room.roomId)}
+                  onClick={() => {
+                    if (room.visibility === 'approval') {
+                      // In a real app, this would send a join request to the host
+                      alert('Join request sent to host');
+                    } else {
+                      joinMeeting(room.roomId);
+                    }
+                  }}
                 >
-                  <div>
-                    <p className="font-bold text-primary-800">Room {room.roomId}</p>
-                    <p className="text-sm text-secondary-600">{room.participants || 0} participants</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-primary-800 truncate">{room.name}</p>
+                      {room.isRecording && (
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-secondary-600">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</p>
+                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                        {room.visibility === 'public' ? 'Public' : 'Approval Required'}
+                      </span>
+                    </div>
                   </div>
-                  <button className="btn-primary text-sm py-1 px-4 rounded-lg shadow">
-                    Join
+                  <button className={`text-sm py-1 px-4 rounded-lg shadow transition-colors ${
+                    room.visibility === 'approval' 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'btn-primary'
+                  }`}>
+                    {room.visibility === 'approval' ? 'Request' : 'Join'}
                   </button>
                 </motion.div>
               ))}
@@ -596,6 +622,12 @@ export default function DashboardPage() {
       <ScheduleMeetingModal
         open={scheduling}
         onClose={() => setScheduling(false)}
+      />
+      
+      <CreateMeetingModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onMeetingCreated={loadRooms}
       />
     </div>
   );

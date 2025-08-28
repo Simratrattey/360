@@ -17,6 +17,7 @@ import {
   Eye
 } from 'lucide-react';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
+import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
 import { fetchUpcomingMeetings } from '../services/meetingService';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -72,9 +74,9 @@ export default function MeetingsPage() {
   }, [meetings]);
 
   const startNow = () => {
-    const roomId = generateRoomId();
-    openMeetingWindow(roomId);
+    setIsCreateModalOpen(true);
   };
+
 
   useEffect(() => {
     const loadMeetings = async () => {
@@ -187,6 +189,7 @@ export default function MeetingsPage() {
             </div>
           </div>
         </motion.div>
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Calendar */}
@@ -489,6 +492,13 @@ export default function MeetingsPage() {
         onMeetingScheduled={() => {
           reload();
         }}
+      />
+
+      {/* Create Meeting Modal */}
+      <CreateMeetingModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onMeetingCreated={reload}
       />
     </div>
   );
