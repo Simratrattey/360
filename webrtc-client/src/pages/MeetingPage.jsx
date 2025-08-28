@@ -393,13 +393,21 @@ export default function MeetingPage() {
 
   // Attach remote streams to their video elements and handle multilingual audio
   useEffect(() => {
-    console.log('[MeetingPage] 🔄 Remote streams updated:', Array.from(remoteStreams.entries()).map(([id, stream]) => ({
+    // Only log streams for active participants (filter out departed participants)
+    const activeStreams = Array.from(remoteStreams.entries()).filter(([id]) => participantMap[id] !== undefined);
+    console.log('[MeetingPage] 🔄 Active remote streams:', activeStreams.map(([id, stream]) => ({
       id,
+      participantName: participantMap[id],
       videoTracks: stream.getVideoTracks().length,
       audioTracks: stream.getAudioTracks().length
     })));
     
     remoteStreams.forEach((stream, id) => {
+      // Skip processing for participants who have left (not in participantMap)
+      if (participantMap[id] === undefined) {
+        return;
+      }
+      
       // Start audio analyzer for speaking detection
       if (stream.getAudioTracks().length > 0 && !audioAnalyzers.current.has(id)) {
         startAudioAnalyzer(stream, id, false);
@@ -438,16 +446,16 @@ export default function MeetingPage() {
       
       // Start processing this stream if subtitles or multilingual is enabled
       if ((subtitlesEnabled || multilingualEnabled) && stream.getAudioTracks().length > 0) {
-        const participantName = participantMap[id] || 'Guest';
+        const participantName = participantMap[id];
         console.log(`Starting audio processing for ${participantName} (${id})`);
         startRemoteStreamRecognition(stream, id, participantName);
       }
     });
     
-    // Cleanup audio analyzers for streams that are no longer present
+    // Cleanup audio analyzers for streams that are no longer present or participants who have left
     const currentStreamIds = new Set(Array.from(remoteStreams.keys()));
     audioAnalyzers.current.forEach((analyzer, id) => {
-      if (id !== 'local' && !currentStreamIds.has(id)) {
+      if (id !== 'local' && (!currentStreamIds.has(id) || participantMap[id] === undefined)) {
         console.log(`[Audio Analyzer] Cleaning up removed participant ${id}`);
         stopAudioAnalyzer(id);
       }
@@ -867,11 +875,14 @@ export default function MeetingPage() {
       
       // Add remote videos
       remoteStreams.forEach((stream, id) => {
+        // Skip departed participants  
+        if (participantMap[id] === undefined) return;
+        
         const videoEl = document.getElementById(`remote-video-${id}`);
         if (videoEl) {
           videoElements.push({
             video: videoEl,
-            label: participantMap[id] || 'Guest',
+            label: participantMap[id],
             isLocal: false
           });
         }
@@ -1060,7 +1071,10 @@ To convert to MP4:
     
     // Start processing each remote stream directly
     remoteStreams.forEach((stream, peerId) => {
-      const participantName = participantMap[peerId] || 'Guest';
+      // Skip departed participants
+      if (participantMap[peerId] === undefined) return;
+      
+      const participantName = participantMap[peerId];
       startRemoteStreamRecognition(stream, peerId, participantName);
     });
   };
@@ -1707,8 +1721,11 @@ To convert to MP4:
     if (subtitlesEnabled && remoteStreams.size > 0) {
       // Start recognition for any new remote streams
       remoteStreams.forEach((stream, peerId) => {
+        // Skip departed participants
+        if (participantMap[peerId] === undefined) return;
+        
         if (!speechRecognitionRef.current?.has(peerId)) {
-          const participantName = participantMap[peerId] || 'Guest';
+          const participantName = participantMap[peerId];
           startRemoteStreamRecognition(stream, peerId, participantName);
         }
       });
@@ -1965,14 +1982,21 @@ To convert to MP4:
   };
 
   // Memoized video tiles to prevent unnecessary recalculations
+  // Filter out participants who have left (not in participantMap)
   const videoTiles = useMemo(() => [
     { id: 'local', stream: localStream, isLocal: true, label: 'You' },
-    ...Array.from(remoteStreams.entries()).map(([id, stream]) => ({
-      id,
-      stream,
-      isLocal: false,
-      label: participantMap[id] || 'Guest',
-    }))
+    ...Array.from(remoteStreams.entries())
+      .filter(([id, stream]) => {
+        // Only include remote streams that have a corresponding participant in participantMap
+        // This prevents empty "Guest" containers for departed participants
+        return participantMap[id] !== undefined;
+      })
+      .map(([id, stream]) => ({
+        id,
+        stream,
+        isLocal: false,
+        label: participantMap[id],
+      }))
   ], [localStream, remoteStreams, participantMap]);
 
   // Memoized grid calculation
