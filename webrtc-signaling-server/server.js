@@ -16,7 +16,7 @@ import http    from 'http';
 import { Server as SocketIO } from 'socket.io';
 import User    from './src/models/user.js';
 import Message from './src/models/message.js';
-import Conversation from './src/models/conversation.js';
+import Conversation, { ReadReceipt } from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
 import { 
@@ -85,9 +85,32 @@ app.use('/api/auth', authRoutes);
 // File routes should be accessible to authenticated users, so register before auth middleware
 app.use('/api/files', fileRoutes);
 app.use(helmet());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+
+// More lenient rate limiting for read operations (conversation read, message read, etc.)
+const readOperationsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Allow 1000 read operations per 15 minutes
+  skip: (req) => {
+    // Only apply this limiter to read operations
+    return !req.path.includes('/read') && req.method !== 'GET';
+  }
+});
+
+// General rate limiting for all other operations
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes  
+  max: 500, // 500 requests per 15 minutes for other operations
+  skip: (req) => {
+    // Skip if it's a read operation (will be handled by readOperationsLimiter)
+    return req.path.includes('/read') || req.method === 'GET';
+  }
+});
+
+app.use(readOperationsLimiter);
+app.use(generalLimiter);
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
+  // Skip auth for certain endpoints
   if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/rooms')) {
     return next();
   }
@@ -1212,6 +1235,13 @@ io.on('connection', async socket => {
   // Mark message as read
   socket.on('chat:read', async ({ messageId }) => {
     const userId = socket.userId;
+    
+    // Validate messageId is a proper ObjectId
+    if (!messageId || messageId.startsWith('temp-') || !mongoose.Types.ObjectId.isValid(messageId)) {
+      console.warn('Invalid messageId for read operation:', messageId);
+      return;
+    }
+    
     const session = await mongoose.startSession();
     
     try {
@@ -1224,6 +1254,24 @@ io.on('connection', async socket => {
         );
         
         if (message) {
+          // Sync ReadReceipt timestamp to keep conversation read status consistent
+          // Only update if this message is newer than the current lastReadAt
+          const existingReceipt = await ReadReceipt.findOne({
+            user: userId,
+            conversation: message.conversation
+          }).session(session);
+          
+          const shouldUpdate = !existingReceipt || 
+                              new Date(message.createdAt) > new Date(existingReceipt.lastReadAt);
+          
+          if (shouldUpdate) {
+            await ReadReceipt.findOneAndUpdate(
+              { user: userId, conversation: message.conversation },
+              { lastReadAt: message.createdAt },
+              { upsert: true, session }
+            );
+          }
+          
           // Get the conversation to find other members
           const conversation = await Conversation.findById(message.conversation).populate('members');
           if (conversation) {

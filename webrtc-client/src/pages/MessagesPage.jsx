@@ -140,6 +140,11 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Track conversations already marked as read to prevent duplicate API calls
+  const readConversationsRef = useRef(new Set());
+  const markReadTimeoutRef = useRef(null);
+  
   // Initialize messages cache with localStorage persistence
   const [messagesCache, setMessagesCache] = useState(() => {
     try {
@@ -200,6 +205,52 @@ export default function MessagesPage() {
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  // Debounced function to mark conversation as read (prevents API spam)
+  const debouncedMarkAsRead = useCallback((conversationId) => {
+    // Skip if already marked as read recently
+    if (readConversationsRef.current.has(conversationId)) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (markReadTimeoutRef.current) {
+      clearTimeout(markReadTimeoutRef.current);
+    }
+
+    // Debounce the API call by 500ms
+    markReadTimeoutRef.current = setTimeout(() => {
+      // Add to read set to prevent duplicates
+      readConversationsRef.current.add(conversationId);
+      
+      conversationAPI.markConversationAsRead(conversationId)
+        .then(() => {
+          if (refreshUnreadCount) refreshUnreadCount();
+          
+          // Set unread to 0 for this conversation in the sidebar
+          setAllConversations(prev =>
+            prev.map(section => ({
+              ...section,
+              items: section.items.map(conv => 
+                conv._id === conversationId 
+                  ? { ...conv, unread: 0 }
+                  : conv
+              )
+            }))
+          );
+          
+          // Remove from set after 5 seconds to allow re-marking if needed
+          setTimeout(() => {
+            readConversationsRef.current.delete(conversationId);
+          }, 5000);
+        })
+        .catch(error => {
+          console.error('Error marking conversation as read:', error);
+          // Remove from set on error so it can be retried
+          readConversationsRef.current.delete(conversationId);
+        });
+    }, 500);
+  }, [refreshUnreadCount, setAllConversations]);
   
   useEffect(() => {
     messagesCacheRef.current = messagesCache;
@@ -1173,33 +1224,23 @@ export default function MessagesPage() {
   // Mark messages as read when conversation is selected
   useEffect(() => {
     if (selected && messages.length > 0) {
-      // Mark all messages as read
+      // Mark all messages as read (only real messages, not temp ones)
       messages.forEach(msg => {
-        if (msg.sender !== user.id) {
+        if (msg.sender !== user.id && msg._id && !msg._id.startsWith('temp-')) {
           chatSocket.markAsRead(msg._id);
         }
       });
       
-      // Mark conversation as read on backend
-      conversationAPI.markConversationAsRead(selected._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(conv =>
-                conv._id === selected._id ? { ...conv, unread: 0 } : conv
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      // Use debounced function to mark conversation as read (only if it has unread messages)
+      const selectedConv = allConversations.find(section => 
+        section.items?.find(conv => conv._id === selected._id)
+      )?.items?.find(conv => conv._id === selected._id);
+      
+      if (selectedConv && selectedConv.unread > 0) {
+        debouncedMarkAsRead(selected._id);
+      }
     }
-  }, [selected, messages, user.id, chatSocket, refreshUnreadCount]);
+  }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
@@ -1246,25 +1287,9 @@ export default function MessagesPage() {
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Mark conversation as read immediately
+    // Use debounced function to mark conversation as read (prevents 429 errors)
     if (conv.unread > 0) {
-      conversationAPI.markConversationAsRead(conv._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(c =>
-                c._id === conv._id ? { ...c, unread: 0 } : c
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      debouncedMarkAsRead(conv._id);
     }
   };
 
@@ -1417,7 +1442,7 @@ export default function MessagesPage() {
         new Date().toISOString()
       );
       
-      // Prepare message data for sending
+      // Prepare message data for sending (capture input before clearing)
       const messageData = {
         tempId,
         conversationId: selected._id,
@@ -1429,6 +1454,12 @@ export default function MessagesPage() {
         createdAt: new Date().toISOString()
       };
 
+      // Clear input fields immediately after preparing message data for better UX
+      setInput('');
+      setUploadFile(null);
+      setReplyTo(null);
+      setShowEmojiPicker(false);
+
       // Send message with network resilience
       try {
         await sendMessageWithRetry(messageData);
@@ -1436,12 +1467,6 @@ export default function MessagesPage() {
         console.error('Failed to send message:', error);
         // Message will be queued by sendMessageWithRetry
       }
-      
-      // Reset input fields immediately for better UX
-      setInput('');
-      setUploadFile(null);
-      setReplyTo(null);
-      setShowEmojiPicker(false);
       
       // Show success notification for file uploads
       if (uploadFile) {
@@ -1779,24 +1804,32 @@ export default function MessagesPage() {
       const olderMessages = response.data.messages || [];
       
       if (olderMessages.length > 0) {
-        // Prepend older messages to existing messages
-        setMessages(prev => [...olderMessages, ...prev]);
-        setMessageOffset(prev => prev + olderMessages.length);
+        // Use mergeMessages to properly deduplicate and merge older messages
+        setMessages(prev => {
+          const mergedMessages = mergeMessages(olderMessages, prev);
+          return mergedMessages;
+        });
+        
+        // Only increment offset by the number of unique new messages
+        const uniqueOlderMessages = olderMessages.filter(olderMsg => 
+          !messages.some(existingMsg => existingMsg._id === olderMsg._id)
+        );
+        setMessageOffset(prev => prev + uniqueOlderMessages.length);
         setHasMoreMessages(olderMessages.length === 50);
         
         // Update reactions state for newly loaded older messages
         const olderReactions = {};
-        olderMessages.forEach(msg => {
+        uniqueOlderMessages.forEach(msg => {
           if (msg.reactions && msg.reactions.length > 0) {
             olderReactions[msg._id] = msg.reactions;
           }
         });
         setReactions(prev => ({ ...olderReactions, ...prev })); // Add older reactions first
         
-        // Update cache
+        // Update cache with proper merging
         setMessagesCache(prev => ({
           ...prev,
-          [selected._id]: [...olderMessages, ...(prev[selected._id] || [])]
+          [selected._id]: mergeMessages(olderMessages, prev[selected._id] || [])
         }));
       } else {
         setHasMoreMessages(false);
