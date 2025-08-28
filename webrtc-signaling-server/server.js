@@ -85,9 +85,32 @@ app.use('/api/auth', authRoutes);
 // File routes should be accessible to authenticated users, so register before auth middleware
 app.use('/api/files', fileRoutes);
 app.use(helmet());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+
+// More lenient rate limiting for read operations (conversation read, message read, etc.)
+const readOperationsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Allow 1000 read operations per 15 minutes
+  skip: (req) => {
+    // Only apply this limiter to read operations
+    return !req.path.includes('/read') && req.method !== 'GET';
+  }
+});
+
+// General rate limiting for all other operations
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes  
+  max: 500, // 500 requests per 15 minutes for other operations
+  skip: (req) => {
+    // Skip if it's a read operation (will be handled by readOperationsLimiter)
+    return req.path.includes('/read') || req.method === 'GET';
+  }
+});
+
+app.use(readOperationsLimiter);
+app.use(generalLimiter);
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
+  // Skip auth for certain endpoints
   if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/rooms')) {
     return next();
   }

@@ -140,6 +140,11 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Track conversations already marked as read to prevent duplicate API calls
+  const readConversationsRef = useRef(new Set());
+  const markReadTimeoutRef = useRef(null);
+  
   // Initialize messages cache with localStorage persistence
   const [messagesCache, setMessagesCache] = useState(() => {
     try {
@@ -200,6 +205,49 @@ export default function MessagesPage() {
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  // Debounced function to mark conversation as read (prevents API spam)
+  const debouncedMarkAsRead = useCallback((conversationId) => {
+    // Skip if already marked as read recently
+    if (readConversationsRef.current.has(conversationId)) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (markReadTimeoutRef.current) {
+      clearTimeout(markReadTimeoutRef.current);
+    }
+
+    // Debounce the API call by 500ms
+    markReadTimeoutRef.current = setTimeout(() => {
+      // Add to read set to prevent duplicates
+      readConversationsRef.current.add(conversationId);
+      
+      conversationAPI.markConversationAsRead(conversationId)
+        .then(() => {
+          if (refreshUnreadCount) refreshUnreadCount();
+          
+          // Set unread to 0 for this conversation in the sidebar
+          setAllConversations(prev =>
+            prev.map(conv => 
+              conv._id === conversationId 
+                ? { ...conv, unread: 0 }
+                : conv
+            )
+          );
+          
+          // Remove from set after 5 seconds to allow re-marking if needed
+          setTimeout(() => {
+            readConversationsRef.current.delete(conversationId);
+          }, 5000);
+        })
+        .catch(error => {
+          console.error('Error marking conversation as read:', error);
+          // Remove from set on error so it can be retried
+          readConversationsRef.current.delete(conversationId);
+        });
+    }, 500);
+  }, [refreshUnreadCount, setAllConversations]);
   
   useEffect(() => {
     messagesCacheRef.current = messagesCache;
@@ -1180,26 +1228,16 @@ export default function MessagesPage() {
         }
       });
       
-      // Mark conversation as read on backend
-      conversationAPI.markConversationAsRead(selected._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(conv =>
-                conv._id === selected._id ? { ...conv, unread: 0 } : conv
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      // Use debounced function to mark conversation as read (only if it has unread messages)
+      const selectedConv = allConversations.find(section => 
+        section.items?.find(conv => conv._id === selected._id)
+      )?.items?.find(conv => conv._id === selected._id);
+      
+      if (selectedConv && selectedConv.unread > 0) {
+        debouncedMarkAsRead(selected._id);
+      }
     }
-  }, [selected, messages, user.id, chatSocket, refreshUnreadCount]);
+  }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
@@ -1246,25 +1284,9 @@ export default function MessagesPage() {
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Mark conversation as read immediately
+    // Use debounced function to mark conversation as read (prevents 429 errors)
     if (conv.unread > 0) {
-      conversationAPI.markConversationAsRead(conv._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(c =>
-                c._id === conv._id ? { ...c, unread: 0 } : c
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      debouncedMarkAsRead(conv._id);
     }
   };
 
