@@ -39,32 +39,16 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
     try {
       const roomId = generateRoomId();
       
-      // Send meeting info to server
-      console.log('[CreateMeeting] Sending request to:', `${import.meta.env.VITE_API_URL}/meeting-info`);
-      console.log('[CreateMeeting] Request body:', { roomId, name: meetingName.trim(), visibility });
+      // Store meeting info in localStorage for the meeting page to pass via socket
+      const meetingInfo = {
+        roomId,
+        name: meetingName.trim(),
+        visibility,
+        createdAt: new Date().toISOString()
+      };
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/meeting-info`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          roomId,
-          name: meetingName.trim(),
-          visibility
-        })
-      });
-
-      console.log('[CreateMeeting] Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error('[CreateMeeting] Error response:', errorData);
-        throw new Error(`Failed to create meeting info: ${response.status} ${errorData}`);
-      }
-      
-      const result = await response.json();
-      console.log('[CreateMeeting] Success:', result);
+      localStorage.setItem(`meeting-${roomId}`, JSON.stringify(meetingInfo));
+      console.log('[CreateMeeting] Stored meeting info locally:', meetingInfo);
       
       // Open meeting window
       openMeetingWindow(roomId);

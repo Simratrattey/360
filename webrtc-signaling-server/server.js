@@ -88,7 +88,7 @@ app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/meeting-info') || req.path.startsWith('/rooms')) {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/rooms')) {
     return next();
   }
   return authMiddleware(req, res, next);
@@ -599,9 +599,13 @@ io.on('connection', async socket => {
   // Broadcast online status to all users
   io.emit('user:online', { userId: socket.userId, user: onlineUsers.get(socket.userId) });
   
-  // roomId can still come from client
-  socket.on('joinRoom', roomId => {
+  // roomId can still come from client, optionally with meeting info
+  socket.on('joinRoom', (roomId, meetingInfo = null) => {
     console.log(`[Signaling] socket ${socket.id} requesting joinRoom ${roomId}`);
+    if (meetingInfo) {
+      console.log(`[Signaling] 📋 Received meeting info:`, meetingInfo);
+    }
+    
     if (socket.currentRoom) {
       socket.leave(socket.currentRoom);
       // Remove by socketId, not username
@@ -616,8 +620,8 @@ io.on('connection', async socket => {
     socket.currentRoom = roomId;
 
     if (!rooms[roomId]) {
-      // Try to get meeting info from localStorage-style storage or use defaults
-      const meetingInfo = global.meetingInfoCache ? global.meetingInfoCache[roomId] : null;
+      // Use provided meeting info or try to get from cache or use defaults
+      const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
       
       rooms[roomId] = { 
         offers: [], 
@@ -627,10 +631,16 @@ io.on('connection', async socket => {
         isRecording: false, // Track recording status
         recordedBy: null, // Who started the recording
         // Enhanced meeting info
-        name: meetingInfo?.name || `Room ${roomId.slice(-6)}`,
-        visibility: meetingInfo?.visibility || 'public',
-        createdAt: meetingInfo?.createdAt || new Date().toISOString()
+        name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
+        visibility: storedMeetingInfo?.visibility || 'public',
+        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString()
       };
+      
+      console.log(`[Signaling] ✅ Created room ${roomId} with info:`, {
+        name: rooms[roomId].name,
+        visibility: rooms[roomId].visibility,
+        host: rooms[roomId].host
+      });
     }
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
@@ -1181,38 +1191,7 @@ app.get('/api/rooms', (req, res) => {
   res.json({ rooms: activeRooms });
 });
 
-// API endpoint to create meeting info
-app.post('/api/meeting-info', express.json(), (req, res) => {
-  try {
-    console.log('[Meeting Info] POST /api/meeting-info received:', req.body);
-    
-    const { roomId, name, visibility } = req.body;
-    
-    if (!roomId || !name) {
-      console.error('[Meeting Info] Missing required fields:', { roomId: !!roomId, name: !!name });
-      return res.status(400).json({ error: 'Room ID and name are required' });
-    }
-    
-    // Initialize global meeting info cache if it doesn't exist
-    if (!global.meetingInfoCache) {
-      global.meetingInfoCache = {};
-    }
-    
-    // Store meeting info
-    global.meetingInfoCache[roomId] = {
-      name,
-      visibility: visibility || 'public',
-      createdAt: new Date().toISOString()
-    };
-    
-    console.log(`[Meeting Info] ✅ Stored info for room ${roomId}: ${name} (${visibility})`);
-    
-    res.json({ success: true, roomId, name, visibility });
-  } catch (error) {
-    console.error('[Meeting Info] ❌ Error storing meeting info:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// Meeting info is now handled via socket when joining room
 
 // 🔥 NEW: Endpoint for SFU server to broadcast newProducer events
 app.post('/api/broadcast/newProducer', express.json(), (req, res) => {
