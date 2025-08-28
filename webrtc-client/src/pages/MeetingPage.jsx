@@ -106,6 +106,9 @@ export default function MeetingPage() {
   const [speakingParticipants, setSpeakingParticipants] = useState(new Set());
   const audioAnalyzers = useRef(new Map()); // Store audio analyzers for each participant
   
+  // Join request system
+  const [joinRequests, setJoinRequests] = useState([]);
+  
   // Debug participant map changes
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
@@ -498,12 +501,20 @@ export default function MeetingPage() {
       }
     };
 
+    // Join request handler for hosts
+    const handleJoinRequest = (requestData) => {
+      console.log('[MeetingPage] Received join request:', requestData);
+      setJoinRequests(prev => [...prev, requestData]);
+    };
+
     sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
     sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
+    sfuSocket.on('joinRequest', handleJoinRequest);
 
     return () => {
       sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
       sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
+      sfuSocket.off('joinRequest', handleJoinRequest);
     };
   }, [sfuSocket, user?.id, screenSharingUserId]);
 
@@ -1760,6 +1771,32 @@ To convert to MP4:
     setSubtitlePosition({ x: 0, y: 0 });
   };
 
+  // Join request response handlers
+  const handleJoinRequestResponse = (requestId, approved) => {
+    const request = joinRequests.find(r => r.requestId === requestId);
+    if (!request || !sfuSocket) return;
+
+    console.log(`[MeetingPage] ${approved ? 'Approving' : 'Denying'} join request from ${request.requesterName}`);
+    
+    sfuSocket.emit('respondToJoinRequest', {
+      requestId,
+      approved,
+      requesterSocketId: request.requesterSocketId,
+      roomId: request.roomId
+    });
+
+    // Remove the request from the list
+    setJoinRequests(prev => prev.filter(r => r.requestId !== requestId));
+  };
+
+  const approveJoinRequest = (requestId) => {
+    handleJoinRequestResponse(requestId, true);
+  };
+
+  const denyJoinRequest = (requestId) => {
+    handleJoinRequestResponse(requestId, false);
+  };
+
   // Audio activity detection for speaking indicators
   const startAudioAnalyzer = (stream, participantId, isLocal = false) => {
     try {
@@ -2369,6 +2406,44 @@ To convert to MP4:
           <div className="text-xs">{avatarApiError}</div>
         </div>
       )}
+
+      {/* Join Request Popups */}
+      {joinRequests.map((request, index) => (
+        <div 
+          key={request.requestId}
+          className="absolute top-20 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-xl z-40 min-w-80"
+          style={{ top: `${80 + (index * 120)}px` }} // Stack multiple requests
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold">🚪 Join Request</div>
+            <div className="text-xs opacity-75">Host approval required</div>
+          </div>
+          
+          <div className="mb-4">
+            <div className="text-sm">
+              <strong>{request.requesterName}</strong> wants to join this meeting
+            </div>
+            <div className="text-xs opacity-75 mt-1">
+              This meeting requires host approval to join
+            </div>
+          </div>
+          
+          <div className="flex space-x-2">
+            <button
+              onClick={() => approveJoinRequest(request.requestId)}
+              className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded font-medium transition-colors"
+            >
+              ✓ Allow
+            </button>
+            <button
+              onClick={() => denyJoinRequest(request.requestId)}
+              className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-medium transition-colors"
+            >
+              ✗ Deny
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

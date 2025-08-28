@@ -865,6 +865,62 @@ io.on('connection', async socket => {
     console.log(`[Room ${rid}] Avatar API ${enabled ? 'enabled' : 'disabled'} by host ${socket.userId}`);
   });
 
+  // Join request for approval-required meetings
+  socket.on('requestJoinRoom', ({ roomId, requesterName, requesterUserId }) => {
+    console.log(`[Signaling] Join request for room ${roomId} from ${requesterName} (${requesterUserId})`);
+    
+    if (!rooms[roomId]) {
+      socket.emit('joinRequestResult', { success: false, message: 'Room not found' });
+      return;
+    }
+    
+    const room = rooms[roomId];
+    if (room.visibility !== 'approval') {
+      socket.emit('joinRequestResult', { success: false, message: 'This room does not require approval' });
+      return;
+    }
+    
+    // Find the host socket
+    const hostSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.userId === room.host && s.currentRoom === roomId);
+    
+    if (hostSocket) {
+      // Send join request to host
+      hostSocket.emit('joinRequest', {
+        requestId: `${Date.now()}-${requesterUserId}`,
+        roomId,
+        requesterName,
+        requesterUserId,
+        requesterSocketId: socket.id
+      });
+      
+      socket.emit('joinRequestResult', { success: true, message: 'Join request sent to host' });
+      console.log(`[Signaling] ✅ Join request sent to host ${room.host}`);
+    } else {
+      socket.emit('joinRequestResult', { success: false, message: 'Host is not available' });
+      console.log(`[Signaling] ❌ Host not found for room ${roomId}`);
+    }
+  });
+  
+  // Host response to join request
+  socket.on('respondToJoinRequest', ({ requestId, approved, requesterSocketId, roomId }) => {
+    console.log(`[Signaling] Host ${socket.userId} ${approved ? 'approved' : 'denied'} join request ${requestId}`);
+    
+    const requesterSocket = io.sockets.sockets.get(requesterSocketId);
+    if (requesterSocket) {
+      if (approved) {
+        // Allow the requester to join
+        requesterSocket.emit('joinRequestApproved', { roomId });
+        console.log(`[Signaling] ✅ Join request approved, user can join room ${roomId}`);
+      } else {
+        requesterSocket.emit('joinRequestDenied', { roomId, message: 'Host denied your join request' });
+        console.log(`[Signaling] ❌ Join request denied for room ${roomId}`);
+      }
+    } else {
+      console.log(`[Signaling] ⚠️ Requester socket ${requesterSocketId} not found`);
+    }
+  });
+
   // Recording notifications
   socket.on('recordingStarted', ({ recordedBy }) => {
     const rid = socket.currentRoom;

@@ -23,6 +23,7 @@ import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useSocket } from '../context/SocketContext';
 
 const stats = [
   { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
@@ -41,6 +42,7 @@ const recentMeetings = [
 export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
+  const { sfuSocket } = useSocket() || {};
   const navigate = useNavigate();
   const { unreadCount: globalUnreadCount, notifications: generalNotifications } = useNotifications();
   const [rooms, setRooms] = useState([]);
@@ -322,6 +324,41 @@ export default function DashboardPage() {
     openMeetingWindow(roomId);
   };
 
+  const requestJoinMeeting = (roomId) => {
+    if (!sfuSocket || !user) {
+      alert('Unable to send join request. Please try again.');
+      return;
+    }
+
+    console.log('[Dashboard] Sending join request for room:', roomId);
+    
+    sfuSocket.emit('requestJoinRoom', {
+      roomId,
+      requesterName: user.fullName || user.username || user.email,
+      requesterUserId: user.id || user._id
+    });
+
+    // Listen for join request result
+    sfuSocket.once('joinRequestResult', (result) => {
+      if (result.success) {
+        alert('Join request sent to host successfully!');
+        
+        // Listen for host's response
+        sfuSocket.once('joinRequestApproved', () => {
+          alert('Host approved your request! Joining meeting...');
+          joinMeeting(roomId);
+        });
+        
+        sfuSocket.once('joinRequestDenied', (data) => {
+          alert(data.message || 'Host denied your join request.');
+        });
+        
+      } else {
+        alert(result.message || 'Failed to send join request.');
+      }
+    });
+  };
+
   return (
     <div className="relative space-y-8">
       {/* Hero background illustration */}
@@ -500,8 +537,7 @@ export default function DashboardPage() {
                   className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => {
                     if (room.visibility === 'approval') {
-                      // In a real app, this would send a join request to the host
-                      alert('Join request sent to host');
+                      requestJoinMeeting(room.roomId);
                     } else {
                       joinMeeting(room.roomId);
                     }
