@@ -1,37 +1,29 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useSocket } from './SocketContext'; // Reuse socket from SocketContext
 import { messageStatus as messageStatusService, markAsDelivered, markAsRead } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
 
 export function ChatSocketProvider({ children }) {
   const { user } = useAuth();
-  const [socket, setSocket] = useState(null);
+  const socketContext = useSocket(); // Get socket from SocketContext
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Map());
   const [legacyMessageStatus, setLegacyMessageStatus] = useState(new Map());
   const listeners = useRef({});
 
-  useEffect(() => {
-    if (!user) return;
-    
-    const token = localStorage.getItem('token');
-    if (!token) return;
+  // Use the existing socket from SocketContext instead of creating a new one
+  const socket = socketContext?.socket;
 
-    // Use the same URL format as SocketContext
-    const backendRoot = import.meta.env.VITE_API_URL.replace(/\/api$/, '');
-    const s = io(backendRoot, {
-      auth: { token },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 20000,
-    });
+  useEffect(() => {
+    if (!user || !socket) return;
+    
+    console.log('🔔 ChatSocket reusing socket from SocketContext:', socket.id);
+    const s = socket; // Use existing socket
 
     s.on('connect', () => {
-      console.log('🔔 Chat socket connected - User ID:', user?.id);
+      console.log('🔔 Chat socket connected - User ID:', user?.id, 'Socket ID:', s.id);
       setConnected(true);
       // Get online users when connected
       s.emit('getOnlineUsers');
@@ -177,39 +169,41 @@ export function ChatSocketProvider({ children }) {
       });
     });
 
+    // Removed global chat:sent handler to prevent conflicts with sendMessage Promise handlers
+
     // Note: conversation:created, conversation:deleted, and conversation:updated events
     // are handled in MessagesPage component to update UI directly
 
     // Note: Removed notify-message handler to prevent duplicate notifications
     // All message notifications are now handled through chat:new events in MessagesPage
 
-    setSocket(s);
+    // Socket is managed by SocketContext, no need to set it here
 
-    // Cleanup function to prevent memory leaks
+    // Cleanup function - only clean up chat-specific event listeners
     return () => {
-      
-      // Clear heartbeat interval if exists
-      if (s.heartbeatInterval) {
-        clearInterval(s.heartbeatInterval);
-        s.heartbeatInterval = null;
+      if (s) {
+        // Remove only chat-specific event listeners, not all listeners
+        s.off('chat:new');
+        s.off('chat:delivered');
+        s.off('chat:read');
+        s.off('user:online');
+        s.off('user:offline');
+        s.off('onlineUsers');
+        
+        // Clear heartbeat interval if exists
+        if (s.heartbeatInterval) {
+          clearInterval(s.heartbeatInterval);
+          s.heartbeatInterval = null;
+        }
       }
       
-      // Remove all event listeners to prevent memory leaks
-      s.removeAllListeners();
-      
-      // Clear listeners ref
+      // Clear listeners ref and reset chat-specific state
       listeners.current = {};
-      
-      // Disconnect socket
-      s.disconnect();
-      
-      // Reset state
-      setSocket(null);
       setConnected(false);
       setOnlineUsers(new Map());
       setLegacyMessageStatus(new Map());
     };
-  }, [user]);
+  }, [user, socket]);
 
   // Register event listeners with proper cleanup tracking
   const on = (event, cb) => {

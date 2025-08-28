@@ -140,6 +140,11 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Track conversations already marked as read to prevent duplicate API calls
+  const readConversationsRef = useRef(new Set());
+  const markReadTimeoutRef = useRef(null);
+  
   // Initialize messages cache with localStorage persistence
   const [messagesCache, setMessagesCache] = useState(() => {
     try {
@@ -158,12 +163,94 @@ export default function MessagesPage() {
   const messagesCacheRef = useRef(messagesCache);
   const allConversationsRef = useRef(allConversations);
   const isMobile = useMediaQuery({ maxWidth: 767 });
+
+  // Utility function to merge server messages with cached messages
+  const mergeMessages = (serverMessages, cachedMessages) => {
+    const messageMap = new Map();
+    
+    // Add server messages first (they are the source of truth)
+    serverMessages.forEach(msg => {
+      if (msg._id) {
+        messageMap.set(msg._id, msg);
+      }
+    });
+    
+    // Add cached messages that aren't in server messages
+    // This preserves real-time messages that might not be in server yet
+    cachedMessages.forEach(msg => {
+      if (msg._id && !messageMap.has(msg._id)) {
+        // Only add if it's not already in server messages
+        messageMap.set(msg._id, msg);
+      } else if (!msg._id && msg.tempId) {
+        // Handle temporary messages (optimistic updates)
+        const existingByTempId = Array.from(messageMap.values()).find(m => m.tempId === msg.tempId);
+        if (!existingByTempId) {
+          messageMap.set(msg.tempId || `temp-${Date.now()}`, msg);
+        }
+      }
+    });
+    
+    // Convert back to array and sort by timestamp
+    const merged = Array.from(messageMap.values()).sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.timestamp || 0);
+      const dateB = new Date(b.createdAt || b.timestamp || 0);
+      return dateA - dateB;
+    });
+    
+    return merged;
+  };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
   // Keep refs in sync with state
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  // Debounced function to mark conversation as read (prevents API spam)
+  const debouncedMarkAsRead = useCallback((conversationId) => {
+    // Skip if already marked as read recently
+    if (readConversationsRef.current.has(conversationId)) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (markReadTimeoutRef.current) {
+      clearTimeout(markReadTimeoutRef.current);
+    }
+
+    // Debounce the API call by 500ms
+    markReadTimeoutRef.current = setTimeout(() => {
+      // Add to read set to prevent duplicates
+      readConversationsRef.current.add(conversationId);
+      
+      conversationAPI.markConversationAsRead(conversationId)
+        .then(() => {
+          if (refreshUnreadCount) refreshUnreadCount();
+          
+          // Set unread to 0 for this conversation in the sidebar
+          setAllConversations(prev =>
+            prev.map(section => ({
+              ...section,
+              items: section.items.map(conv => 
+                conv._id === conversationId 
+                  ? { ...conv, unread: 0 }
+                  : conv
+              )
+            }))
+          );
+          
+          // Remove from set after 5 seconds to allow re-marking if needed
+          setTimeout(() => {
+            readConversationsRef.current.delete(conversationId);
+          }, 5000);
+        })
+        .catch(error => {
+          console.error('Error marking conversation as read:', error);
+          // Remove from set on error so it can be retried
+          readConversationsRef.current.delete(conversationId);
+        });
+    }, 500);
+  }, [refreshUnreadCount, setAllConversations]);
   
   useEffect(() => {
     messagesCacheRef.current = messagesCache;
@@ -356,6 +443,11 @@ export default function MessagesPage() {
       if (target) {
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
+        
+        // Don't clear cache when navigating from notification - this causes message loss
+        // Instead, let the normal message loading logic merge cached and fresh messages
+        console.log('📨 Navigating from notification to:', conversationId);
+        
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
@@ -576,7 +668,7 @@ export default function MessagesPage() {
     }
   };
 
-  // WHATSAPP-STYLE: Instant Conversation Loading
+  // WHATSAPP-STYLE: Instant Conversation Loading  
   useEffect(() => {
     if (!selected?._id) {
       setMessages([]);
@@ -589,52 +681,82 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
-    // First, immediately show cached messages for instant loading
-    const cachedMessages = messagesCache[convId];
-    if (cachedMessages && cachedMessages.length > 0) {
+    // Always fetch fresh messages from server, but show cached ones immediately for better UX
+    const cachedMessages = messagesCache[convId] || [];
+    
+    // Set loading state initially
+    setMessagesLoading(true);
+    
+    // Show cached messages immediately for better UX, but only if we have them
+    if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
-      setMessagesLoading(false);
-      setMessageOffset(cachedMessages.length);
-      setHasMoreMessages(cachedMessages.length >= 50); // Assume more if we have full batch
-      chatSocket.joinConversation(convId);
-    } else {
-      // No cache - show loading and fetch from server
-      setMessages([]);
-      setMessagesLoading(true);
       
-      messageAPI.getMessages(convId, { limit: 50 })
-        .then(res => {
-          const serverMessages = res.data.messages || [];
-          setMessages(serverMessages);
-          setMessageOffset(serverMessages.length);
-          setHasMoreMessages(serverMessages.length === 50); // If we got full batch, there might be more
-          
-          // Update cache if we don't have newer real-time messages
-          setMessagesCache(prev => {
-            const existingCache = prev[convId];
-            if (existingCache && existingCache.length > serverMessages.length) {
-              return prev;
-            }
-            return { ...prev, [convId]: serverMessages };
-          });
-          
-          chatSocket.joinConversation(convId);
-        })
-        .catch(error => {
-          console.error('Failed to load messages:', error);
-          setMessages([]);
-          chatSocket.joinConversation(convId);
-        })
-        .finally(() => {
-          setMessagesLoading(false);
-        });
+      // Initialize reactions state from cached messages
+      const cachedReactions = {};
+      cachedMessages.forEach(msg => {
+        if (msg.reactions && msg.reactions.length > 0) {
+          cachedReactions[msg._id] = msg.reactions;
+        }
+      });
+      setReactions(cachedReactions);
+      setMessagesLoading(false);
+    } else {
+      setMessages([]);
+      setReactions({});
     }
+    
+    // Always fetch from server to ensure we have latest messages
+    messageAPI.getMessages(convId, { limit: 50 })
+      .then(res => {
+        const serverMessages = res.data.messages || [];
+        
+        // Only merge if we have cached messages that might contain newer real-time messages
+        // Otherwise, just use server messages directly to avoid potential duplication
+        let finalMessages;
+        if (cachedMessages.length > 0) {
+          finalMessages = mergeMessages(serverMessages, cachedMessages);
+        } else {
+          finalMessages = serverMessages;
+        }
+        
+        setMessages(finalMessages);
+        setMessageOffset(finalMessages.length);
+        setHasMoreMessages(serverMessages.length === 50);
+        
+        // Initialize reactions state from loaded messages
+        const initialReactions = {};
+        finalMessages.forEach(msg => {
+          if (msg.reactions && msg.reactions.length > 0) {
+            initialReactions[msg._id] = msg.reactions;
+          }
+        });
+        setReactions(initialReactions);
+        
+        // Update cache with final results
+        setMessagesCache(prev => ({
+          ...prev,
+          [convId]: finalMessages
+        }));
+        
+        chatSocket.joinConversation(convId);
+      })
+      .catch(error => {
+        console.error('Failed to load messages:', error);
+        // If server fetch fails, keep cached messages if available
+        if (cachedMessages.length === 0) {
+          setMessages([]);
+        }
+        chatSocket.joinConversation(convId);
+      })
+      .finally(() => {
+        setMessagesLoading(false);
+      });
     
     // Always leave previous room when switching
     return () => {
       chatSocket.leaveConversation(convId);
     };
-  }, [selected]);
+  }, [selected?._id]); // Only re-run when conversation ID changes, not when selected object changes
 
   // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
 
@@ -647,36 +769,46 @@ export default function MessagesPage() {
       const isMyMessage = msg.senderId === user.id;
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
+      console.log(`📨 Received chat:new message:`, msg._id);
+      
       
       // 1. Update message cache
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
-        // Skip if message already exists (by _id or tempId)
-        const isDuplicate = convMessages.some(m => 
-          m._id === msg._id || 
-          (msg.tempId && m.tempId === msg.tempId) ||
-          (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
-        );
+        // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
+        const isDuplicate = convMessages.some(m => {
+          // Skip if we already have this exact server message (by _id)
+          if (m._id && msg._id && m._id === msg._id) {
+            return true;
+          }
+          return false;
+        });
         if (isDuplicate) {
+          console.log('Skipping duplicate message by _id:', msg._id);
           return prev;
         }
         
         // For my own messages, remove optimistic duplicates (messages with tempId that match the real message)
         let cleanMessages = convMessages;
-        if (isMyMessage) {
-          // Remove optimistic messages (pending/sending) and tempId matches
+        if (isMyMessage && msg.tempId) {
+          // Remove optimistic messages that match this server message
           cleanMessages = convMessages.filter(m => {
-            // Keep the message if it's not pending/sending and doesn't match the incoming message
-            if (!m.pending && !m.sending) return true;
             // Remove if tempIds match (this optimistic message is being replaced)
-            if (msg.tempId && m.tempId === msg.tempId) return false;
-            // Remove if it's a pending/sending message from this user
-            if (m.senderId === user.id && (m.pending || m.sending)) return false;
+            if (m.tempId === msg.tempId) {
+              console.log('Removing optimistic message:', m.tempId, 'for real message:', msg._id);
+              return false;
+            }
+            // Remove if it's a pending/sending message from this user with same tempId
+            if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
+              console.log('Removing pending message:', m.tempId, 'for real message:', msg._id);
+              return false;
+            }
             return true;
           });
         }
         
+        console.log('Adding real message to cache:', msg._id, msg.tempId);
         const newCache = [...cleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
         const MAX_CACHED_MESSAGES = 50;
@@ -693,32 +825,56 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Skip if message already exists (by _id or tempId)
-          const isDuplicate = prev.some(m => 
-            m._id === msg._id || 
-            (msg.tempId && m.tempId === msg.tempId) ||
-            (msg.tempId && m._id === msg.tempId) // Handle optimistic message case
-          );
+          // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
+          const isDuplicate = prev.some(m => {
+            // Skip if we already have this exact server message (by _id)
+            if (m._id && msg._id && m._id === msg._id) {
+              return true;
+            }
+            return false;
+          });
           if (isDuplicate) {
+            console.log('Skipping duplicate message in current view by _id:', msg._id);
             return prev;
           }
           
           // For my messages, remove optimistic versions
           let filtered = prev;
-          if (isMyMessage) {
+          if (isMyMessage && msg.tempId) {
             filtered = prev.filter(m => {
-              // Keep the message if it's not pending/sending and doesn't match the incoming message
-              if (!m.pending && !m.sending) return true;
               // Remove if tempIds match (this optimistic message is being replaced)
-              if (msg.tempId && m.tempId === msg.tempId) return false;
-              // Remove if it's a pending/sending message from this user
-              if (m.senderId === user.id && (m.pending || m.sending)) return false;
+              if (m.tempId === msg.tempId) {
+                console.log('Removing optimistic message from current view:', m.tempId, 'for real message:', msg._id);
+                return false;
+              }
+              // Remove if it's a pending/sending message from this user with same tempId
+              if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
+                console.log('Removing pending message from current view:', m.tempId, 'for real message:', msg._id);
+                return false;
+              }
               return true;
             });
           }
           
-          return [...filtered, { ...msg, conversationId }];
+          const newMessage = { 
+            ...msg, 
+            conversationId,
+            // Ensure these fields are properly set for rendering
+            pending: false,
+            sending: false
+          };
+          const newMessages = [...filtered, newMessage];
+          console.log('Adding real message to current view:', msg._id, msg.tempId, 'Total messages:', newMessages.length);
+          return newMessages;
         });
+        
+        // Update reactions state if the new message has reactions
+        if (msg.reactions && msg.reactions.length > 0) {
+          setReactions(prev => ({
+            ...prev,
+            [msg._id]: msg.reactions
+          }));
+        }
       }
       
       // 3. Update sidebar
@@ -1068,33 +1224,23 @@ export default function MessagesPage() {
   // Mark messages as read when conversation is selected
   useEffect(() => {
     if (selected && messages.length > 0) {
-      // Mark all messages as read
+      // Mark all messages as read (only real messages, not temp ones)
       messages.forEach(msg => {
-        if (msg.sender !== user.id) {
+        if (msg.sender !== user.id && msg._id && !msg._id.startsWith('temp-')) {
           chatSocket.markAsRead(msg._id);
         }
       });
       
-      // Mark conversation as read on backend
-      conversationAPI.markConversationAsRead(selected._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(conv =>
-                conv._id === selected._id ? { ...conv, unread: 0 } : conv
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      // Use debounced function to mark conversation as read (only if it has unread messages)
+      const selectedConv = allConversations.find(section => 
+        section.items?.find(conv => conv._id === selected._id)
+      )?.items?.find(conv => conv._id === selected._id);
+      
+      if (selectedConv && selectedConv.unread > 0) {
+        debouncedMarkAsRead(selected._id);
+      }
     }
-  }, [selected, messages, user.id, chatSocket, refreshUnreadCount]);
+  }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
@@ -1141,25 +1287,9 @@ export default function MessagesPage() {
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Mark conversation as read immediately
+    // Use debounced function to mark conversation as read (prevents 429 errors)
     if (conv.unread > 0) {
-      conversationAPI.markConversationAsRead(conv._id)
-        .then(() => {
-          if (refreshUnreadCount) refreshUnreadCount();
-          
-          // Set unread to 0 for this conversation in the sidebar
-          setAllConversations(prev =>
-            prev.map(section => ({
-              ...section,
-              items: section.items.map(c =>
-                c._id === conv._id ? { ...c, unread: 0 } : c
-              ),
-            }))
-          );
-        })
-        .catch(error => {
-          console.error('Error marking conversation as read:', error);
-        });
+      debouncedMarkAsRead(conv._id);
     }
   };
 
@@ -1197,12 +1327,10 @@ export default function MessagesPage() {
           if (messageQueue && typeof messageQueue.removeFromQueues === 'function') {
             messageQueue.removeFromQueues(messageData.tempId);
           }
-          // Small delay to ensure queue cleanup completes first
-          setTimeout(() => {
-            if (messageStatus && typeof messageStatus.markAsSent === 'function') {
-              messageStatus.markAsSent(messageData.tempId, response.messageId);
-            }
-          }, 50);
+          // Mark as sent immediately 
+          if (messageStatus && typeof messageStatus.markAsSent === 'function') {
+            messageStatus.markAsSent(messageData.tempId, response.messageId);
+          }
         } catch (error) {
           console.error('Error updating message status:', error);
         }
@@ -1314,7 +1442,7 @@ export default function MessagesPage() {
         new Date().toISOString()
       );
       
-      // Prepare message data for sending
+      // Prepare message data for sending (capture input before clearing)
       const messageData = {
         tempId,
         conversationId: selected._id,
@@ -1326,6 +1454,12 @@ export default function MessagesPage() {
         createdAt: new Date().toISOString()
       };
 
+      // Clear input fields immediately after preparing message data for better UX
+      setInput('');
+      setUploadFile(null);
+      setReplyTo(null);
+      setShowEmojiPicker(false);
+
       // Send message with network resilience
       try {
         await sendMessageWithRetry(messageData);
@@ -1333,12 +1467,6 @@ export default function MessagesPage() {
         console.error('Failed to send message:', error);
         // Message will be queued by sendMessageWithRetry
       }
-      
-      // Reset input fields immediately for better UX
-      setInput('');
-      setUploadFile(null);
-      setReplyTo(null);
-      setShowEmojiPicker(false);
       
       // Show success notification for file uploads
       if (uploadFile) {
@@ -1676,15 +1804,32 @@ export default function MessagesPage() {
       const olderMessages = response.data.messages || [];
       
       if (olderMessages.length > 0) {
-        // Prepend older messages to existing messages
-        setMessages(prev => [...olderMessages, ...prev]);
-        setMessageOffset(prev => prev + olderMessages.length);
+        // Use mergeMessages to properly deduplicate and merge older messages
+        setMessages(prev => {
+          const mergedMessages = mergeMessages(olderMessages, prev);
+          return mergedMessages;
+        });
+        
+        // Only increment offset by the number of unique new messages
+        const uniqueOlderMessages = olderMessages.filter(olderMsg => 
+          !messages.some(existingMsg => existingMsg._id === olderMsg._id)
+        );
+        setMessageOffset(prev => prev + uniqueOlderMessages.length);
         setHasMoreMessages(olderMessages.length === 50);
         
-        // Update cache
+        // Update reactions state for newly loaded older messages
+        const olderReactions = {};
+        uniqueOlderMessages.forEach(msg => {
+          if (msg.reactions && msg.reactions.length > 0) {
+            olderReactions[msg._id] = msg.reactions;
+          }
+        });
+        setReactions(prev => ({ ...olderReactions, ...prev })); // Add older reactions first
+        
+        // Update cache with proper merging
         setMessagesCache(prev => ({
           ...prev,
-          [selected._id]: [...olderMessages, ...(prev[selected._id] || [])]
+          [selected._id]: mergeMessages(olderMessages, prev[selected._id] || [])
         }));
       } else {
         setHasMoreMessages(false);

@@ -82,6 +82,9 @@ export default function ChatWindow({
   const isUserScrolling = useRef(false);
   const scrollTimeoutRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
+  
+  // Debug: Log messages length to see if ChatWindow receives updated messages
+  console.log('📨 ChatWindow messages count:', messages.length, 'Latest message ID:', messages[messages.length - 1]?._id);
 
   // Enhanced scroll management with performance optimizations
   useEffect(() => {

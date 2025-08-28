@@ -45,11 +45,10 @@ export default function DashboardPage() {
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [messageNotifications, setMessageNotifications] = useState([]);
-  const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
+  // Using only global notifications to avoid duplicates
   const [scheduling, setScheduling] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
@@ -75,82 +74,7 @@ export default function DashboardPage() {
   }, []);
 
   // Fetch unread message notifications
-  useEffect(() => {
-    async function fetchUnread() {
-      try {
-        const res = await conversationAPI.getConversations();
-        const conversations = res.data.conversations || res.data || [];
-        // Create message notifications for unread messages
-        const messageNotifs = conversations
-          .filter(c => c.unread > 0)
-          .map(c => ({
-            id: c._id,
-            type: c.type,
-            name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
-            unread: c.unread,
-            avatar: c.avatar,
-            icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash,
-            lastText: 'New messages',
-            lastSender: ''
-          }));
-        setMessageNotifications(messageNotifs);
-      } catch (err) {
-        console.error('Error fetching unread messages:', err);
-        setMessageNotifications([]);
-      }
-    }
-    fetchUnread();
-  }, [user]);
 
-  // Real-time message notification updates
-  useEffect(() => {
-    if (!chatSocket || !chatSocket.socket) return;
-    const handleNewMessage = (msg) => {
-      // Only show notification if the sender is NOT the current user
-      if (
-        (msg.senderId && msg.senderId !== user.id) ||
-        (typeof msg.sender === 'string' && msg.sender !== user.id) ||
-        (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
-      ) {
-        setMessageNotifications(prev => {
-          // Find if this conversation already exists
-          const idx = prev.findIndex(n => n.id === msg.conversationId);
-          if (idx !== -1) {
-            // Update unread count and move to top
-            const updated = [...prev];
-            updated[idx] = {
-              ...updated[idx],
-              unread: (updated[idx].unread || 0) + 1,
-              lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-              lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-            };
-            // Move to top
-            const [item] = updated.splice(idx, 1);
-            return [item, ...updated];
-          } else {
-            // New conversation notification
-            return [
-              {
-                id: msg.conversationId,
-                type: msg.conversationType || 'dm',
-                name: msg.conversationName || msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-                unread: 1,
-                avatar: msg.conversationAvatar || '',
-                icon: msg.conversationType === 'group' ? Users : msg.conversationType === 'community' ? Hash : User,
-                lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-                lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-              },
-              ...prev
-            ];
-          }
-        });
-      }
-    };
-    chatSocket.on('chat:new', handleNewMessage);
-    return () => {
-      chatSocket.off('chat:new', handleNewMessage);
-    };
-  }, [chatSocket, user.id]);
 
   // Real-time conversation creation/deletion updates for dashboard
   useEffect(() => {
@@ -176,11 +100,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -212,11 +132,7 @@ export default function DashboardPage() {
           }
         };
 
-        // Update local general notifications (this will show in dashboard)
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -253,10 +169,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -292,10 +205,7 @@ export default function DashboardPage() {
           }
         };
 
-        setLocalGeneralNotifications(prev => {
-          const updated = [notification, ...(Array.isArray(prev) ? prev : [])];
-          return updated;
-        });
+        // Notification will be handled by NotificationContext globally
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -420,89 +330,53 @@ export default function DashboardPage() {
             <MessageSquare className="h-6 w-6 text-blue-400" />
             Notifications
           </h2>
-          {(globalUnreadCount && globalUnreadCount > 0) && (
-            <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-              {globalUnreadCount} unread
-            </span>
-          )}
         </div>
-        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0 || (Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []).length > 0) ? (
+        {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
-            {/* General notifications (conversation creation/deletion, etc.) */}
-            {[...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).map((notif, idx) => (
+            
+            {/* General notifications (group/conversation events) */}
+            {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
-                className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => {
-                  // Navigate to messages page for conversation notifications
-                  if (notif.data?.conversationId) {
+                className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
+                onClick={async () => {
+                  // Mark notification as read
+                  if (markAsRead && notif._id) {
+                    await markAsRead(notif._id);
+                    // Refresh notifications to ensure UI is in sync with server
+                    if (refreshNotifications) {
+                      refreshNotifications();
+                    }
+                  }
+                  // Navigate based on notification type
+                  if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
+                    navigate('/messages');
+                  } else if (notif.type === 'message' && notif.data?.conversationId) {
+                    // Navigate to specific conversation for message notifications
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
                   }
                 }}
               >
                 <div className="relative">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                    {notif.type === 'conversation_created' ? '🎉' : 
-                     notif.type === 'community_created' ? '🌍' : 
+                  <div className={`h-12 w-12 rounded-full bg-gradient-to-r ${
+                    notif.type === 'conversation_created' || notif.type === 'community_created' 
+                      ? 'from-green-500 to-emerald-500' 
+                      : notif.type === 'conversation_deleted' 
+                      ? 'from-red-500 to-pink-500'
+                      : 'from-blue-500 to-cyan-500'
+                  } flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                    {notif.type === 'conversation_created' || notif.type === 'community_created' ? '🎉' : 
                      notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
                   </div>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></div>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-primary-800">{notif.title}</h3>
-                  </div>
-                  <p className="text-secondary-600 text-sm">{notif.message}</p>
-                  <p className="text-secondary-500 text-xs">
-                    {new Date(notif.createdAt).toLocaleDateString()}
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-secondary-800 truncate">{notif.title}</p>
+                  <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
+                  <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>
                 </div>
-              </motion.div>
-            ))}
-            
-            {/* Message notifications */}
-            {(Array.isArray(messageNotifications) ? messageNotifications : []).map((notif, idx) => (
-              <motion.div
-                key={`message-${notif.id}-${idx}`}
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: ([...(Array.isArray(localGeneralNotifications) ? localGeneralNotifications : []), ...(Array.isArray(generalNotifications) ? generalNotifications : [])].filter(n => !n.read).slice(0, 5).length + idx) * 0.07, duration: 0.5 }}
-                className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => navigate(`/messages?conversation=${notif.id}`)}
-              >
-                <div className="relative">
-                  {notif.avatar ? (
-                    <img src={notif.avatar} alt={notif.name} className="h-12 w-12 rounded-full object-cover shadow-md" />
-                  ) : (
-                    <div className={`h-12 w-12 rounded-full bg-gradient-to-r ${notif.type === 'dm' ? 'from-purple-500 to-pink-500' : notif.type === 'group' ? 'from-blue-500 to-cyan-500' : 'from-green-500 to-emerald-500'} flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
-                      <notif.icon className="h-6 w-6" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-primary-800">
-                      {notif.name || (notif.type === 'group' ? 'Group' : notif.type === 'community' ? 'Community' : 'Direct Message')}
-                    </h3>
-                    {notif.unread > 0 && (
-                      <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                        {notif.unread}
-                      </span>
-                    )}
-                  </div>
-                  {notif.lastText && (
-                    <p className="text-secondary-500 text-xs truncate max-w-xs">{notif.lastSender}: {notif.lastText}</p>
-                  )}
-                  <p className="text-secondary-600 text-sm">
-                    {notif.unread} new message{notif.unread > 1 ? 's' : ''} {notif.type === 'dm' ? 'from this person' : notif.type === 'group' ? 'from this group' : 'from this community'}
-                  </p>
-                </div>
-                <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold rounded-full px-3 py-1 min-w-[32px] text-center shadow-md">
-                  {notif.unread > 99 ? '99+' : notif.unread}
-                </span>
               </motion.div>
             ))}
           </div>

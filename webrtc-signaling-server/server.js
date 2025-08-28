@@ -16,7 +16,7 @@ import http    from 'http';
 import { Server as SocketIO } from 'socket.io';
 import User    from './src/models/user.js';
 import Message from './src/models/message.js';
-import Conversation from './src/models/conversation.js';
+import Conversation, { ReadReceipt } from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
 import { 
@@ -85,9 +85,32 @@ app.use('/api/auth', authRoutes);
 // File routes should be accessible to authenticated users, so register before auth middleware
 app.use('/api/files', fileRoutes);
 app.use(helmet());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+
+// More lenient rate limiting for read operations (conversation read, message read, etc.)
+const readOperationsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Allow 1000 read operations per 15 minutes
+  skip: (req) => {
+    // Only apply this limiter to read operations
+    return !req.path.includes('/read') && req.method !== 'GET';
+  }
+});
+
+// General rate limiting for all other operations
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes  
+  max: 500, // 500 requests per 15 minutes for other operations
+  skip: (req) => {
+    // Skip if it's a read operation (will be handled by readOperationsLimiter)
+    return req.path.includes('/read') || req.method === 'GET';
+  }
+});
+
+app.use(readOperationsLimiter);
+app.use(generalLimiter);
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
+  // Skip auth for certain endpoints
   if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/rooms')) {
     return next();
   }
@@ -578,6 +601,62 @@ app.locals.sendNotification = sendNotification;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
 
+// Helper function to transfer host when current host leaves
+function transferHost(roomId, leavingUserId) {
+  const room = rooms[roomId];
+  if (!room || room.host !== leavingUserId) {
+    return; // Not the host leaving, no transfer needed
+  }
+  
+  // Find the next participant in line (first person who joined after the host)
+  const remainingParticipants = room.participants.filter(p => p.userId !== leavingUserId);
+  
+  if (remainingParticipants.length === 0) {
+    console.log(`[Host Transfer] No remaining participants in room ${roomId}, room will be deleted`);
+    return;
+  }
+  
+  // Transfer host to the first remaining participant
+  const newHost = remainingParticipants[0];
+  room.host = newHost.userId;
+  
+  console.log(`[Host Transfer] 👑 Host transferred from ${leavingUserId} to ${newHost.userId} (${newHost.userName}) in room ${roomId}`);
+  
+  // Notify all remaining participants about the host change
+  const newRoomSettings = {
+    host: room.host,
+    avatarApiEnabled: room.avatarApiEnabled
+  };
+  
+  // Send updated room settings to all participants
+  remainingParticipants.forEach(participant => {
+    const participantSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.id === participant.socketId);
+    
+    if (participantSocket) {
+      participantSocket.emit('roomSettingsUpdated', {
+        ...newRoomSettings,
+        isHost: participant.userId === room.host
+      });
+      
+      // Special notification for the new host
+      if (participant.userId === room.host) {
+        participantSocket.emit('hostTransferred', {
+          message: 'You are now the host of this meeting',
+          previousHost: leavingUserId
+        });
+      }
+    }
+  });
+  
+  // Broadcast host change to all participants in the room
+  io.to(roomId).emit('hostChanged', {
+    newHostId: newHost.userId,
+    newHostName: newHost.userName,
+    previousHostId: leavingUserId
+  });
+}
+
 // Socket.io logic
 io.on('connection', async socket => {
   console.log('[Signaling] 🆕 client connected:', socket.id);
@@ -757,6 +836,9 @@ io.on('connection', async socket => {
     console.log('[Signaling] Emitting hangup to room', rid, 'with peerId:', peerId, 'participants:', rooms[rid]?.participants);
     socket.to(rid).emit('hangup', peerId);
     if (rooms[rid]) {
+      // Check if host is leaving and transfer if needed (before removing from participants)
+      transferHost(rid, socket.userId);
+      
       rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
       rooms[rid].offers = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       io.to(rid).emit('availableOffers', rooms[rid].offers);
@@ -787,6 +869,9 @@ io.on('connection', async socket => {
       
       // Clean up the same way as hangup
       if (rooms[rid]) {
+        // Check if host is leaving and transfer if needed (before removing from participants)
+        transferHost(rid, socket.userId);
+        
         rooms[rid].participants = rooms[rid].participants.filter(p => typeof p === 'object' && p.socketId !== socket.id);
         rooms[rid].offers       = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
         
@@ -1067,6 +1152,13 @@ io.on('connection', async socket => {
         tempId: tempId // Include tempId for client-side deduplication
       };
       
+      console.log(`📢 Broadcasting message to conversation ${conversationId}:`, {
+        messageId: messageForClient._id,
+        tempId: messageForClient.tempId,
+        text: messageForClient.text?.substring(0, 50) + '...',
+        recipientCount: recipientIds.length
+      });
+      
       // Send to all online members except sender
       recipientIds.forEach(recipientId => {
         const recipient = onlineUsers.get(recipientId);
@@ -1124,6 +1216,7 @@ io.on('connection', async socket => {
       }
       
       // Send success acknowledgment to sender
+      console.log(`📤 Sending chat:sent acknowledgment - messageId: ${populatedMessage._id.toString()}, tempId: ${tempId}`);
       socket.emit('chat:sent', {
         success: true,
         messageId: populatedMessage._id.toString(),
@@ -1142,6 +1235,13 @@ io.on('connection', async socket => {
   // Mark message as read
   socket.on('chat:read', async ({ messageId }) => {
     const userId = socket.userId;
+    
+    // Validate messageId is a proper ObjectId
+    if (!messageId || messageId.startsWith('temp-') || !mongoose.Types.ObjectId.isValid(messageId)) {
+      console.warn('Invalid messageId for read operation:', messageId);
+      return;
+    }
+    
     const session = await mongoose.startSession();
     
     try {
@@ -1154,6 +1254,24 @@ io.on('connection', async socket => {
         );
         
         if (message) {
+          // Sync ReadReceipt timestamp to keep conversation read status consistent
+          // Only update if this message is newer than the current lastReadAt
+          const existingReceipt = await ReadReceipt.findOne({
+            user: userId,
+            conversation: message.conversation
+          }).session(session);
+          
+          const shouldUpdate = !existingReceipt || 
+                              new Date(message.createdAt) > new Date(existingReceipt.lastReadAt);
+          
+          if (shouldUpdate) {
+            await ReadReceipt.findOneAndUpdate(
+              { user: userId, conversation: message.conversation },
+              { lastReadAt: message.createdAt },
+              { upsert: true, session }
+            );
+          }
+          
           // Get the conversation to find other members
           const conversation = await Conversation.findById(message.conversation).populate('members');
           if (conversation) {

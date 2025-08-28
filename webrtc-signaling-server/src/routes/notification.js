@@ -1,4 +1,5 @@
 import express from 'express';
+import inputValidation from '../middleware/inputValidation.js';
 import {
   getUserNotifications,
   markNotificationAsRead,
@@ -16,12 +17,12 @@ router.get('/', getUserNotifications);
 router.get('/unread-count', getUnreadCount);
 
 // Mark notification as read
-router.patch('/:notificationId/read', markNotificationAsRead);
+router.patch('/:notificationId/read', inputValidation.validateObjectId('notificationId'), markNotificationAsRead);
 
 // Mark all notifications as read
 router.patch('/mark-all-read', markAllNotificationsAsRead);
 
 // Delete notification
-router.delete('/:notificationId', deleteNotification);
+router.delete('/:notificationId', inputValidation.validateObjectId('notificationId'), deleteNotification);
 
 export default router; 

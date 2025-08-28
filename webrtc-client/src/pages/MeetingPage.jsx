@@ -110,6 +110,9 @@ export default function MeetingPage() {
   const [joinRequests, setJoinRequests] = useState([]);
   const [showJoinRequests, setShowJoinRequests] = useState(false);
   
+  // Host transfer system
+  const [hostTransferNotification, setHostTransferNotification] = useState(null);
+  
   // Debug participant map changes
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
@@ -508,14 +511,50 @@ export default function MeetingPage() {
       setJoinRequests(pendingRequests || []);
     };
 
+    // Host transfer handlers
+    const handleHostTransferred = ({ message, previousHost }) => {
+      console.log('[MeetingPage] You are now the host:', message, 'Previous host:', previousHost);
+      setHostTransferNotification({
+        type: 'newHost',
+        message,
+        previousHost,
+        timestamp: Date.now()
+      });
+      
+      // Auto-dismiss after 8 seconds
+      setTimeout(() => setHostTransferNotification(null), 8000);
+    };
+
+    const handleHostChanged = ({ newHostId, newHostName, previousHostId }) => {
+      console.log('[MeetingPage] Host changed:', { newHostId, newHostName, previousHostId });
+      
+      // Only show notification if the user is not the new host (they already got hostTransferred event)
+      if (newHostId !== user?.id && newHostId !== user?._id) {
+        setHostTransferNotification({
+          type: 'hostChanged',
+          message: `${newHostName} is now the host`,
+          newHostName,
+          previousHostId,
+          timestamp: Date.now()
+        });
+        
+        // Auto-dismiss after 6 seconds
+        setTimeout(() => setHostTransferNotification(null), 6000);
+      }
+    };
+
     sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
     sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
     sfuSocket.on('joinRequestsUpdated', handleJoinRequestsUpdated);
+    sfuSocket.on('hostTransferred', handleHostTransferred);
+    sfuSocket.on('hostChanged', handleHostChanged);
 
     return () => {
       sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
       sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
       sfuSocket.off('joinRequestsUpdated', handleJoinRequestsUpdated);
+      sfuSocket.off('hostTransferred', handleHostTransferred);
+      sfuSocket.off('hostChanged', handleHostChanged);
     };
   }, [sfuSocket, user?.id, screenSharingUserId]);
 
@@ -2413,6 +2452,64 @@ To convert to MP4:
         <div className="absolute top-20 left-4 bg-red-600 text-white p-3 rounded-lg shadow-lg z-30">
           <div className="text-sm font-medium">Avatar API Disabled</div>
           <div className="text-xs">{avatarApiError}</div>
+        </div>
+      )}
+
+      {/* Host Transfer Notification - Sleek slide-in from top right */}
+      {hostTransferNotification && (
+        <div 
+          className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 max-w-sm animate-slide-in-right ${
+            hostTransferNotification.type === 'newHost'
+              ? 'bg-white border-blue-500 text-gray-800'
+              : 'bg-white border-green-500 text-gray-800'
+          }`}
+        >
+          <style>{`
+            .animate-slide-in-right {
+              animation: slideInFromRight 0.5s ease-out forwards;
+            }
+            @keyframes slideInFromRight {
+              0% {
+                transform: translateX(100%);
+                opacity: 0;
+              }
+              100% {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
+          
+          <div className="flex items-start space-x-3">
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+              hostTransferNotification.type === 'newHost'
+                ? 'bg-blue-100 text-blue-600'
+                : 'bg-green-100 text-green-600'
+            }`}>
+              {hostTransferNotification.type === 'newHost' ? '👑' : '🔄'}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {hostTransferNotification.type === 'newHost' ? 'You\'re now the host' : 'New host'}
+              </div>
+              <div className="text-xs text-gray-600 mt-1">
+                {hostTransferNotification.type === 'newHost' 
+                  ? 'You can now manage meeting settings'
+                  : hostTransferNotification.message
+                }
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setHostTransferNotification(null)}
+              className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 

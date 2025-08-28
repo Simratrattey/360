@@ -14,7 +14,11 @@ const NotificationSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['meeting_invitation', 'meeting_reminder', 'meeting_cancelled', 'meeting_updated', 'message', 'system'],
+    enum: [
+      'meeting_invitation', 'meeting_reminder', 'meeting_cancelled', 'meeting_updated', 
+      'message', 'system', 'meeting_invite', 'system_alert', 'task_assignment', 
+      'mention', 'conversation_created', 'community_created', 'conversation_deleted'
+    ],
     required: true
   },
   title: {
