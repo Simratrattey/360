@@ -12,7 +12,8 @@ import {
   Activity,
   Sparkles,
   User,
-  Hash
+  Hash,
+  X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
@@ -51,6 +52,10 @@ export default function DashboardPage() {
   const [localGeneralNotifications, setLocalGeneralNotifications] = useState([]);
   const [scheduling, setScheduling] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  
+  // Join request system
+  const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
+  const [approvedRooms, setApprovedRooms] = useState(new Set());
 
   const loadRooms = () => {
     API.get('/rooms')
@@ -324,9 +329,30 @@ export default function DashboardPage() {
     openMeetingWindow(roomId);
   };
 
+  // Helper function to add custom notifications
+  const addJoinRequestNotification = (type, message, roomId = null) => {
+    const notification = {
+      id: Date.now(),
+      type, // 'success', 'error', 'approved', 'denied'
+      message,
+      roomId,
+      timestamp: new Date().toISOString()
+    };
+    
+    setJoinRequestNotifications(prev => [...prev, notification]);
+    
+    // Auto-remove after 5 seconds for success/error, 10 seconds for approved/denied
+    const timeout = type === 'approved' || type === 'denied' ? 10000 : 5000;
+    setTimeout(() => {
+      setJoinRequestNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }, timeout);
+    
+    return notification.id;
+  };
+
   const requestJoinMeeting = (roomId) => {
     if (!sfuSocket || !user) {
-      alert('Unable to send join request. Please try again.');
+      addJoinRequestNotification('error', 'Unable to send join request. Please try again.');
       return;
     }
 
@@ -341,20 +367,21 @@ export default function DashboardPage() {
     // Listen for join request result
     sfuSocket.once('joinRequestResult', (result) => {
       if (result.success) {
-        alert('Join request sent to host successfully!');
+        addJoinRequestNotification('success', 'Join request sent to host successfully!');
         
         // Listen for host's response
         sfuSocket.once('joinRequestApproved', () => {
-          alert('Host approved your request! Joining meeting...');
-          joinMeeting(roomId);
+          addJoinRequestNotification('approved', 'Host approved your request! You can now join the meeting.', roomId);
+          // Mark room as approved so button changes to "Join"
+          setApprovedRooms(prev => new Set([...prev, roomId]));
         });
         
         sfuSocket.once('joinRequestDenied', (data) => {
-          alert(data.message || 'Host denied your join request.');
+          addJoinRequestNotification('denied', data.message || 'Host denied your join request.');
         });
         
       } else {
-        alert(result.message || 'Failed to send join request.');
+        addJoinRequestNotification('error', result.message || 'Failed to send join request.');
       }
     });
   };
@@ -536,7 +563,7 @@ export default function DashboardPage() {
                   whileHover={{ scale: 1.03 }}
                   className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => {
-                    if (room.visibility === 'approval') {
+                    if (room.visibility === 'approval' && !approvedRooms.has(room.roomId)) {
                       requestJoinMeeting(room.roomId);
                     } else {
                       joinMeeting(room.roomId);
@@ -558,11 +585,11 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <button className={`text-sm py-1 px-4 rounded-lg shadow transition-colors ${
-                    room.visibility === 'approval' 
+                    room.visibility === 'approval' && !approvedRooms.has(room.roomId)
                       ? 'bg-blue-600 hover:bg-blue-700 text-white' 
                       : 'btn-primary'
                   }`}>
-                    {room.visibility === 'approval' ? 'Request' : 'Join'}
+                    {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
                   </button>
                 </motion.div>
               ))}
@@ -665,6 +692,75 @@ export default function DashboardPage() {
         onClose={() => setIsCreateModalOpen(false)}
         onMeetingCreated={loadRooms}
       />
+
+      {/* Custom Join Request Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {joinRequestNotifications.map((notification) => (
+          <motion.div
+            key={notification.id}
+            initial={{ opacity: 0, x: 300, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 300, scale: 0.8 }}
+            className={`p-4 rounded-lg shadow-lg border-l-4 max-w-md ${
+              notification.type === 'success'
+                ? 'bg-green-50 border-green-400 text-green-800'
+                : notification.type === 'error'
+                ? 'bg-red-50 border-red-400 text-red-800'
+                : notification.type === 'approved'
+                ? 'bg-blue-50 border-blue-400 text-blue-800'
+                : notification.type === 'denied'
+                ? 'bg-orange-50 border-orange-400 text-orange-800'
+                : 'bg-gray-50 border-gray-400 text-gray-800'
+            }`}
+          >
+            <div className="flex items-start">
+              <div className="flex-shrink-0 mr-3">
+                {notification.type === 'success' && (
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-3 bg-white rounded-full"></div>
+                  </div>
+                )}
+                {notification.type === 'error' && (
+                  <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+                    <div className="w-1 h-3 bg-white rounded-full"></div>
+                  </div>
+                )}
+                {notification.type === 'approved' && (
+                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-1 bg-white rounded-full rotate-45 relative">
+                      <div className="w-1 h-2 bg-white rounded-full absolute -top-0.5 left-1"></div>
+                    </div>
+                  </div>
+                )}
+                {notification.type === 'denied' && (
+                  <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                    <div className="w-3 h-0.5 bg-white rounded-full"></div>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">{notification.message}</p>
+                {notification.type === 'approved' && notification.roomId && (
+                  <button
+                    onClick={() => joinMeeting(notification.roomId)}
+                    className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-md transition-colors"
+                  >
+                    Join Now
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setJoinRequestNotifications(prev => 
+                  prev.filter(n => n.id !== notification.id)
+                )}
+                className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 } 
