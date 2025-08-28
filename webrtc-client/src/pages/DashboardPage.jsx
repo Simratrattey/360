@@ -409,8 +409,48 @@ export default function DashboardPage() {
             </span>
           )}
         </div>
-        {(Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 ? (
+        {((Array.isArray(messageNotifications) ? messageNotifications : []).length > 0 || 
+          (Array.isArray(generalNotifications) ? generalNotifications : []).length > 0) ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
+            
+            {/* General notifications (group/conversation events) */}
+            {(Array.isArray(generalNotifications) ? generalNotifications : []).map((notif, idx) => (
+              <motion.div
+                key={`general-${notif._id}-${idx}`}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.07, duration: 0.5 }}
+                className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
+                onClick={() => {
+                  // Mark notification as read
+                  if (markAsRead && notif._id) {
+                    markAsRead(notif._id);
+                  }
+                  // Navigate based on notification type
+                  if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
+                    navigate('/messages');
+                  }
+                }}
+              >
+                <div className="relative">
+                  <div className={`h-12 w-12 rounded-full bg-gradient-to-r ${
+                    notif.type === 'conversation_created' || notif.type === 'community_created' 
+                      ? 'from-green-500 to-emerald-500' 
+                      : notif.type === 'conversation_deleted' 
+                      ? 'from-red-500 to-pink-500'
+                      : 'from-blue-500 to-cyan-500'
+                  } flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
+                    {notif.type === 'conversation_created' || notif.type === 'community_created' ? '🎉' : 
+                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-secondary-800 truncate">{notif.title}</p>
+                  <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
+                  <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>
+                </div>
+              </motion.div>
+            ))}
             
             {/* Message notifications */}
             {(Array.isArray(messageNotifications) ? messageNotifications : []).map((notif, idx) => (
@@ -418,7 +458,7 @@ export default function DashboardPage() {
                 key={`message-${notif.id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.07, duration: 0.5 }}
+                transition={{ delay: (generalNotifications.length + idx) * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
                 onClick={() => {
                   // Clear this message notification
