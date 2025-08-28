@@ -330,11 +330,6 @@ export default function DashboardPage() {
             <MessageSquare className="h-6 w-6 text-blue-400" />
             Notifications
           </h2>
-          {(globalUnreadCount && globalUnreadCount > 0) && (
-            <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-              {globalUnreadCount} unread
-            </span>
-          )}
         </div>
         {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
