@@ -36,19 +36,30 @@ export const getUserNotifications = async (req, res, next) => {
 export const markNotificationAsRead = async (req, res, next) => {
   try {
     const { notificationId } = req.params;
+    const userId = req.user?.id;
+    
+    console.log(`[NotificationController] Marking notification as read - NotificationId: ${notificationId}, UserId: ${userId}`);
+    
+    if (!userId) {
+      console.error('[NotificationController] No user ID found in request');
+      return res.status(403).json({ message: 'User not authenticated' });
+    }
     
     const notification = await Notification.findOneAndUpdate(
-      { _id: notificationId, recipient: req.user.id },
+      { _id: notificationId, recipient: userId },
       { read: true },
       { new: true }
     ).populate('sender', 'fullName username avatarUrl');
 
     if (!notification) {
+      console.log(`[NotificationController] Notification not found - NotificationId: ${notificationId}, UserId: ${userId}`);
       return res.status(404).json({ message: 'Notification not found' });
     }
 
+    console.log(`[NotificationController] Successfully marked notification as read - NotificationId: ${notificationId}`);
     res.json({ notification });
   } catch (err) {
+    console.error('[NotificationController] Error marking notification as read:', err);
     next(err);
   }
 };
