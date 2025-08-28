@@ -99,45 +99,42 @@ export default function DashboardPage() {
         (typeof msg.sender === 'string' && msg.sender !== user.id) ||
         (typeof msg.sender === 'object' && msg.sender && msg.sender._id !== user.id)
       ) {
-        setMessageNotifications(prev => {
-          // Find if this conversation already exists
-          const idx = prev.findIndex(n => n.id === msg.conversationId);
-          if (idx !== -1) {
-            // Update unread count and move to top
-            const updated = [...prev];
-            updated[idx] = {
-              ...updated[idx],
-              unread: (updated[idx].unread || 0) + 1,
-              lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-              lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-            };
-            // Move to top
-            const [item] = updated.splice(idx, 1);
-            return [item, ...updated];
-          } else {
-            // New conversation notification
-            return [
-              {
-                id: msg.conversationId,
-                type: msg.conversationType || 'dm',
-                name: msg.conversationName || msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-                unread: 1,
-                avatar: msg.conversationAvatar || '',
-                icon: msg.conversationType === 'group' ? Users : msg.conversationType === 'community' ? Hash : User,
-                lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
-                lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
-              },
-              ...prev
-            ];
+        console.log('📨 New message received on dashboard, refreshing notification counts from server');
+        
+        // Instead of manually updating counts, refresh from server to get accurate counts
+        // This prevents double counting and ensures consistency
+        setTimeout(() => {
+          // Fetch fresh unread data from server
+          async function refreshUnread() {
+            try {
+              const res = await conversationAPI.getConversations();
+              const conversations = res.data.conversations || res.data || [];
+              const messageNotifs = conversations
+                .filter(c => c.unread > 0)
+                .map(c => ({
+                  id: c._id,
+                  type: c.type,
+                  name: c.name || (c.type === 'dm' && c.members ? (c.members.find(m => m._id !== user?._id)?.fullName || c.members.find(m => m._id !== user?._id)?.username || 'Unknown') : ''),
+                  unread: c.unread,
+                  avatar: c.avatar,
+                  icon: c.type === 'dm' ? User : c.type === 'group' ? Users : Hash,
+                  lastText: msg.text || (msg.file ? 'Sent a file' : 'New message'),
+                  lastSender: msg.senderName || (msg.sender && msg.sender.fullName) || 'New Message',
+                }));
+              setMessageNotifications(messageNotifs);
+            } catch (err) {
+              console.error('Error refreshing unread messages:', err);
+            }
           }
-        });
+          refreshUnread();
+        }, 100); // Small delay to ensure server has processed the message
       }
     };
     chatSocket.on('chat:new', handleNewMessage);
     return () => {
       chatSocket.off('chat:new', handleNewMessage);
     };
-  }, [chatSocket, user.id]);
+  }, [chatSocket, user.id, user]);
 
   // Real-time conversation creation/deletion updates for dashboard
   useEffect(() => {
@@ -357,8 +354,10 @@ export default function DashboardPage() {
                 onClick={() => {
                   // Clear this message notification
                   setMessageNotifications(prev => prev.filter(n => n.id !== notif.id));
-                  // Navigate to messages
-                  navigate(`/messages?conversation=${notif.id}`);
+                  // Small delay to ensure any recent messages are properly processed by server
+                  setTimeout(() => {
+                    navigate(`/messages?conversation=${notif.id}`);
+                  }, 200);
                 }}
               >
                 <div className="relative">

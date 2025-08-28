@@ -356,6 +356,15 @@ export default function MessagesPage() {
       if (target) {
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
+        
+        // Force refresh messages when navigating from notification to ensure latest messages are loaded
+        console.log('📨 Navigating from notification - forcing message refresh for:', conversationId);
+        setMessagesCache(prev => {
+          const newCache = { ...prev };
+          delete newCache[conversationId]; // Clear cache to force refresh
+          return newCache;
+        });
+        
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
