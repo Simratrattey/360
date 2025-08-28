@@ -640,9 +640,20 @@ export default function MessagesPage() {
     // Show cached messages immediately for instant loading
     if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
+      
+      // Initialize reactions state from cached messages
+      const cachedReactions = {};
+      cachedMessages.forEach(msg => {
+        if (msg.reactions && msg.reactions.length > 0) {
+          cachedReactions[msg._id] = msg.reactions;
+        }
+      });
+      setReactions(cachedReactions);
+      
       setMessagesLoading(false);
     } else {
       setMessages([]);
+      setReactions({});
       setMessagesLoading(true);
     }
     
@@ -657,6 +668,15 @@ export default function MessagesPage() {
         setMessages(mergedMessages);
         setMessageOffset(mergedMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
+        
+        // Initialize reactions state from loaded messages
+        const initialReactions = {};
+        mergedMessages.forEach(msg => {
+          if (msg.reactions && msg.reactions.length > 0) {
+            initialReactions[msg._id] = msg.reactions;
+          }
+        });
+        setReactions(initialReactions);
         
         // Update cache with merged results
         setMessagesCache(prev => ({
@@ -793,6 +813,14 @@ export default function MessagesPage() {
           console.log('Adding real message to current view:', msg._id, msg.tempId, 'Total messages:', newMessages.length);
           return newMessages;
         });
+        
+        // Update reactions state if the new message has reactions
+        if (msg.reactions && msg.reactions.length > 0) {
+          setReactions(prev => ({
+            ...prev,
+            [msg._id]: msg.reactions
+          }));
+        }
       }
       
       // 3. Update sidebar
@@ -1752,6 +1780,15 @@ export default function MessagesPage() {
         setMessages(prev => [...olderMessages, ...prev]);
         setMessageOffset(prev => prev + olderMessages.length);
         setHasMoreMessages(olderMessages.length === 50);
+        
+        // Update reactions state for newly loaded older messages
+        const olderReactions = {};
+        olderMessages.forEach(msg => {
+          if (msg.reactions && msg.reactions.length > 0) {
+            olderReactions[msg._id] = msg.reactions;
+          }
+        });
+        setReactions(prev => ({ ...olderReactions, ...prev })); // Add older reactions first
         
         // Update cache
         setMessagesCache(prev => ({
