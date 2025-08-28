@@ -106,6 +106,10 @@ export default function MeetingPage() {
   const [speakingParticipants, setSpeakingParticipants] = useState(new Set());
   const audioAnalyzers = useRef(new Map()); // Store audio analyzers for each participant
   
+  // Join request system
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [showJoinRequests, setShowJoinRequests] = useState(false);
+  
   // Debug participant map changes
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
@@ -498,12 +502,20 @@ export default function MeetingPage() {
       }
     };
 
+    // Join request handler for hosts - updated to use joinRequestsUpdated
+    const handleJoinRequestsUpdated = ({ pendingRequests, count }) => {
+      console.log('[MeetingPage] Join requests updated:', { pendingRequests, count });
+      setJoinRequests(pendingRequests || []);
+    };
+
     sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
     sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
+    sfuSocket.on('joinRequestsUpdated', handleJoinRequestsUpdated);
 
     return () => {
       sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
       sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
+      sfuSocket.off('joinRequestsUpdated', handleJoinRequestsUpdated);
     };
   }, [sfuSocket, user?.id, screenSharingUserId]);
 
@@ -513,11 +525,14 @@ export default function MeetingPage() {
       if (showSettings && !event.target.closest('[data-settings-panel]')) {
         setShowSettings(false);
       }
+      if (showJoinRequests && !event.target.closest('.join-requests-dropdown') && !event.target.closest('.participants-badge')) {
+        setShowJoinRequests(false);
+      }
     };
     
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [showSettings]);
+  }, [showSettings, showJoinRequests]);
 
   const handlePrev = () => {
     const i = Math.max(0, avatarIndex - 1);
@@ -1760,6 +1775,31 @@ To convert to MP4:
     setSubtitlePosition({ x: 0, y: 0 });
   };
 
+  // Join request response handlers
+  const handleJoinRequestResponse = (requestId, approved) => {
+    const request = joinRequests.find(r => r.requestId === requestId);
+    if (!request || !sfuSocket) return;
+
+    console.log(`[MeetingPage] ${approved ? 'Approving' : 'Denying'} join request from ${request.requesterName}`);
+    
+    sfuSocket.emit('respondToJoinRequest', {
+      requestId,
+      approved,
+      requesterSocketId: request.requesterSocketId,
+      roomId: request.roomId
+    });
+
+    // No need to remove locally - server will send updated list via joinRequestsUpdated
+  };
+
+  const approveJoinRequest = (requestId) => {
+    handleJoinRequestResponse(requestId, true);
+  };
+
+  const denyJoinRequest = (requestId) => {
+    handleJoinRequestResponse(requestId, false);
+  };
+
   // Audio activity detection for speaking indicators
   const startAudioAnalyzer = (stream, participantId, isLocal = false) => {
     try {
@@ -1924,6 +1964,12 @@ To convert to MP4:
         meetingStartTime={meetingStartTime}
         roomId={roomId}
         recordingStatus={recordingStatus}
+        joinRequests={joinRequests}
+        showJoinRequests={showJoinRequests}
+        onToggleJoinRequests={() => setShowJoinRequests(!showJoinRequests)}
+        isHost={roomSettings?.isHost}
+        onApproveJoinRequest={approveJoinRequest}
+        onDenyJoinRequest={denyJoinRequest}
       />
       
       
@@ -2369,6 +2415,7 @@ To convert to MP4:
           <div className="text-xs">{avatarApiError}</div>
         </div>
       )}
+
     </div>
   );
 }

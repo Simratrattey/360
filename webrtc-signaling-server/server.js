@@ -88,7 +88,7 @@ app.use(helmet());
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use('/api/sfu', authMiddleware, sfuRoutes);
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast')) {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/files') || req.path.startsWith('/bot') || req.path.startsWith('/broadcast') || req.path.startsWith('/rooms')) {
     return next();
   }
   return authMiddleware(req, res, next);
@@ -599,9 +599,13 @@ io.on('connection', async socket => {
   // Broadcast online status to all users
   io.emit('user:online', { userId: socket.userId, user: onlineUsers.get(socket.userId) });
   
-  // roomId can still come from client
-  socket.on('joinRoom', roomId => {
+  // roomId can still come from client, optionally with meeting info
+  socket.on('joinRoom', (roomId, meetingInfo = null) => {
     console.log(`[Signaling] socket ${socket.id} requesting joinRoom ${roomId}`);
+    if (meetingInfo) {
+      console.log(`[Signaling] 📋 Received meeting info:`, meetingInfo);
+    }
+    
     if (socket.currentRoom) {
       socket.leave(socket.currentRoom);
       // Remove by socketId, not username
@@ -616,14 +620,29 @@ io.on('connection', async socket => {
     socket.currentRoom = roomId;
 
     if (!rooms[roomId]) {
+      // Use provided meeting info or try to get from cache or use defaults
+      const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
+      
       rooms[roomId] = { 
         offers: [], 
         participants: [], 
         host: socket.userId, // First person to join becomes host
         avatarApiEnabled: true, // Default to enabled
         isRecording: false, // Track recording status
-        recordedBy: null // Who started the recording
+        recordedBy: null, // Who started the recording
+        // Enhanced meeting info
+        name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
+        visibility: storedMeetingInfo?.visibility || 'public',
+        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+        // Join request tracking
+        pendingJoinRequests: new Map() // userId -> request info
       };
+      
+      console.log(`[Signaling] ✅ Created room ${roomId} with info:`, {
+        name: rooms[roomId].name,
+        visibility: rooms[roomId].visibility,
+        host: rooms[roomId].host
+      });
     }
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
@@ -846,6 +865,101 @@ io.on('connection', async socket => {
     socket.emit('roomSettingsUpdated', settingsUpdate); // Ensure host gets the update too
     
     console.log(`[Room ${rid}] Avatar API ${enabled ? 'enabled' : 'disabled'} by host ${socket.userId}`);
+  });
+
+  // Join request for approval-required meetings
+  socket.on('requestJoinRoom', ({ roomId, requesterName, requesterUserId }) => {
+    console.log(`[Signaling] Join request for room ${roomId} from ${requesterName} (${requesterUserId})`);
+    
+    if (!rooms[roomId]) {
+      socket.emit('joinRequestResult', { success: false, message: 'Room not found' });
+      return;
+    }
+    
+    const room = rooms[roomId];
+    if (room.visibility !== 'approval') {
+      socket.emit('joinRequestResult', { success: false, message: 'This room does not require approval' });
+      return;
+    }
+    
+    // Check for duplicate request
+    if (room.pendingJoinRequests.has(requesterUserId)) {
+      socket.emit('joinRequestResult', { success: false, message: 'You already have a pending join request' });
+      return;
+    }
+    
+    // Find the host socket
+    const hostSocket = Array.from(io.sockets.sockets.values())
+      .find(s => s.userId === room.host && s.currentRoom === roomId);
+    
+    if (hostSocket) {
+      const requestData = {
+        requestId: `${Date.now()}-${requesterUserId}`,
+        roomId,
+        requesterName,
+        requesterUserId,
+        requesterSocketId: socket.id,
+        requestTime: new Date().toISOString()
+      };
+      
+      // Store the pending request
+      room.pendingJoinRequests.set(requesterUserId, requestData);
+      
+      // Send updated join request list to host
+      const pendingRequests = Array.from(room.pendingJoinRequests.values());
+      hostSocket.emit('joinRequestsUpdated', { 
+        roomId,
+        pendingRequests,
+        count: pendingRequests.length
+      });
+      
+      socket.emit('joinRequestResult', { success: true, message: 'Join request sent to host' });
+      console.log(`[Signaling] ✅ Join request added to pending list for room ${roomId}`);
+    } else {
+      socket.emit('joinRequestResult', { success: false, message: 'Host is not available' });
+      console.log(`[Signaling] ❌ Host not found for room ${roomId}`);
+    }
+  });
+  
+  // Host response to join request
+  socket.on('respondToJoinRequest', ({ requestId, approved, requesterSocketId, roomId }) => {
+    console.log(`[Signaling] Host ${socket.userId} ${approved ? 'approved' : 'denied'} join request ${requestId}`);
+    
+    const room = rooms[roomId];
+    if (!room) {
+      console.log(`[Signaling] ❌ Room ${roomId} not found for join request response`);
+      return;
+    }
+    
+    // Find and remove the request from pending list
+    const requesterUserId = Array.from(room.pendingJoinRequests.entries())
+      .find(([userId, request]) => request.requestId === requestId)?.[0];
+    
+    if (requesterUserId) {
+      room.pendingJoinRequests.delete(requesterUserId);
+      
+      // Send updated request count to host
+      const pendingRequests = Array.from(room.pendingJoinRequests.values());
+      socket.emit('joinRequestsUpdated', { 
+        roomId,
+        pendingRequests,
+        count: pendingRequests.length
+      });
+    }
+    
+    const requesterSocket = io.sockets.sockets.get(requesterSocketId);
+    if (requesterSocket) {
+      if (approved) {
+        // Allow the requester to join
+        requesterSocket.emit('joinRequestApproved', { roomId });
+        console.log(`[Signaling] ✅ Join request approved, user can join room ${roomId}`);
+      } else {
+        requesterSocket.emit('joinRequestDenied', { roomId, message: 'Host denied your join request' });
+        console.log(`[Signaling] ❌ Join request denied for room ${roomId}`);
+      }
+    } else {
+      console.log(`[Signaling] ⚠️ Requester socket ${requesterSocketId} not found`);
+    }
   });
 
   // Recording notifications
@@ -1154,12 +1268,27 @@ io.on('connection', async socket => {
 
 // API endpoint to get active rooms
 app.get('/api/rooms', (req, res) => {
-  const activeRooms = Object.keys(rooms).map(roomId => ({
-    roomId,
-    participantCount: rooms[roomId].participants.length
-  }));
+  const activeRooms = Object.keys(rooms)
+    .filter(roomId => {
+      const room = rooms[roomId];
+      // Only return rooms that are not private and have participants
+      return room.visibility !== 'private' && room.participants.length > 0;
+    })
+    .map(roomId => ({
+      roomId,
+      name: rooms[roomId].name,
+      visibility: rooms[roomId].visibility,
+      participantCount: rooms[roomId].participants.length,
+      host: rooms[roomId].host,
+      createdAt: rooms[roomId].createdAt,
+      isRecording: rooms[roomId].isRecording
+    }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Sort by newest first
+  
   res.json({ rooms: activeRooms });
 });
+
+// Meeting info is now handled via socket when joining room
 
 // 🔥 NEW: Endpoint for SFU server to broadcast newProducer events
 app.post('/api/broadcast/newProducer', express.json(), (req, res) => {

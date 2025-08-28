@@ -149,21 +149,48 @@ export function SocketProvider({ children }) {
   const joinRoom = (roomId) => {
     console.log('[SocketContext] 🎯 joinRoom called with roomId:', roomId, 'type:', typeof roomId);
     setCurrentRoom(roomId);
+    
+    // Check for meeting info in localStorage
+    const meetingInfoKey = `meeting-${roomId}`;
+    const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+    let meetingInfo = null;
+    
+    if (meetingInfoStr) {
+      try {
+        meetingInfo = JSON.parse(meetingInfoStr);
+        console.log('[SocketContext] 📋 Found meeting info for room:', meetingInfo);
+      } catch (e) {
+        console.warn('[SocketContext] ⚠️ Failed to parse meeting info:', e);
+      }
+    }
+    
     if (!sfuSocket) {
       console.warn('[SocketContext] ⚠️ no socket yet, saved room only:', roomId);
       return;
     }
+    
+    const emitJoinRoom = () => {
+      if (meetingInfo) {
+        console.log('[SocketContext] 📤 Emitting joinRoom with meeting info');
+        sfuSocket.emit('joinRoom', roomId, meetingInfo);
+        // Clean up localStorage after sending
+        localStorage.removeItem(meetingInfoKey);
+      } else {
+        console.log('[SocketContext] 📤 Emitting joinRoom without meeting info');
+        sfuSocket.emit('joinRoom', roomId);
+      }
+    };
+    
     if (!sfuSocket.connected) {
       console.log('[SocketContext] ⏳ socket not connected, will emit joinRoom after connect:', roomId);
       sfuSocket.once('connect', () => {
         console.log('[SocketContext] 🔌 connected, now emitting joinRoom for', roomId);
-        sfuSocket.emit('joinRoom', roomId);
+        emitJoinRoom();
       });
       sfuSocket.connect();
     } else {
       console.log('[SocketContext] 🔁 socket already connected, emitting joinRoom for', roomId);
-      console.log('[SocketContext] 📤 About to emit joinRoom event to server...');
-      sfuSocket.emit('joinRoom', roomId);
+      emitJoinRoom();
       console.log('[SocketContext] ✅ joinRoom event emitted successfully');
     }
   };
