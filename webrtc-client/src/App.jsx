@@ -1,13 +1,12 @@
 import React, { useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext.jsx';
+import { CurrentConversationProvider } from './context/CurrentConversationContext.jsx';
 import { Toaster } from 'react-hot-toast';
-import ErrorBoundary from './components/ErrorBoundary.jsx';
 import Layout from './components/Layout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import LandingPage from './pages/LandingPage.jsx';
 import MeetingPage from './pages/MeetingPage.jsx';
 import PrivateRoute from './components/PrivateRoute';
 import MeetingsPage from './pages/MeetingsPage.jsx';
@@ -66,18 +65,20 @@ export default function App() {
   // If logged in and not a meeting page, show the main app with layout
   return (
     <>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/meetings" element={<MeetingsPage />} />
-          <Route path="/meetings/:id" element={<MeetingDetailsPage />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/messages" element={<MessagesPage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <CurrentConversationProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/meetings" element={<MeetingsPage />} />
+            <Route path="/meetings/:id" element={<MeetingDetailsPage />} />
+            <Route path="/contacts" element={<ContactsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/search" element={<SearchResultsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </CurrentConversationProvider>
       <Toaster position="top-right" />
     </>
   );

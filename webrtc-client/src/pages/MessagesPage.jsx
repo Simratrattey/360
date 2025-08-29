@@ -48,6 +48,8 @@ import * as conversationAPI from '../api/conversationService';
 import * as messageAPI from '../api/messageService';
 import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
+import { useCurrentConversation } from '../context/CurrentConversationContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useMediaQuery } from 'react-responsive';
 import { useMessageNotifications } from '../components/Layout';
 import NetworkStatus from '../components/NetworkStatus';
@@ -117,6 +119,8 @@ function groupMessagesByDate(messages) {
 export default function MessagesPage() {
   const { user } = useAuth();
   const chatSocket = useChatSocket();
+  const { updateCurrentConversation, updateMessagesPageStatus, clearCurrentConversation } = useCurrentConversation();
+  const { clearNotificationsForConversation } = useNotifications();
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
@@ -205,6 +209,26 @@ export default function MessagesPage() {
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
+
+  // Track entering/leaving messages page
+  useEffect(() => {
+    updateMessagesPageStatus(true);
+    
+    return () => {
+      updateMessagesPageStatus(false);
+      clearCurrentConversation();
+    };
+  }, [updateMessagesPageStatus, clearCurrentConversation]);
+
+  // Update current conversation when selected conversation changes
+  useEffect(() => {
+    if (selected?._id) {
+      updateCurrentConversation(selected._id);
+      clearNotificationsForConversation(selected._id);
+    } else {
+      clearCurrentConversation();
+    }
+  }, [selected?._id, updateCurrentConversation, clearCurrentConversation, clearNotificationsForConversation]);
 
   // Debounced function to mark conversation as read (prevents API spam)
   const debouncedMarkAsRead = useCallback((conversationId) => {

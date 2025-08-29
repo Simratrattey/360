@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useChatSocket } from './ChatSocketContext';
+import { useCurrentConversation } from './CurrentConversationContext';
 import * as notificationService from '../services/notificationService';
 import { 
   NOTIFICATION_TYPES, 
@@ -27,6 +28,7 @@ export const useNotifications = () => {
 export const NotificationProvider = ({ children }) => {
   const { user } = useAuth();
   const { socket } = useChatSocket();
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -121,7 +123,7 @@ export const NotificationProvider = ({ children }) => {
       const notificationId = notification._id || `notif-${Date.now()}`;
       
       // Skip showing notification if not applicable (e.g., user is on the same conversation)
-      if (!shouldShowNotification(notification)) {
+      if (!shouldShowNotification(notification, currentConversationId, isOnMessagesPage)) {
         console.log('Skipping notification display based on context');
         return null;
       }
@@ -192,7 +194,7 @@ export const NotificationProvider = ({ children }) => {
       console.error('Error showing browser notification:', error);
       return null;
     }
-  }, [markAsRead]);
+  }, [markAsRead, currentConversationId, isOnMessagesPage]);
 
   // Handle new notification
   const handleNewNotification = useCallback((notification) => {
@@ -383,6 +385,30 @@ export const NotificationProvider = ({ children }) => {
     loadUnreadCount();
   };
 
+  const clearNotificationsForConversation = useCallback((conversationId) => {
+    if (!conversationId) return;
+    
+    console.log('📢 Clearing notifications for conversation:', conversationId);
+    
+    // Find message notifications for this conversation
+    const conversationNotifications = notifications.filter(notif => 
+      notif.type === 'message' && 
+      notif.data?.conversationId === conversationId && 
+      !notif.read
+    );
+    
+    // Mark them as read
+    conversationNotifications.forEach(async (notif) => {
+      if (notif._id) {
+        try {
+          await markAsRead(notif._id);
+        } catch (error) {
+          console.error('Error marking conversation notification as read:', error);
+        }
+      }
+    });
+  }, [notifications, markAsRead]);
+
   const value = {
     notifications,
     unreadCount,
@@ -390,7 +416,8 @@ export const NotificationProvider = ({ children }) => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    refreshNotifications
+    refreshNotifications,
+    clearNotificationsForConversation
   };
 
   return (
