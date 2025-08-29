@@ -24,6 +24,7 @@ import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useSocket } from '../context/SocketContext';
 
 const stats = [
@@ -44,8 +45,9 @@ export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications, clearNotificationsForConversation } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   // Using only global notifications to avoid duplicates
@@ -331,11 +333,37 @@ export default function DashboardPage() {
             Notifications
           </h2>
         </div>
-        {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
+        {(() => {
+          // Filter unread notifications, excluding message notifications for currently selected conversation
+          const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+            .filter(notif => !notif.read)
+            .filter(notif => {
+              // If this is a message notification and user is on messages page with this conversation selected, hide it
+              if (notif.type === 'message' && isOnMessagesPage && currentConversationId === notif.data?.conversationId) {
+                return false;
+              }
+              return true;
+            });
+          
+          return unreadNotifications.length > 0;
+        })() ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             
             {/* General notifications (group/conversation events) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).map((notif, idx) => (
+            {(() => {
+              // Filter unread notifications, excluding message notifications for currently selected conversation
+              const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+                .filter(notif => !notif.read)
+                .filter(notif => {
+                  // If this is a message notification and user is on messages page with this conversation selected, hide it
+                  if (notif.type === 'message' && isOnMessagesPage && currentConversationId === notif.data?.conversationId) {
+                    return false;
+                  }
+                  return true;
+                });
+              
+              return filteredNotifications;
+            })().map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
@@ -355,6 +383,8 @@ export default function DashboardPage() {
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
                     navigate('/messages');
                   } else if (notif.type === 'message' && notif.data?.conversationId) {
+                    // Clear all notifications for this conversation when opening it
+                    clearNotificationsForConversation(notif.data.conversationId);
                     // Navigate to specific conversation for message notifications
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
                   }

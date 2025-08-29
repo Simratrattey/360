@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext'; // Reuse socket from SocketContext
+import { useCurrentConversation } from './CurrentConversationContext';
 import { messageStatus as messageStatusService, markAsDelivered, markAsRead } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
@@ -8,6 +9,7 @@ const ChatSocketContext = createContext();
 export function ChatSocketProvider({ children }) {
   const { user } = useAuth();
   const socketContext = useSocket(); // Get socket from SocketContext
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Map());
   const [legacyMessageStatus, setLegacyMessageStatus] = useState(new Map());
@@ -98,15 +100,23 @@ export function ChatSocketProvider({ children }) {
     // Debug: Add specific event listeners for debugging
     s.on('chat:new', (message) => {
       // Show browser notification if message is not from current user
+      // and not for the currently selected conversation when on messages page
+      const isFromCurrentUser = (
+        (message.senderId && message.senderId === user.id) ||
+        (typeof message.sender === 'string' && message.sender === user.id) ||
+        (typeof message.sender === 'object' && message.sender && message.sender._id === user.id)
+      );
+      
+      const isForCurrentConversation = isOnMessagesPage && 
+        currentConversationId && 
+        message.conversationId === currentConversationId;
+      
       if (
         window.Notification &&
         Notification.permission === 'granted' &&
         user &&
-        (
-          (message.senderId && message.senderId !== user.id) ||
-          (typeof message.sender === 'string' && message.sender !== user.id) ||
-          (typeof message.sender === 'object' && message.sender && message.sender._id !== user.id)
-        )
+        !isFromCurrentUser &&
+        !isForCurrentConversation
       ) {
         const title = message.senderName || (message.sender && message.sender.fullName) || 'New Message';
         const body = message.text || (message.file ? 'Sent a file' : 'New message');
@@ -116,6 +126,8 @@ export function ChatSocketProvider({ children }) {
         } catch (e) {
           console.error('[Notification Debug] Notification error:', e);
         }
+      } else if (isForCurrentConversation) {
+        console.log('[Notification Debug] Notification suppressed for current conversation:', message.conversationId);
       }
     });
 
