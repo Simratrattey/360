@@ -391,7 +391,7 @@ export const NotificationProvider = ({ children }) => {
     console.log('📢 Clearing notifications for conversation:', conversationId);
     
     // Find message notifications for this conversation
-    const conversationNotifications = notifications.filter(notif => 
+    const conversationNotifications = (Array.isArray(notifications) ? notifications : []).filter(notif => 
       notif.type === 'message' && 
       notif.data?.conversationId === conversationId && 
       !notif.read
