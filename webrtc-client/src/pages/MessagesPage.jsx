@@ -683,10 +683,10 @@ export default function MessagesPage() {
         }
       });
       
-      // Auto-select only on very first load when no conversation ever selected
-      if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
-        handleSelect(conversations[0]);
-      }
+      // Auto-selection removed - let user choose which conversation to open
+      // if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
+      //   handleSelect(conversations[0]);
+      // }
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }

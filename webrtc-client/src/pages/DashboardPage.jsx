@@ -404,6 +404,10 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-secondary-800 truncate">{notif.title}</p>
+                  {/* Show conversation name for group/community notifications */}
+                  {(notif.type === 'conversation_created' || notif.type === 'community_created') && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-blue-600 truncate">"{notif.data.conversationName}"</p>
+                  )}
                   <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
                   <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>
                 </div>
