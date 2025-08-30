@@ -396,10 +396,13 @@ export default function DashboardPage() {
                       ? 'from-green-500 to-emerald-500' 
                       : notif.type === 'conversation_deleted' 
                       ? 'from-red-500 to-pink-500'
+                      : notif.type === 'message'
+                      ? 'from-purple-500 to-blue-500'
                       : 'from-blue-500 to-cyan-500'
                   } flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
                     {notif.type === 'conversation_created' || notif.type === 'community_created' ? '🎉' : 
-                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
+                     notif.type === 'conversation_deleted' ? '🗑️' : 
+                     notif.type === 'message' ? '💬' : '🔔'}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -407,6 +410,10 @@ export default function DashboardPage() {
                   {/* Show conversation name for group/community notifications */}
                   {(notif.type === 'conversation_created' || notif.type === 'community_created') && notif.data?.conversationName && (
                     <p className="text-sm font-medium text-blue-600 truncate">"{notif.data.conversationName}"</p>
+                  )}
+                  {/* Show conversation context for message notifications */}
+                  {notif.type === 'message' && notif.data?.conversationType && notif.data?.conversationType !== 'dm' && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-green-600 truncate">in "{notif.data.conversationName}"</p>
                   )}
                   <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
                   <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>

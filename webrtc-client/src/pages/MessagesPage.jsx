@@ -232,23 +232,27 @@ export default function MessagesPage() {
 
   // Debounced function to mark conversation as read (prevents API spam)
   const debouncedMarkAsRead = useCallback((conversationId) => {
-    // Skip if already marked as read recently
-    if (readConversationsRef.current.has(conversationId)) {
-      return;
-    }
+    if (!conversationId) return;
 
-    // Clear any existing timeout
+    // Clear any existing timeout to debounce rapid calls
     if (markReadTimeoutRef.current) {
       clearTimeout(markReadTimeoutRef.current);
     }
 
     // Debounce the API call by 500ms
     markReadTimeoutRef.current = setTimeout(() => {
+      // Skip if already marked as read very recently (within last 2 seconds)
+      if (readConversationsRef.current.has(conversationId)) {
+        return;
+      }
+      
       // Add to read set to prevent duplicates
       readConversationsRef.current.add(conversationId);
       
+      console.log('📖 Marking conversation as read:', conversationId);
       conversationAPI.markConversationAsRead(conversationId)
         .then(() => {
+          console.log('📖 Successfully marked conversation as read:', conversationId);
           if (refreshUnreadCount) refreshUnreadCount();
           
           // Set unread to 0 for this conversation in the sidebar
@@ -263,17 +267,17 @@ export default function MessagesPage() {
             }))
           );
           
-          // Remove from set after 5 seconds to allow re-marking if needed
+          // Remove from set after 3 seconds to allow re-marking if needed
           setTimeout(() => {
             readConversationsRef.current.delete(conversationId);
-          }, 5000);
+          }, 3000);
         })
         .catch(error => {
           console.error('Error marking conversation as read:', error);
           // Remove from set on error so it can be retried
           readConversationsRef.current.delete(conversationId);
         });
-    }, 500);
+    }, 300); // Reduced debounce time for more responsive feeling
   }, [refreshUnreadCount, setAllConversations]);
   
   useEffect(() => {
@@ -1255,14 +1259,8 @@ export default function MessagesPage() {
         }
       });
       
-      // Use debounced function to mark conversation as read (only if it has unread messages)
-      const selectedConv = allConversations.find(section => 
-        section.items?.find(conv => conv._id === selected._id)
-      )?.items?.find(conv => conv._id === selected._id);
-      
-      if (selectedConv && selectedConv.unread > 0) {
-        debouncedMarkAsRead(selected._id);
-      }
+      // Always mark conversation as read when viewing it to ensure proper unread indicator clearing
+      debouncedMarkAsRead(selected._id);
     }
   }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
 
@@ -1311,10 +1309,9 @@ export default function MessagesPage() {
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Use debounced function to mark conversation as read (prevents 429 errors)
-    if (conv.unread > 0) {
-      debouncedMarkAsRead(conv._id);
-    }
+    // Always mark conversation as read when selected to ensure unread indicators are properly cleared
+    // This fixes the issue where users navigate directly to messages and don't see unread indicators clear
+    debouncedMarkAsRead(conv._id);
   };
 
   // Send message with network resilience and retry logic

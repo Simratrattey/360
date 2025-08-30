@@ -1180,15 +1180,28 @@ io.on('connection', async socket => {
           // Skip notification for sender
           if (recipientId === userId) continue;
           
-          // Create notification
+          // Create notification with conversation context for better differentiation
+          const senderName = populatedMessage.sender.fullName || populatedMessage.sender.username;
+          let notificationTitle = senderName;
+          
+          // Add conversation context to differentiate DM vs Group/Community messages
+          if (conversation.type === 'group' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          } else if (conversation.type === 'community' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          }
+          // For DMs, keep it simple with just sender name
+          
           const notification = await createNotification(
             recipientId,
             userId,
             'message',
-            `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+            notificationTitle,
             messagePreview,
             {
               conversationId: conversationId,
+              conversationType: conversation.type,
+              conversationName: conversation.name,
               messageId: populatedMessage._id.toString(),
               senderAvatar: populatedMessage.sender.avatarUrl
             }
