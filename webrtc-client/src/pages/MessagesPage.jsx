@@ -626,9 +626,20 @@ export default function MessagesPage() {
         // Mark conversation as read when navigating from notification
         // This ensures unread indicators disappear properly
         if (target.unread > 0) {
-          setTimeout(() => {
-            debouncedMarkAsRead(target._id);
-          }, 1000);
+          // Immediately update UI to remove unread indicator for instant feedback
+          setAllConversations(prev =>
+            prev.map(section => ({
+              ...section,
+              items: section.items.map(conversation => 
+                conversation._id === target._id 
+                  ? { ...conversation, unread: 0 }
+                  : conversation
+              )
+            }))
+          );
+          
+          // Mark as read on server in background (no delay needed for UI)
+          debouncedMarkAsRead(target._id);
         }
         
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -1380,11 +1391,20 @@ export default function MessagesPage() {
     // Only mark as read if conversation has messages and user will see them
     // This preserves unread indicators until user actually views content
     if (conv.unread > 0) {
-      console.log(`📖 Marking conversation as read due to selection with unread: ${conv.unread}`);
-      // Delay to ensure messages load first, then mark as read
-      setTimeout(() => {
-        debouncedMarkAsRead(conv._id);
-      }, 1000);
+      // Immediately update UI to remove unread indicator for instant feedback
+      setAllConversations(prev =>
+        prev.map(section => ({
+          ...section,
+          items: section.items.map(conversation => 
+            conversation._id === conv._id 
+              ? { ...conversation, unread: 0 }
+              : conversation
+          )
+        }))
+      );
+      
+      // Mark as read on server in background (no delay needed for UI)
+      debouncedMarkAsRead(conv._id);
     }
   };
 

@@ -378,20 +378,21 @@ export default function DashboardPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={async () => {
-                  // Mark notification as read
-                  if (markAsRead && notif._id) {
-                    await markAsRead(notif._id);
-                    // Note: refreshNotifications() removed to prevent race conditions
-                    // markAsRead already updates the local state correctly
-                  }
-                  // Navigate based on notification type
+                onClick={() => {
+                  // Navigate immediately for instant response
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
                     navigate('/messages');
                   } else if (notif.type === 'message' && notif.data?.conversationId) {
                     // Navigate to specific conversation for message notifications
                     // Notifications will be cleared when the conversation is actually opened in MessagesPage
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
+                  }
+                  
+                  // Mark notification as read in background (non-blocking)
+                  if (markAsRead && notif._id) {
+                    markAsRead(notif._id).catch(err => {
+                      console.error('Error marking notification as read:', err);
+                    });
                   }
                 }}
               >
