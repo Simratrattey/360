@@ -84,7 +84,7 @@ export const NotificationProvider = ({ children }) => {
       // Only request if not previously denied
       if (Notification.permission !== 'denied') {
         Notification.requestPermission().then(permission => {
-          console.log('📢 Notification permission:', permission);
+          // Permission requested
         }).catch(err => {
           console.error('Error requesting notification permission:', err);
           setError('Failed to request notification permissions');
@@ -96,13 +96,8 @@ export const NotificationProvider = ({ children }) => {
   // Mark notification as read function
   const markAsRead = useCallback(async (notificationId) => {
     try {
-      console.log(`📝 markAsRead called for notification: ${notificationId}`);
-      
       // Find the notification to get its details
       const notification = (Array.isArray(notifications) ? notifications : []).find(n => n._id === notificationId);
-      if (notification) {
-        console.log(`📝 Marking as read: ${notification.title} (conversation: ${notification.data?.conversationId})`);
-      }
       
       await notificationService.markAsRead(notificationId);
       
@@ -113,12 +108,10 @@ export const NotificationProvider = ({ children }) => {
             : notification
         );
         
-        console.log(`📝 Updated notifications state: ${updated.filter(n => !n.read).length} unread remaining`);
         return updated;
       });
       
       setUnreadCount(prev => Math.max(0, prev - 1));
-      console.log(`📝 Successfully marked notification ${notificationId} as read`);
     } catch (error) {
       console.error('Error marking notification as read:', error);
       setError('Failed to mark notification as read');
@@ -128,7 +121,6 @@ export const NotificationProvider = ({ children }) => {
   // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
     if (!('Notification' in window) || Notification.permission !== 'granted') {
-      console.log('📢 Browser notifications not supported or permission not granted');
       return null;
     }
 
@@ -138,7 +130,6 @@ export const NotificationProvider = ({ children }) => {
       
       // Skip showing notification if not applicable (e.g., user is on the same conversation)
       if (!shouldShowNotification(notification, currentConversationId, isOnMessagesPage)) {
-        console.log('Skipping notification display based on context');
         return null;
       }
 
@@ -212,12 +203,10 @@ export const NotificationProvider = ({ children }) => {
 
   // Handle new notification
   const handleNewNotification = useCallback((notification) => {
-    console.log('📢 New notification received:', notification);
     
     // Skip if this is a duplicate notification
     const isDuplicate = (Array.isArray(notifications) ? notifications : []).some(n => n._id === notification._id);
     if (isDuplicate) {
-      console.log('Skipping duplicate notification');
       return;
     }
     
@@ -238,31 +227,24 @@ export const NotificationProvider = ({ children }) => {
                              (document.visibilityState !== 'visible' || !document.hasFocus());
     
     if (shouldShowBrowser) {
-      console.log('📢 Showing browser notification for type:', notification.type);
       showBrowserNotification(notification);
-    } else {
-      console.log('📢 App is in foreground, browser notification skipped for type:', notification.type);
     }
   }, [notifications, showBrowserNotification]);
 
   // Setup socket event listeners
   const setupListeners = useCallback(() => {
     if (!socket) {
-      console.log('📢 Socket not available for notification listeners');
       return () => {}; // Return empty cleanup function
     }
-
-    console.log('📢 Setting up notification listeners');
     
     const handleConnect = () => {
-      console.log('📢 Socket connected, setting up notification listeners');
       if (socket) {
         socket.on('notification:new', handleNewNotification);
       }
     };
 
     const handleDisconnect = (reason) => {
-      console.log('📢 Socket disconnected:', reason);
+      // Socket disconnected
     };
     
     const handleConnectError = (error) => {
@@ -279,16 +261,8 @@ export const NotificationProvider = ({ children }) => {
       handleConnect();
     }
     
-    console.log('📢 Current socket event listeners:', {
-      notification: socket.hasListeners('notification:new'),
-      connect: socket.hasListeners('connect'),
-      disconnect: socket.hasListeners('disconnect'),
-      connect_error: socket.hasListeners('connect_error')
-    });
-
     // Cleanup function
     return () => {
-      console.log('📢 Cleaning up notification listeners');
       if (socket) {
         socket.off('notification:new', handleNewNotification);
         socket.off('connect', handleConnect);
@@ -301,7 +275,6 @@ export const NotificationProvider = ({ children }) => {
   // Initialize socket listeners when socket or user changes
   useEffect(() => {
     if (!socket || !user) {
-      console.log('📢 Socket or user not ready for notification listeners');
       return () => {};
     }
 
@@ -402,14 +375,8 @@ export const NotificationProvider = ({ children }) => {
   const clearNotificationsForConversation = useCallback((conversationId) => {
     if (!conversationId) return;
     
-    console.log('📢 Clearing notifications for conversation:', conversationId);
-    
     // Find ALL notifications to see what we're working with
     const allUnreadNotifs = (Array.isArray(notifications) ? notifications : []).filter(notif => !notif.read);
-    console.log(`📊 Total unread notifications before clearing: ${allUnreadNotifs.length}`);
-    allUnreadNotifs.forEach(notif => {
-      console.log(`📊 - Notification: ${notif.title} (conversation: ${notif.data?.conversationId})`);
-    });
     
     // Find message notifications for this conversation
     const conversationNotifications = allUnreadNotifs.filter(notif => 
@@ -417,13 +384,10 @@ export const NotificationProvider = ({ children }) => {
       notif.data?.conversationId === conversationId
     );
     
-    console.log(`📢 Found ${conversationNotifications.length} notifications to clear for conversation ${conversationId}`);
-    
     // Mark them as read
     conversationNotifications.forEach(async (notif) => {
       if (notif._id) {
         try {
-          console.log(`📢 Marking notification as read: ${notif.title} (${notif._id})`);
           await markAsRead(notif._id);
         } catch (error) {
           console.error('Error marking conversation notification as read:', error);

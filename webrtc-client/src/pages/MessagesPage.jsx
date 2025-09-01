@@ -215,22 +215,13 @@ export default function MessagesPage() {
       // Debounce rapid calls - only allow one call per 2 seconds unless forced
       const now = Date.now();
       if (!forceRefresh && (now - lastFetchTimeRef.current) < 2000) {
-        console.log(`⏳ Skipping fetchConversations - too recent (${now - lastFetchTimeRef.current}ms ago)`);
         return;
       }
       
       lastFetchTimeRef.current = now;
-      console.log(`📡 Fetching conversations from server... (forceRefresh: ${forceRefresh})`);
       
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
-      
-      console.log(`📡 Received ${conversations.length} conversations from server`);
-      conversations.forEach(conv => {
-        if (conv.unread > 0) {
-          console.log(`📡 Server conversation "${conv.name || conv._id}" has unread: ${conv.unread}`);
-        }
-      });
       
       // Sort conversations by lastMessageAt within each type
       const sortByLastMessage = (a, b) => {
@@ -288,11 +279,7 @@ export default function MessagesPage() {
             const prevConv = prevItems.find(p => p._id === newConv._id);
             if (prevConv && prevConv.unread > newConv.unread) {
               // Keep the higher local unread count (from real-time updates)
-              console.log(`📊 Preserving higher local unread count for ${newConv.name || newConv._id}: local ${prevConv.unread} vs server ${newConv.unread}`);
               return { ...newConv, unread: prevConv.unread };
-            }
-            if (prevConv && newConv.unread > 0) {
-              console.log(`📊 Using server unread count for ${newConv.name || newConv._id}: server ${newConv.unread}`);
             }
             return newConv;
           });
@@ -1082,7 +1069,6 @@ export default function MessagesPage() {
       
       // If current user was added to the group, they should see it in their conversation list
       if (isCurrentUser) {
-        console.log('🔥 [MEMBER-ADDED] ✅ Current user was added to group - refreshing conversation list');
         
         // Refresh conversations to get the new group with updated members
         fetchConversations(true);
@@ -1103,7 +1089,6 @@ export default function MessagesPage() {
       } else {
         // For other users, just update the current conversation if they're viewing it
         if (selected && selected._id === conversationId) {
-          console.log('🔥 [MEMBER-ADDED] ✅ Updating current conversation with new member');
           handleConversationUpdated();
         }
         
@@ -1185,7 +1170,6 @@ export default function MessagesPage() {
       } else {
         // For other users, update the current conversation if they're viewing it
         if (selected && selected._id === conversationId) {
-          console.log('🔥 [MEMBER-REMOVED] ✅ Updating current conversation - member removed');
           handleConversationUpdated();
         }
         
@@ -1235,7 +1219,6 @@ export default function MessagesPage() {
       
       // Always show conversation if user should see it (creator will have it from API, others get it from socket)
       if (shouldShowConversation) {
-        console.log('🔥 [CONVERSATION-CREATED] ✅ Adding to sidebar now!');
         
         // Use the same approach as chat:new messages - simple and effective!
         addConversationToTop(newConversation);
@@ -2334,7 +2317,6 @@ export default function MessagesPage() {
           localStorage.removeItem('unread_count');
           localStorage.removeItem('chatSearchHistory');
           sessionStorage.removeItem('app_errors');
-          console.log('✅ Cache cleared! Please refresh the page.');
           window.location.reload();
         }
       };
