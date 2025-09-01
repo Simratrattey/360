@@ -204,6 +204,96 @@ export default function MessagesPage() {
     return merged;
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+
+  // Define fetchConversations function early to avoid hoisting issues  
+  const fetchConversations = useCallback(async (forceRefresh = false) => {
+    try {
+      const res = await conversationAPI.getConversations();
+      const conversations = res.data.conversations || res.data || [];
+      
+      // Sort conversations by lastMessageAt within each type
+      const sortByLastMessage = (a, b) => {
+        const dateA = new Date(a.lastMessageAt || a.createdAt);
+        const dateB = new Date(b.lastMessageAt || b.createdAt);
+        return dateB - dateA;
+      };
+      
+      // Remove duplicates from API data
+      const deduplicateConversations = (conversations) => {
+        const idMap = new Map();
+        const nameMap = new Map();
+        
+        return conversations.filter((conv) => {
+          // Remove ID duplicates
+          if (idMap.has(conv._id)) {
+            return false;
+          }
+          idMap.set(conv._id, true);
+          
+          // Remove name duplicates for communities
+          if (conv.type === 'community' && conv.name) {
+            if (nameMap.has(conv.name)) {
+              return false;
+            }
+            nameMap.set(conv.name, true);
+          }
+          
+          return true;
+        });
+      };
+      
+      const dmConversations = deduplicateConversations(conversations.filter(c => c.type === 'dm')).sort(sortByLastMessage);
+      const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
+      const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
+      
+      // Combine all conversations into a single unified list, sorted by most recent
+      const allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
+        .sort(sortByLastMessage);
+      
+      // Use a single section for all conversations
+      const unifiedSection = [
+        { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
+      ];
+      
+      setAllConversations(unifiedSection);
+
+      // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
+      // We limit the number of conversations prefetched per section to avoid overwhelming the server.
+      const PREFETCH_CONVERSATIONS_PER_SECTION = 3;
+      const PREFETCH_MESSAGES_LIMIT = 10;
+      const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
+      
+      // FIXED: Smart prefetch that never overwrites real-time cached messages
+      conversationsToPrefetch.forEach(conv => {
+        if (!conv || !conv._id) return;
+        // Only prefetch if NO cache exists at all (empty or undefined)
+        const existingCache = messagesCache[conv._id];
+        if (!existingCache || existingCache.length === 0) {
+          messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
+            .then(res => {
+              const msgs = res.data?.messages || res.data || [];
+              // Only update cache if it's still empty (avoid overwriting real-time messages)
+              setMessagesCache(prev => {
+                if (prev[conv._id] && prev[conv._id].length > 0) {
+                  return prev;
+                }
+                return { ...prev, [conv._id]: msgs };
+              });
+            })
+            .catch(err => {
+              console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
+            });
+        }
+      });
+      
+      // Auto-selection removed - let user choose which conversation to open
+      // if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
+      //   handleSelect(conversations[0]);
+      // }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    }
+  }, [messagesCache]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -628,95 +718,6 @@ export default function MessagesPage() {
       delete window.retryMessage;
     };
   }, [selected]);
-
-  const fetchConversations = useCallback(async () => {
-    try {
-      const res = await conversationAPI.getConversations();
-      const conversations = res.data.conversations || res.data || [];
-      
-      // Sort conversations by lastMessageAt within each type
-      const sortByLastMessage = (a, b) => {
-        const dateA = new Date(a.lastMessageAt || a.createdAt);
-        const dateB = new Date(b.lastMessageAt || b.createdAt);
-        return dateB - dateA;
-      };
-      
-      // Remove duplicates from API data
-      const deduplicateConversations = (conversations) => {
-        const idMap = new Map();
-        const nameMap = new Map();
-        
-        return conversations.filter((conv) => {
-          // Remove ID duplicates
-          if (idMap.has(conv._id)) {
-            return false;
-          }
-          idMap.set(conv._id, true);
-          
-          // Remove name duplicates for communities
-          if (conv.type === 'community' && conv.name) {
-            if (nameMap.has(conv.name)) {
-              return false;
-            }
-            nameMap.set(conv.name, true);
-          }
-          
-          return true;
-        });
-      };
-      
-      const dmConversations = deduplicateConversations(conversations.filter(c => c.type === 'dm')).sort(sortByLastMessage);
-      const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
-      const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
-      
-      // Combine all conversations into a single unified list, sorted by most recent
-      const allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
-        .sort(sortByLastMessage);
-      
-      // Use a single section for all conversations
-      const unifiedSection = [
-        { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
-      ];
-      
-      setAllConversations(unifiedSection);
-
-      // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
-      // We limit the number of conversations prefetched per section to avoid overwhelming the server.
-      const PREFETCH_CONVERSATIONS_PER_SECTION = 3;
-      const PREFETCH_MESSAGES_LIMIT = 10;
-      const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
-      
-      // FIXED: Smart prefetch that never overwrites real-time cached messages
-      conversationsToPrefetch.forEach(conv => {
-        if (!conv || !conv._id) return;
-        // Only prefetch if NO cache exists at all (empty or undefined)
-        const existingCache = messagesCache[conv._id];
-        if (!existingCache || existingCache.length === 0) {
-          messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
-            .then(res => {
-              const msgs = res.data?.messages || res.data || [];
-              // Only update cache if it's still empty (avoid overwriting real-time messages)
-              setMessagesCache(prev => {
-                if (prev[conv._id] && prev[conv._id].length > 0) {
-                  return prev;
-                }
-                return { ...prev, [conv._id]: msgs };
-              });
-            })
-            .catch(err => {
-              console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
-            });
-        }
-      });
-      
-      // Auto-selection removed - let user choose which conversation to open
-      // if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
-      //   handleSelect(conversations[0]);
-      // }
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    }
-  }, [messagesCache]);
 
   // WHATSAPP-STYLE: Instant Conversation Loading  
   useEffect(() => {
