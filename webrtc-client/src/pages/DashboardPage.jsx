@@ -383,9 +383,8 @@ export default function DashboardPage() {
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
                     navigate('/messages');
                   } else if (notif.type === 'message' && notif.data?.conversationId) {
-                    // Clear all notifications for this conversation when opening it
-                    clearNotificationsForConversation(notif.data.conversationId);
                     // Navigate to specific conversation for message notifications
+                    // Notifications will be cleared when the conversation is actually opened in MessagesPage
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
                   }
                 }}

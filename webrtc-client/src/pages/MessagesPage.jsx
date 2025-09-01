@@ -214,11 +214,19 @@ export default function MessagesPage() {
   useEffect(() => {
     updateMessagesPageStatus(true);
     
+    // Refresh conversations when entering messages page to ensure latest unread counts
+    // This fixes the issue where unread indicators don't show when navigating directly to messages
+    // Add small delay to ensure any real-time messages have been processed
+    const timeoutId = setTimeout(() => {
+      fetchConversations();
+    }, 100);
+    
     return () => {
+      clearTimeout(timeoutId);
       updateMessagesPageStatus(false);
       clearCurrentConversation();
     };
-  }, [updateMessagesPageStatus, clearCurrentConversation]);
+  }, [updateMessagesPageStatus, clearCurrentConversation, fetchConversations]);
 
   // Update current conversation when selected conversation changes
   useEffect(() => {
@@ -440,13 +448,27 @@ export default function MessagesPage() {
     // Track window focus
     const onFocus = () => (windowFocused.current = true);
     const onBlur = () => (windowFocused.current = false);
+    
+    // Handle visibility change to refresh conversations when page becomes visible
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        // Page became visible - refresh conversations to ensure latest unread counts
+        setTimeout(() => {
+          fetchConversations();
+        }, 200);
+      }
+    };
+    
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    
     return () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [fetchConversations]);
 
   // Fetch conversations on mount (REST)
   useEffect(() => {
@@ -607,7 +629,7 @@ export default function MessagesPage() {
     };
   }, [selected]);
 
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
@@ -694,7 +716,7 @@ export default function MessagesPage() {
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
-  };
+  }, [messagesCache]);
 
   // WHATSAPP-STYLE: Instant Conversation Loading  
   useEffect(() => {
