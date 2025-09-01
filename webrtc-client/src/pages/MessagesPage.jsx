@@ -204,11 +204,24 @@ export default function MessagesPage() {
     return merged;
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+  
+  // Debouncing ref to prevent excessive fetchConversations calls
+  const fetchDebounceRef = useRef(null);
+  const lastFetchTimeRef = useRef(0);
 
   // Define fetchConversations function early to avoid hoisting issues  
   const fetchConversations = useCallback(async (forceRefresh = false) => {
     try {
+      // Debounce rapid calls - only allow one call per 2 seconds unless forced
+      const now = Date.now();
+      if (!forceRefresh && (now - lastFetchTimeRef.current) < 2000) {
+        console.log(`⏳ Skipping fetchConversations - too recent (${now - lastFetchTimeRef.current}ms ago)`);
+        return;
+      }
+      
+      lastFetchTimeRef.current = now;
       console.log(`📡 Fetching conversations from server... (forceRefresh: ${forceRefresh})`);
+      
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
       
@@ -335,19 +348,17 @@ export default function MessagesPage() {
   useEffect(() => {
     updateMessagesPageStatus(true);
     
-    // Refresh conversations when entering messages page to ensure latest unread counts
-    // This fixes the issue where unread indicators don't show when navigating directly to messages
-    // Add delay to ensure any real-time messages have been saved to database
-    const timeoutId = setTimeout(() => {
+    // Only refresh on entry if we don't have conversations loaded yet
+    if (allConversations.length === 0) {
+      console.log('🔄 Initial conversation load on messages page entry');
       fetchConversations();
-    }, 500);
+    }
     
     return () => {
-      clearTimeout(timeoutId);
       updateMessagesPageStatus(false);
       clearCurrentConversation();
     };
-  }, [updateMessagesPageStatus, clearCurrentConversation, fetchConversations]);
+  }, [updateMessagesPageStatus, clearCurrentConversation, fetchConversations, allConversations.length]);
 
   // Update current conversation when selected conversation changes
   useEffect(() => {
@@ -577,11 +588,16 @@ export default function MessagesPage() {
     // Handle visibility change to refresh conversations when page becomes visible
     const onVisibilityChange = () => {
       if (!document.hidden) {
-        // Page became visible - refresh conversations to ensure latest unread counts
-        // Longer delay to ensure server has processed any pending real-time messages
-        setTimeout(() => {
-          fetchConversations();
-        }, 600);
+        // Only refresh if page was hidden for more than 30 seconds
+        const hiddenTime = Date.now() - (document.lastVisibilityChange || 0);
+        if (hiddenTime > 30000) {
+          console.log('🔄 Page visible after long absence, refreshing conversations');
+          setTimeout(() => {
+            fetchConversations(true); // Force refresh after long absence
+          }, 1000);
+        }
+      } else {
+        document.lastVisibilityChange = Date.now();
       }
     };
     
@@ -857,6 +873,8 @@ export default function MessagesPage() {
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
       console.log(`📨 Received chat:new message:`, msg._id);
+      console.log(`📨 Message details - From: ${msg.senderName || msg.senderId}, isMyMessage: ${isMyMessage}, currentConv: ${isCurrentConversation}`);
+      console.log(`📨 Will increment unread: ${!isMyMessage && !isCurrentConversation}`);
       
       
       // 1. Update message cache
@@ -1318,10 +1336,11 @@ export default function MessagesPage() {
         }
       });
       
-      // Always mark conversation as read when viewing it to ensure proper unread indicator clearing
-      debouncedMarkAsRead(selected._id);
+      // Only mark as read when user has actually interacted with the conversation
+      // Don't auto-mark as read just for selecting - wait for user interaction
+      // This prevents premature read marking that destroys unread indicators
     }
-  }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
+  }, [selected, user.id, chatSocket]); // Removed messages and allConversations to prevent aggressive read marking
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
@@ -1371,8 +1390,15 @@ export default function MessagesPage() {
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Mark conversation as read when selected
-    debouncedMarkAsRead(conv._id);
+    // Only mark as read if conversation has messages and user will see them
+    // This preserves unread indicators until user actually views content
+    if (conv.unread > 0) {
+      console.log(`📖 Marking conversation as read due to selection with unread: ${conv.unread}`);
+      // Delay to ensure messages load first, then mark as read
+      setTimeout(() => {
+        debouncedMarkAsRead(conv._id);
+      }, 1000);
+    }
   };
 
   // Send message with network resilience and retry logic

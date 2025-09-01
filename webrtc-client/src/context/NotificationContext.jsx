@@ -96,20 +96,34 @@ export const NotificationProvider = ({ children }) => {
   // Mark notification as read function
   const markAsRead = useCallback(async (notificationId) => {
     try {
+      console.log(`📝 markAsRead called for notification: ${notificationId}`);
+      
+      // Find the notification to get its details
+      const notification = (Array.isArray(notifications) ? notifications : []).find(n => n._id === notificationId);
+      if (notification) {
+        console.log(`📝 Marking as read: ${notification.title} (conversation: ${notification.data?.conversationId})`);
+      }
+      
       await notificationService.markAsRead(notificationId);
-      setNotifications(prev => 
-        prev.map(notification => 
+      
+      setNotifications(prev => {
+        const updated = prev.map(notification => 
           notification._id === notificationId 
             ? { ...notification, read: true }
             : notification
-        )
-      );
+        );
+        
+        console.log(`📝 Updated notifications state: ${updated.filter(n => !n.read).length} unread remaining`);
+        return updated;
+      });
+      
       setUnreadCount(prev => Math.max(0, prev - 1));
+      console.log(`📝 Successfully marked notification ${notificationId} as read`);
     } catch (error) {
       console.error('Error marking notification as read:', error);
       setError('Failed to mark notification as read');
     }
-  }, []);
+  }, [notifications]);
 
   // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
@@ -390,17 +404,26 @@ export const NotificationProvider = ({ children }) => {
     
     console.log('📢 Clearing notifications for conversation:', conversationId);
     
+    // Find ALL notifications to see what we're working with
+    const allUnreadNotifs = (Array.isArray(notifications) ? notifications : []).filter(notif => !notif.read);
+    console.log(`📊 Total unread notifications before clearing: ${allUnreadNotifs.length}`);
+    allUnreadNotifs.forEach(notif => {
+      console.log(`📊 - Notification: ${notif.title} (conversation: ${notif.data?.conversationId})`);
+    });
+    
     // Find message notifications for this conversation
-    const conversationNotifications = (Array.isArray(notifications) ? notifications : []).filter(notif => 
+    const conversationNotifications = allUnreadNotifs.filter(notif => 
       notif.type === 'message' && 
-      notif.data?.conversationId === conversationId && 
-      !notif.read
+      notif.data?.conversationId === conversationId
     );
+    
+    console.log(`📢 Found ${conversationNotifications.length} notifications to clear for conversation ${conversationId}`);
     
     // Mark them as read
     conversationNotifications.forEach(async (notif) => {
       if (notif._id) {
         try {
+          console.log(`📢 Marking notification as read: ${notif.title} (${notif._id})`);
           await markAsRead(notif._id);
         } catch (error) {
           console.error('Error marking conversation notification as read:', error);
