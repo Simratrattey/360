@@ -338,8 +338,13 @@ export default function DashboardPage() {
           const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
             .filter(notif => !notif.read)
             .filter(notif => {
-              // If this is a message notification and user is on messages page with this conversation selected, hide it
-              if (notif.type === 'message' && isOnMessagesPage && currentConversationId === notif.data?.conversationId) {
+              // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+              // Don't hide notifications just because user was previously on messages page
+              if (notif.type === 'message' && 
+                  isOnMessagesPage && 
+                  currentConversationId === notif.data?.conversationId &&
+                  window.location.pathname === '/messages') {
+                console.log('🔍 Hiding notification for current conversation:', notif.data?.conversationId);
                 return false;
               }
               return true;
@@ -355,8 +360,11 @@ export default function DashboardPage() {
               const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
                 .filter(notif => !notif.read)
                 .filter(notif => {
-                  // If this is a message notification and user is on messages page with this conversation selected, hide it
-                  if (notif.type === 'message' && isOnMessagesPage && currentConversationId === notif.data?.conversationId) {
+                  // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+                  if (notif.type === 'message' && 
+                      isOnMessagesPage && 
+                      currentConversationId === notif.data?.conversationId &&
+                      window.location.pathname === '/messages') {
                     return false;
                   }
                   return true;

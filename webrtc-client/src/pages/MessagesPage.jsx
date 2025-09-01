@@ -208,8 +208,16 @@ export default function MessagesPage() {
   // Define fetchConversations function early to avoid hoisting issues  
   const fetchConversations = useCallback(async (forceRefresh = false) => {
     try {
+      console.log(`📡 Fetching conversations from server... (forceRefresh: ${forceRefresh})`);
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
+      
+      console.log(`📡 Received ${conversations.length} conversations from server`);
+      conversations.forEach(conv => {
+        if (conv.unread > 0) {
+          console.log(`📡 Server conversation "${conv.name || conv._id}" has unread: ${conv.unread}`);
+        }
+      });
       
       // Sort conversations by lastMessageAt within each type
       const sortByLastMessage = (a, b) => {
@@ -267,8 +275,11 @@ export default function MessagesPage() {
             const prevConv = prevItems.find(p => p._id === newConv._id);
             if (prevConv && prevConv.unread > newConv.unread) {
               // Keep the higher local unread count (from real-time updates)
-              console.log(`📊 Preserving higher local unread count for ${newConv.name || newConv._id}: ${prevConv.unread} vs server ${newConv.unread}`);
+              console.log(`📊 Preserving higher local unread count for ${newConv.name || newConv._id}: local ${prevConv.unread} vs server ${newConv.unread}`);
               return { ...newConv, unread: prevConv.unread };
+            }
+            if (prevConv && newConv.unread > 0) {
+              console.log(`📊 Using server unread count for ${newConv.name || newConv._id}: server ${newConv.unread}`);
             }
             return newConv;
           });
@@ -460,6 +471,10 @@ export default function MessagesPage() {
           
           const oldUnread = convItem.unread || 0;
           const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
+          
+          if (incrementUnread) {
+            console.log(`📬 Incrementing unread count for ${convItem.name || convId}: ${oldUnread} → ${newUnread}`);
+          }
 
           const updatedConv = {
             ...convItem,
@@ -1348,13 +1363,15 @@ export default function MessagesPage() {
     if (!conv || !conv._id) {
       return;
     }
+    
+    console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
+    
     setSelected(conv);
     setReplyTo(null);
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Always mark conversation as read when selected to ensure unread indicators are properly cleared
-    // This fixes the issue where users navigate directly to messages and don't see unread indicators clear
+    // Mark conversation as read when selected
     debouncedMarkAsRead(conv._id);
   };
 
