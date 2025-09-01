@@ -255,7 +255,27 @@ export default function MessagesPage() {
         { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
       ];
       
-      setAllConversations(unifiedSection);
+      // Smart merge: preserve higher local unread counts from real-time updates
+      setAllConversations(prevSections => {
+        const newSections = [...unifiedSection];
+        
+        // If we have previous data, merge unread counts intelligently
+        if (prevSections.length > 0 && prevSections[0].items) {
+          const prevItems = prevSections[0].items;
+          
+          newSections[0].items = newSections[0].items.map(newConv => {
+            const prevConv = prevItems.find(p => p._id === newConv._id);
+            if (prevConv && prevConv.unread > newConv.unread) {
+              // Keep the higher local unread count (from real-time updates)
+              console.log(`📊 Preserving higher local unread count for ${newConv.name || newConv._id}: ${prevConv.unread} vs server ${newConv.unread}`);
+              return { ...newConv, unread: prevConv.unread };
+            }
+            return newConv;
+          });
+        }
+        
+        return newSections;
+      });
 
       // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
       // We limit the number of conversations prefetched per section to avoid overwhelming the server.
@@ -306,10 +326,10 @@ export default function MessagesPage() {
     
     // Refresh conversations when entering messages page to ensure latest unread counts
     // This fixes the issue where unread indicators don't show when navigating directly to messages
-    // Add small delay to ensure any real-time messages have been processed
+    // Add delay to ensure any real-time messages have been saved to database
     const timeoutId = setTimeout(() => {
       fetchConversations();
-    }, 100);
+    }, 500);
     
     return () => {
       clearTimeout(timeoutId);
@@ -543,9 +563,10 @@ export default function MessagesPage() {
     const onVisibilityChange = () => {
       if (!document.hidden) {
         // Page became visible - refresh conversations to ensure latest unread counts
+        // Longer delay to ensure server has processed any pending real-time messages
         setTimeout(() => {
           fetchConversations();
-        }, 200);
+        }, 600);
       }
     };
     

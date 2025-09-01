@@ -374,10 +374,8 @@ export default function DashboardPage() {
                   // Mark notification as read
                   if (markAsRead && notif._id) {
                     await markAsRead(notif._id);
-                    // Refresh notifications to ensure UI is in sync with server
-                    if (refreshNotifications) {
-                      refreshNotifications();
-                    }
+                    // Note: refreshNotifications() removed to prevent race conditions
+                    // markAsRead already updates the local state correctly
                   }
                   // Navigate based on notification type
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
