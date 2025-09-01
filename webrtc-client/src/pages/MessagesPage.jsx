@@ -789,9 +789,6 @@ export default function MessagesPage() {
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
     const cachedMessages = messagesCache[convId] || [];
     
-    // Set loading state initially
-    setMessagesLoading(true);
-    
     // Show cached messages immediately for better UX, but only if we have them
     if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
@@ -806,8 +803,10 @@ export default function MessagesPage() {
       setReactions(cachedReactions);
       setMessagesLoading(false);
     } else {
+      // Only show loading state if we don't have cached messages
       setMessages([]);
       setReactions({});
+      setMessagesLoading(true);
     }
     
     // Always fetch from server to ensure we have latest messages
