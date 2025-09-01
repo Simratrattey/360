@@ -787,7 +787,8 @@ export default function MessagesPage() {
     const convId = selected._id;
     
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
-    const cachedMessages = messagesCache[convId] || [];
+    // Use ref to get the most current cache (important for navigation from notifications)
+    const cachedMessages = messagesCacheRef.current[convId] || [];
     
     // Show cached messages immediately for better UX, but only if we have them
     if (cachedMessages.length > 0) {
