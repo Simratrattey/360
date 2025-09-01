@@ -623,14 +623,18 @@ export default function MessagesPage() {
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
         
-        // Don't clear cache when navigating from notification - this causes message loss
-        // Instead, let the normal message loading logic merge cached and fresh messages
-        console.log('📨 Navigating from notification to:', conversationId);
+        // Mark conversation as read when navigating from notification
+        // This ensures unread indicators disappear properly
+        if (target.unread > 0) {
+          setTimeout(() => {
+            debouncedMarkAsRead(target._id);
+          }, 1000);
+        }
         
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
-  }, [allConversations, isMobile]);
+  }, [allConversations, isMobile, debouncedMarkAsRead]);
 
   // Initialize message queue and status services
   useEffect(() => {
