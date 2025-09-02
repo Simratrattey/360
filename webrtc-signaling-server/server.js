@@ -1167,9 +1167,6 @@ io.on('connection', async socket => {
         }
       });
       
-      // Also send to the conversation room for anyone currently viewing it
-      io.to(conversationId).emit('chat:new', messageForClient);
-      
       // Create and send notifications
       const messagePreview = text 
         ? (text.length > 50 ? text.substring(0, 50) + '...' : text)
@@ -1303,9 +1300,6 @@ io.on('connection', async socket => {
                 io.to(memberSocket.socketId).emit('chat:read', readData);
               }
             });
-            
-            // Also send to the conversation room for anyone currently viewing it
-            io.to(conversation._id.toString()).emit('chat:read', readData);
             
             // Update in-memory status if it exists
             const status = messageStatus.get(messageId);
