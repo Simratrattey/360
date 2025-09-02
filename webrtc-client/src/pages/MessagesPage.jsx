@@ -1579,7 +1579,12 @@ export default function MessagesPage() {
       // Optimistically move conversation to top
       moveConversationToTop(
         selected._id,
-        input.trim() || (uploadFile ? 'Sent a file' : ''),
+        {
+          text: input.trim() || (uploadFile ? undefined : ''),
+          file: uploadFile ? { name: uploadFile.name } : undefined,
+          createdAt: new Date().toISOString(),
+          senderName: 'You'
+        },
         new Date().toISOString()
       );
       
