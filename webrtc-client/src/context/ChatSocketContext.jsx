@@ -97,39 +97,8 @@ export function ChatSocketProvider({ children }) {
       setOnlineUsers(userMap);
     });
 
-    // Debug: Add specific event listeners for debugging
-    s.on('chat:new', (message) => {
-      // Show browser notification if message is not from current user
-      // and not for the currently selected conversation when on messages page
-      const isFromCurrentUser = (
-        (message.senderId && message.senderId === user.id) ||
-        (typeof message.sender === 'string' && message.sender === user.id) ||
-        (typeof message.sender === 'object' && message.sender && message.sender._id === user.id)
-      );
-      
-      const isForCurrentConversation = isOnMessagesPage && 
-        currentConversationId && 
-        message.conversationId === currentConversationId;
-      
-      if (
-        window.Notification &&
-        Notification.permission === 'granted' &&
-        user &&
-        !isFromCurrentUser &&
-        !isForCurrentConversation
-      ) {
-        const title = message.senderName || (message.sender && message.sender.fullName) || 'New Message';
-        const body = message.text || (message.file ? 'Sent a file' : 'New message');
-        try {
-          new Notification(title, { body });
-          console.log('[Notification Debug] Notification shown:', title, body);
-        } catch (e) {
-          console.error('[Notification Debug] Notification error:', e);
-        }
-      } else if (isForCurrentConversation) {
-        console.log('[Notification Debug] Notification suppressed for current conversation:', message.conversationId);
-      }
-    });
+    // Note: chat:new events are handled exclusively by MessagesPage component
+    // to avoid conflicts and ensure proper message processing and deduplication
 
     // Message delivery status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
@@ -195,7 +164,6 @@ export function ChatSocketProvider({ children }) {
     return () => {
       if (s) {
         // Remove only chat-specific event listeners, not all listeners
-        s.off('chat:new');
         s.off('chat:delivered');
         s.off('chat:read');
         s.off('user:online');
