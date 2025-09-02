@@ -831,10 +831,15 @@ export default function MessagesPage() {
     // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
     
+    // Always clear first to prevent wrong conversation display, then set correct messages
+    setMessages([]);
+    
     // WhatsApp-like experience: Show cached messages instantly if available
     if (cachedMessages.length > 0) {
-      // Show cached messages immediately for instant response
-      setMessages(cachedMessages);
+      // Use requestAnimationFrame to ensure clear happens first, then show cached
+      requestAnimationFrame(() => {
+        setMessages(cachedMessages);
+      });
       setMessagesLoading(false);
       
       // Set up unread indicators and reactions from cache
@@ -1006,37 +1011,58 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
+          console.log('🔄 Processing chat:new message:', {
+            id: msg._id,
+            tempId: msg.tempId,
+            text: msg.text?.substring(0, 20),
+            isMyMessage,
+            existingCount: prev.length
+          });
+          
           // Enhanced deduplication logic
           let filtered = prev;
+          const initialCount = filtered.length;
           
           // First, remove any duplicates by _id (exact matches)
           if (msg._id) {
+            const beforeCount = filtered.length;
             filtered = filtered.filter(m => m._id !== msg._id);
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed duplicate by _id:', msg._id, `(${beforeCount} → ${filtered.length})`);
+            }
           }
           
           // Second, remove optimistic messages that this server message replaces
           if (msg.tempId) {
+            const beforeCount = filtered.length;
             filtered = filtered.filter(m => {
               // Remove optimistic message with matching tempId
               if (m.tempId === msg.tempId && (!m._id || m._id.startsWith('temp-'))) {
-                console.log('Removing optimistic message by tempId:', m.tempId, 'for real message:', msg._id);
+                console.log('🗑️ Removing optimistic message by tempId:', m.tempId, 'for real message:', msg._id);
                 return false;
               }
               return true;
             });
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed optimistic messages by tempId:', msg.tempId, `(${beforeCount} → ${filtered.length})`);
+            }
           }
           
           // Third, for sent messages, remove any temporary messages from the same user with similar content
           if (isMyMessage) {
+            const beforeCount = filtered.length;
             filtered = filtered.filter(m => {
               // Remove if it's a temp message from same user with same text (fallback deduplication)
               if (m.senderId === user.id && (m.pending || m.sending || m.tempId) && 
                   m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 30000) {
-                console.log('Removing similar temp message for sent message:', msg._id);
+                console.log('🗑️ Removing similar temp message for sent message:', msg._id);
                 return false;
               }
               return true;
             });
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed similar temp messages:', `(${beforeCount} → ${filtered.length})`);
+            }
           }
           
           const newMessage = { 
@@ -1047,7 +1073,13 @@ export default function MessagesPage() {
             sending: false
           };
           const newMessages = [...filtered, newMessage];
-          console.log('Adding real message to current view:', msg._id, msg.tempId, 'Total messages:', newMessages.length);
+          console.log('✅ Final message added:', {
+            id: msg._id,
+            tempId: msg.tempId,
+            text: msg.text?.substring(0, 20),
+            totalAfter: newMessages.length,
+            removedCount: initialCount - filtered.length
+          });
           return newMessages;
         });
         
