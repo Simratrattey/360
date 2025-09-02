@@ -126,7 +126,6 @@ export default function MessagesPage() {
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
   const [messages, setMessages] = useState([]);
   const [pendingConversationId, setPendingConversationId] = useState(null);
-  const [notificationNavigationIds, setNotificationNavigationIds] = useState(new Set());
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
@@ -630,8 +629,6 @@ export default function MessagesPage() {
     if (conversationId) {
       console.log('📱 Notification navigation: Found conversation ID in URL:', conversationId);
       setPendingConversationId(conversationId);
-      // Track this ID as coming from notification navigation
-      setNotificationNavigationIds(prev => new Set(prev).add(conversationId));
       // Clear URL parameter to prevent it from interfering with navigation
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -661,19 +658,13 @@ export default function MessagesPage() {
       if (target) {
         console.log('📱 Selecting conversation from notification/URL:', conversationId);
         
-        // Clear message cache for this conversation if it came from notification navigation
-        if (pendingConversationId || notificationNavigationIds.has(conversationId)) {
-          console.log('📱 Clearing message cache for fresh notification message loading');
+        // Clear cache for conversations with unread messages or accessed via URL to ensure fresh data
+        if ((target.unread && target.unread > 0) || pendingConversationId) {
+          console.log('📱 Clearing cache for fresh message loading - unread:', target.unread, 'fromURL:', !!pendingConversationId);
           setMessagesCache(prev => ({
             ...prev,
             [conversationId]: []
           }));
-          // Remove from notification navigation set after processing
-          setNotificationNavigationIds(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(conversationId);
-            return newSet;
-          });
         }
         
         setSelected(target);
@@ -1045,7 +1036,7 @@ export default function MessagesPage() {
       console.log(`📨 Will increment unread: ${!isMyMessage && !isCurrentConversation}`);
       
       
-      // 1. Update message cache
+      // 1. ALWAYS Update message cache (regardless of current conversation)
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
@@ -1058,49 +1049,45 @@ export default function MessagesPage() {
           return false;
         });
         if (isDuplicate) {
-          console.log('Skipping duplicate message by _id:', msg._id);
+          console.log('🧹 Cache: Skipping duplicate message by _id:', msg._id);
           return prev;
         }
         
-        // For my own messages, remove optimistic duplicates (messages with tempId that match the real message)
+        // ALWAYS remove optimistic duplicates from cache (whether current conversation or not)
         let cleanMessages = convMessages;
-        if (isMyMessage && msg.tempId) {
-          // Remove optimistic messages that match this server message
+        if (isMyMessage) {
+          console.log('🧹 Cache: Cleaning optimistic messages for user message:', msg._id, 'tempId:', msg.tempId);
           cleanMessages = convMessages.filter(m => {
             // Remove if tempIds match (this optimistic message is being replaced)
-            if (m.tempId === msg.tempId) {
-              console.log('🧹 Cache: Removing optimistic message:', m.tempId, 'for real message:', msg._id);
+            if (msg.tempId && m.tempId === msg.tempId) {
+              console.log('🧹 Cache: Removing optimistic by tempId:', m.tempId, '→', msg._id);
               return false;
             }
             // Remove if it's a pending/sending message from this user with same tempId
-            if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-              console.log('🧹 Cache: Removing pending message:', m.tempId, 'for real message:', msg._id);
+            if (msg.tempId && m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
+              console.log('🧹 Cache: Removing pending by tempId:', m.tempId, '→', msg._id);
               return false;
             }
-            // Additional cleanup: Remove any message from same user with same text and similar timestamp
-            if (m.senderId === user.id && m.text === msg.text && 
-                Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt)) < 30000) {
-              console.log('🧹 Cache: Removing similar message:', m._id || m.tempId, 'for real message:', msg._id);
+            // Remove ANY message from same user with same text and similar timestamp (aggressive cleanup)
+            if (m.senderId === user.id && m.text === msg.text) {
+              const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
+              if (timeDiff < 120000) { // 2 minutes window
+                console.log('🧹 Cache: Removing similar message by content:', m._id || m.tempId, '→', msg._id);
+                return false;
+              }
+            }
+            // Remove temporary IDs that look like they could be this message
+            if (m._id && m._id.startsWith('temp-') && m.senderId === user.id && m.text === msg.text) {
+              console.log('🧹 Cache: Removing temp message by content:', m._id, '→', msg._id);
               return false;
             }
             return true;
           });
         }
         
-        console.log('🧹 Cache: Adding real message to cache:', msg._id, msg.tempId);
+        console.log('🧹 Cache: Adding real message:', msg._id, 'after cleaning', convMessages.length - cleanMessages.length, 'duplicates');
         
-        // Final check: Remove any remaining optimistic messages that might match this server message
-        const finalCleanMessages = cleanMessages.filter(m => {
-          // Remove any message with matching content and similar timestamp (extra safety)
-          if (isMyMessage && m.senderId === user.id && m.text === msg.text && 
-              Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt)) < 60000) {
-            console.log('🧹 Cache: Final cleanup - removing similar message:', m._id || m.tempId);
-            return false;
-          }
-          return true;
-        });
-        
-        const newCache = [...finalCleanMessages, { ...msg, conversationId }];
+        const newCache = [...cleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
         const MAX_CACHED_MESSAGES = 50;
         const limitedCache = newCache.length > MAX_CACHED_MESSAGES 
@@ -1596,19 +1583,13 @@ export default function MessagesPage() {
     
     console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
     
-    // Clear cache if this conversation was accessed via notification to ensure fresh data
-    if (notificationNavigationIds.has(conv._id)) {
-      console.log('📱 Manual selection: Clearing cache for notification-accessed conversation');
+    // Clear cache for conversations with unread messages to ensure fresh data
+    if (conv.unread && conv.unread > 0) {
+      console.log('📱 Clearing cache for conversation with unread messages:', conv.unread);
       setMessagesCache(prev => ({
         ...prev,
         [conv._id]: []
       }));
-      // Remove from notification set after clearing cache
-      setNotificationNavigationIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(conv._id);
-        return newSet;
-      });
     }
     
     // CRITICAL: Clear messages immediately and show loading when user clicks
