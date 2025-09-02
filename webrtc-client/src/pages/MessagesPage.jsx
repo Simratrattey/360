@@ -125,6 +125,7 @@ export default function MessagesPage() {
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
   const [messages, setMessages] = useState([]);
+  const [pendingConversationId, setPendingConversationId] = useState(null);
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
@@ -621,6 +622,18 @@ export default function MessagesPage() {
     };
   }, [fetchConversations]);
 
+  // Capture URL conversation parameter immediately on mount for notification navigation
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const conversationId = urlParams.get('conversation');
+    if (conversationId) {
+      console.log('📱 Notification navigation: Found conversation ID in URL:', conversationId);
+      setPendingConversationId(conversationId);
+      // Clear URL parameter to prevent it from interfering with navigation
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   // Fetch conversations on mount (REST)
   useEffect(() => {
     fetchConversations();
@@ -634,21 +647,31 @@ export default function MessagesPage() {
     }
   }, [isMobile]);
 
-  // Add useEffect to auto-select conversation from URL param
+  // Handle pending conversation selection from notifications
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const conversationId = urlParams.get('conversation');
+    // Check for pending conversation ID first (from notification navigation)
+    const conversationId = pendingConversationId || new URLSearchParams(window.location.search).get('conversation');
+    
     if (conversationId && allConversations.length > 0) {
       const allItems = allConversations.flatMap(section => section.items);
       const target = allItems.find(c => c._id === conversationId);
       if (target) {
+        console.log('📱 Selecting conversation from notification/URL:', conversationId);
+        
+        // Clear message cache for this conversation to ensure fresh data is loaded
+        if (pendingConversationId) {
+          console.log('📱 Clearing message cache for fresh notification message loading');
+          setMessagesCache(prev => ({
+            ...prev,
+            [conversationId]: []
+          }));
+        }
+        
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
         
         // Mark conversation as read when navigating from notification
-        // This ensures unread indicators disappear properly
         if (target.unread > 0) {
-          // Immediately update UI to remove unread indicator for instant feedback
           setAllConversations(prev =>
             prev.map(section => ({
               ...section,
@@ -659,15 +682,15 @@ export default function MessagesPage() {
               )
             }))
           );
-          
-          // Mark as read on server in background (no delay needed for UI)
           debouncedMarkAsRead(target._id);
         }
         
+        // Clear pending conversation ID and URL param
+        setPendingConversationId(null);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
-  }, [allConversations, isMobile, debouncedMarkAsRead]);
+  }, [allConversations, isMobile, debouncedMarkAsRead, pendingConversationId]);
 
   // Initialize message queue and status services
   useEffect(() => {
@@ -1037,12 +1060,18 @@ export default function MessagesPage() {
           cleanMessages = convMessages.filter(m => {
             // Remove if tempIds match (this optimistic message is being replaced)
             if (m.tempId === msg.tempId) {
-              console.log('Removing optimistic message:', m.tempId, 'for real message:', msg._id);
+              console.log('🧹 Cache: Removing optimistic message:', m.tempId, 'for real message:', msg._id);
               return false;
             }
             // Remove if it's a pending/sending message from this user with same tempId
             if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-              console.log('Removing pending message:', m.tempId, 'for real message:', msg._id);
+              console.log('🧹 Cache: Removing pending message:', m.tempId, 'for real message:', msg._id);
+              return false;
+            }
+            // Additional cleanup: Remove any message from same user with same text and similar timestamp
+            if (m.senderId === user.id && m.text === msg.text && 
+                Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt)) < 30000) {
+              console.log('🧹 Cache: Removing similar message:', m._id || m.tempId, 'for real message:', msg._id);
               return false;
             }
             return true;
