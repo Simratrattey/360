@@ -887,6 +887,12 @@ export default function MessagesPage() {
           console.log('🚫 Ignoring server response for old conversation:', convId, 'current:', selected?._id);
           return;
         }
+
+        // Double check with selectedRef to ensure we haven't switched conversations during the async operation
+        if (selectedRef.current?._id !== convId) {
+          console.log('🚫 Ignoring server response - conversation changed during fetch:', convId, 'current:', selectedRef.current?._id);
+          return;
+        }
         
         const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
         
@@ -911,6 +917,21 @@ export default function MessagesPage() {
         
         setMessages(validFinalMessages);
         console.log('✅ Server messages loaded and validated:', validFinalMessages.length, 'for conversation:', convId);
+        console.log('🔍 Setting messages state with:', validFinalMessages.map(m => m._id));
+        
+        // Force a state update to ensure messages are applied even with React batching
+        setTimeout(() => {
+          if (selectedRef.current?._id === convId) {
+            setMessages(prevMessages => {
+              if (prevMessages.length !== validFinalMessages.length) {
+                console.log('🔧 Force-updating messages state - was:', prevMessages.length, 'should be:', validFinalMessages.length);
+                return validFinalMessages;
+              }
+              return prevMessages;
+            });
+          }
+        }, 0);
+        
         setMessageOffset(finalMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
         
@@ -967,6 +988,14 @@ export default function MessagesPage() {
       chatSocket.leaveConversation(convId);
     };
   }, [selected?._id]); // Only re-run when conversation ID changes, not when selected object changes
+
+  // Debug: Track messages state changes
+  useEffect(() => {
+    console.log('📊 Messages state changed:', messages.length, 'messages for conversation:', selected?._id);
+    if (messages.length > 0) {
+      console.log('📊 Message IDs:', messages.map(m => m._id));
+    }
+  }, [messages, selected?._id]);
 
   // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
 
