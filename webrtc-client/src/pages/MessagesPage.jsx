@@ -126,6 +126,7 @@ export default function MessagesPage() {
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
   const [messages, setMessages] = useState([]);
   const [pendingConversationId, setPendingConversationId] = useState(null);
+  const [notificationNavigationIds, setNotificationNavigationIds] = useState(new Set());
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
@@ -629,6 +630,8 @@ export default function MessagesPage() {
     if (conversationId) {
       console.log('📱 Notification navigation: Found conversation ID in URL:', conversationId);
       setPendingConversationId(conversationId);
+      // Track this ID as coming from notification navigation
+      setNotificationNavigationIds(prev => new Set(prev).add(conversationId));
       // Clear URL parameter to prevent it from interfering with navigation
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -658,13 +661,19 @@ export default function MessagesPage() {
       if (target) {
         console.log('📱 Selecting conversation from notification/URL:', conversationId);
         
-        // Clear message cache for this conversation to ensure fresh data is loaded
-        if (pendingConversationId) {
+        // Clear message cache for this conversation if it came from notification navigation
+        if (pendingConversationId || notificationNavigationIds.has(conversationId)) {
           console.log('📱 Clearing message cache for fresh notification message loading');
           setMessagesCache(prev => ({
             ...prev,
             [conversationId]: []
           }));
+          // Remove from notification navigation set after processing
+          setNotificationNavigationIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(conversationId);
+            return newSet;
+          });
         }
         
         setSelected(target);
@@ -1078,8 +1087,20 @@ export default function MessagesPage() {
           });
         }
         
-        console.log('Adding real message to cache:', msg._id, msg.tempId);
-        const newCache = [...cleanMessages, { ...msg, conversationId }];
+        console.log('🧹 Cache: Adding real message to cache:', msg._id, msg.tempId);
+        
+        // Final check: Remove any remaining optimistic messages that might match this server message
+        const finalCleanMessages = cleanMessages.filter(m => {
+          // Remove any message with matching content and similar timestamp (extra safety)
+          if (isMyMessage && m.senderId === user.id && m.text === msg.text && 
+              Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt)) < 60000) {
+            console.log('🧹 Cache: Final cleanup - removing similar message:', m._id || m.tempId);
+            return false;
+          }
+          return true;
+        });
+        
+        const newCache = [...finalCleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
         const MAX_CACHED_MESSAGES = 50;
         const limitedCache = newCache.length > MAX_CACHED_MESSAGES 
@@ -1574,6 +1595,21 @@ export default function MessagesPage() {
     }
     
     console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
+    
+    // Clear cache if this conversation was accessed via notification to ensure fresh data
+    if (notificationNavigationIds.has(conv._id)) {
+      console.log('📱 Manual selection: Clearing cache for notification-accessed conversation');
+      setMessagesCache(prev => ({
+        ...prev,
+        [conv._id]: []
+      }));
+      // Remove from notification set after clearing cache
+      setNotificationNavigationIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(conv._id);
+        return newSet;
+      });
+    }
     
     // CRITICAL: Clear messages immediately and show loading when user clicks
     setMessages([]);
