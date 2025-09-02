@@ -810,41 +810,14 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
-    // Clear messages immediately when switching to prevent showing wrong chat
-    setMessages([]);
-    setMessagesLoading(true);
-    
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
-    // Use ref to get the most current cache (important for navigation from notifications)  
+    // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
     
-    // Show cached messages immediately for better UX, but only if we have them
-    if (cachedMessages.length > 0) {
-      setMessages(cachedMessages);
-      setMessagesLoading(false);
-      
-      // Calculate unread indicator position
-      const unreadCount = selected.unread || 0;
-      if (unreadCount > 0 && cachedMessages.length >= unreadCount) {
-        // Find the index where unread messages start (from the end)
-        const unreadStart = cachedMessages.length - unreadCount;
-        setUnreadStartIndex(unreadStart);
-      } else {
-        setUnreadStartIndex(null);
-      }
-      
-      // Initialize reactions state from cached messages
-      const cachedReactions = {};
-      cachedMessages.forEach(msg => {
-        if (msg.reactions && msg.reactions.length > 0) {
-          cachedReactions[msg._id] = msg.reactions;
-        }
-      });
-      setReactions(cachedReactions);
-    } else {
-      // No cached messages - clear reactions and keep loading state
-      setReactions({});
-    }
+    // Clear previous conversation messages immediately to prevent wrong chat display
+    setMessages([]);
+    setMessagesLoading(true);
+    setReactions({});
     
     // Always fetch from server to ensure we have latest messages
     messageAPI.getMessages(convId, { limit: 50 })
