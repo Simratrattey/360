@@ -833,10 +833,22 @@ export default function MessagesPage() {
     
     // Immediately set the correct messages for this conversation (no delay, no flicker)
     if (cachedMessages.length > 0) {
-      // Show cached messages instantly for WhatsApp-like experience
-      setMessages(cachedMessages);
-      setMessagesLoading(false);
-      console.log('⚡ Cached messages loaded immediately:', cachedMessages.length, 'for conversation:', convId);
+      // Validate that cached messages belong to this conversation
+      const validMessages = cachedMessages.filter(msg => 
+        msg.conversationId === convId || msg.conversation === convId
+      );
+      
+      if (validMessages.length > 0) {
+        // Show cached messages instantly for WhatsApp-like experience
+        setMessages(validMessages);
+        setMessagesLoading(false);
+        console.log('⚡ Cached messages loaded immediately:', validMessages.length, 'for conversation:', convId);
+      } else {
+        // Invalid cache - show loading
+        setMessages([]);
+        setMessagesLoading(true);
+        console.log('⚠️ Invalid cached messages, showing loading for conversation:', convId);
+      }
       
       // Set up unread indicators and reactions from cache
       const unreadCount = selected.unread || 0;
@@ -870,18 +882,35 @@ export default function MessagesPage() {
     // Always fetch from server in background to ensure we have latest messages
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
+        // SAFETY CHECK: Only process if this is still the selected conversation
+        if (selected?._id !== convId) {
+          console.log('🚫 Ignoring server response for old conversation:', convId, 'current:', selected?._id);
+          return;
+        }
+        
         const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
+        
+        // Validate server messages belong to this conversation
+        const validServerMessages = serverMessages.filter(msg => 
+          msg.conversation === convId || msg.conversationId === convId
+        );
         
         // Only merge if we have cached messages that might contain newer real-time messages
         // Otherwise, just use server messages directly to avoid potential duplication
         let finalMessages;
         if (cachedMessages.length > 0) {
-          finalMessages = mergeMessages(serverMessages, cachedMessages);
+          finalMessages = mergeMessages(validServerMessages, cachedMessages);
         } else {
-          finalMessages = serverMessages;
+          finalMessages = validServerMessages;
         }
         
-        setMessages(finalMessages);
+        // Final validation before setting messages
+        const validFinalMessages = finalMessages.filter(msg => 
+          msg.conversationId === convId || msg.conversation === convId
+        );
+        
+        setMessages(validFinalMessages);
+        console.log('✅ Server messages loaded and validated:', validFinalMessages.length, 'for conversation:', convId);
         setMessageOffset(finalMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
         
@@ -1488,9 +1517,10 @@ export default function MessagesPage() {
     
     console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
     
-    // CRITICAL: Clear messages immediately when user clicks to prevent wrong conversation display
+    // CRITICAL: Clear messages immediately and show loading when user clicks
     setMessages([]);
-    console.log('🧹 Messages cleared immediately on conversation select');
+    setMessagesLoading(true);
+    console.log('🧹 Messages cleared and loading started on conversation select');
     
     // Mark as conversation switch for instant scrolling
     setIsConversationSwitch(true);
@@ -2667,7 +2697,10 @@ export default function MessagesPage() {
           {selected && (
             <ChatWindow
               loading={messagesLoading}
-              messages={messages}
+              messages={messages.filter(msg => 
+                msg.conversationId === selected._id || 
+                msg.conversation === selected._id
+              )}
               currentUserId={user?.id}
               conversationType={selected.type}
               onEdit={handleEdit}
