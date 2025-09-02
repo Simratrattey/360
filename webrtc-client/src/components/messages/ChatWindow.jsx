@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useLayoutEffect } from 'react';
 import MessageBubble from './MessageBubble';
 
 // Utility function to detect system messages
@@ -88,6 +88,35 @@ export default function ChatWindow({
   // Debug: Log messages length to see if ChatWindow receives updated messages
   console.log('📨 ChatWindow messages count:', messages.length, 'Latest message ID:', messages[messages.length - 1]?._id);
 
+  // Pre-position scroll for conversation switches BEFORE render
+  useLayoutEffect(() => {
+    if (!chatRef.current || !isConversationSwitch) return;
+    
+    const chatElement = chatRef.current;
+    chatElement.style.scrollBehavior = 'auto';
+    
+    // Force scroll to bottom immediately, before any rendering happens
+    const scrollToBottom = () => {
+      const maxScroll = chatElement.scrollHeight - chatElement.clientHeight;
+      chatElement.scrollTop = Math.max(0, maxScroll);
+    };
+    
+    scrollToBottom();
+    
+    // Double-check on next frame and then reset the flag
+    requestAnimationFrame(() => {
+      if (chatElement) {
+        scrollToBottom();
+        // Reset the flag immediately after positioning
+        requestAnimationFrame(() => {
+          console.log('🔧 Pre-positioned scroll completed, resetting flag');
+        });
+      }
+    });
+    
+    console.log('🔧 Pre-positioned scroll to bottom for conversation switch');
+  }, [messages, isConversationSwitch]);
+
   // Enhanced scroll management with performance optimizations
   useEffect(() => {
     if (!chatRef.current) return;
@@ -100,9 +129,25 @@ export default function ChatWindow({
       isScrollingToBottom.current = true;
       
       if (isConversationSwitch) {
-        // Instant scroll for conversation switches - no animation
+        // For conversation switches, scroll immediately without any delay or animation
         chatElement.style.scrollBehavior = 'auto';
-        chatElement.scrollTop = chatElement.scrollHeight;
+        
+        // Set scroll position immediately, even before the layout is complete
+        const scrollToBottom = () => {
+          const maxScroll = chatElement.scrollHeight - chatElement.clientHeight;
+          chatElement.scrollTop = Math.max(0, maxScroll);
+        };
+        
+        // Scroll immediately
+        scrollToBottom();
+        
+        // Also scroll on next frame to catch any layout changes
+        requestAnimationFrame(() => {
+          if (chatElement) {
+            scrollToBottom();
+          }
+        });
+        
         isScrollingToBottom.current = false;
       } else {
         // Smooth scroll for new messages in the same conversation
