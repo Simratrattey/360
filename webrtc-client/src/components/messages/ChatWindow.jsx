@@ -307,7 +307,13 @@ export default function ChatWindow({
                         setEditInput={setEditInput}
                         handleEditSave={handleEditSave}
                         handleEditCancel={handleEditCancel}
-                        replyContext={null}
+                        replyContext={
+                          msg.replyTo && typeof msg.replyTo === 'object' 
+                            ? msg.replyTo 
+                            : msg.replyTo && typeof msg.replyTo === 'string'
+                            ? messages.find(m => m._id === msg.replyTo)
+                            : null
+                        }
                         messageStatus={messageStatus}
                         onlineUsers={onlineUsers}
                         currentUserId={currentUserId}

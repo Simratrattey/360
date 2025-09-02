@@ -1568,7 +1568,11 @@ export default function MessagesPage() {
         senderName: user?.fullName || user?.username || '',
         text: input.trim(),
         file: fileMeta,
-        replyTo: replyTo ? replyTo._id : undefined,
+        replyTo: replyTo ? {
+          _id: replyTo._id,
+          text: replyTo.text,
+          file: replyTo.file
+        } : undefined,
         createdAt: new Date().toISOString(),
         pending: true,
         sending: true, // Mark as currently sending
