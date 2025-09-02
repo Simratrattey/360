@@ -197,14 +197,28 @@ export default function MessagesPage() {
         return;
       }
       
-      // Skip if this temp message has a corresponding server message
+      // Skip if this temp message has a corresponding server message by tempId
       if (msg.tempId && tempIdMap.has(msg.tempId)) {
         return;
       }
       
+      // CRITICAL: Skip temp messages that have server equivalents by content matching
+      // This handles cases where server message doesn't include tempId
+      if ((msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending) && msg.senderId) {
+        const hasServerEquivalent = serverMessages.some(serverMsg => 
+          serverMsg.senderId === msg.senderId && 
+          serverMsg.text === msg.text &&
+          Math.abs(new Date(serverMsg.createdAt) - new Date(msg.createdAt || msg.timestamp)) < 300000 // 5 minutes
+        );
+        
+        if (hasServerEquivalent) {
+          console.log('🧹 MergeMessages: Skipping temp message with server equivalent:', msg._id || msg.tempId);
+          return;
+        }
+      }
+      
       // Add temporary/optimistic messages that don't have server equivalents
       if (msg.tempId || (msg._id && msg._id.startsWith('temp-'))) {
-        // Only add if no server message with same tempId exists
         const key = msg._id || msg.tempId || `temp-${Date.now()}`;
         if (!messageMap.has(key)) {
           messageMap.set(key, msg);
@@ -1057,32 +1071,42 @@ export default function MessagesPage() {
         let cleanMessages = convMessages;
         if (isMyMessage) {
           console.log('🧹 Cache: Cleaning optimistic messages for user message:', msg._id, 'tempId:', msg.tempId);
+          
+          // Find and remove ALL potential duplicates of this message
           cleanMessages = convMessages.filter(m => {
             // Remove if tempIds match (this optimistic message is being replaced)
             if (msg.tempId && m.tempId === msg.tempId) {
               console.log('🧹 Cache: Removing optimistic by tempId:', m.tempId, '→', msg._id);
               return false;
             }
+            
             // Remove if it's a pending/sending message from this user with same tempId
             if (msg.tempId && m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
               console.log('🧹 Cache: Removing pending by tempId:', m.tempId, '→', msg._id);
               return false;
             }
-            // Remove ANY message from same user with same text and similar timestamp (aggressive cleanup)
+            
+            // Critical: Remove ANY temp message from same user with same text (regardless of timestamp)
+            // This handles the case where server message doesn't have tempId
+            if (m.senderId === user.id && m.text === msg.text && 
+                (m._id?.startsWith('temp-') || m.tempId || m.pending || m.sending)) {
+              console.log('🧹 Cache: Removing temp/optimistic by content match:', m._id || m.tempId, '→', msg._id);
+              return false;
+            }
+            
+            // Remove ANY message from same user with same text and recent timestamp (within 5 minutes)
             if (m.senderId === user.id && m.text === msg.text) {
               const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
-              if (timeDiff < 120000) { // 2 minutes window
-                console.log('🧹 Cache: Removing similar message by content:', m._id || m.tempId, '→', msg._id);
+              if (timeDiff < 300000) { // 5 minutes window to catch all edge cases
+                console.log('🧹 Cache: Removing similar message by content + time:', m._id || m.tempId, 'timeDiff:', timeDiff + 'ms', '→', msg._id);
                 return false;
               }
             }
-            // Remove temporary IDs that look like they could be this message
-            if (m._id && m._id.startsWith('temp-') && m.senderId === user.id && m.text === msg.text) {
-              console.log('🧹 Cache: Removing temp message by content:', m._id, '→', msg._id);
-              return false;
-            }
+            
             return true;
           });
+          
+          console.log('🧹 Cache: Removed', convMessages.length - cleanMessages.length, 'duplicate messages for:', msg._id);
         }
         
         console.log('🧹 Cache: Adding real message:', msg._id, 'after cleaning', convMessages.length - cleanMessages.length, 'duplicates');
@@ -1140,20 +1164,30 @@ export default function MessagesPage() {
             }
           }
           
-          // Third, for sent messages, remove any temporary messages from the same user with similar content
+          // Third, for sent messages, remove ALL temp/optimistic messages with same content (aggressive cleanup)
           if (isMyMessage) {
             const beforeCount = filtered.length;
             filtered = filtered.filter(m => {
-              // Remove if it's a temp message from same user with same text (fallback deduplication)
-              if (m.senderId === user.id && (m.pending || m.sending || m.tempId) && 
-                  m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 30000) {
-                console.log('🗑️ Removing similar temp message for sent message:', msg._id);
+              // Remove ANY temp message from same user with same text (regardless of timestamp or tempId)
+              if (m.senderId === user.id && m.text === msg.text && 
+                  (m._id?.startsWith('temp-') || m.tempId || m.pending || m.sending)) {
+                console.log('🗑️ Removing temp/optimistic by content:', m._id || m.tempId, '→', msg._id);
                 return false;
               }
+              
+              // Remove ANY message from same user with same text and recent timestamp (within 5 minutes)
+              if (m.senderId === user.id && m.text === msg.text) {
+                const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
+                if (timeDiff < 300000) { // 5 minutes window
+                  console.log('🗑️ Removing similar by content + time:', m._id || m.tempId, 'timeDiff:', timeDiff + 'ms', '→', msg._id);
+                  return false;
+                }
+              }
+              
               return true;
             });
             if (filtered.length < beforeCount) {
-              console.log('🗑️ Removed similar temp messages:', `(${beforeCount} → ${filtered.length})`);
+              console.log('🗑️ Removed', beforeCount - filtered.length, 'temp/similar messages for:', msg._id);
             }
           }
           
