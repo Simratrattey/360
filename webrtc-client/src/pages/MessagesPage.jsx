@@ -227,8 +227,16 @@ export default function MessagesPage() {
           console.log('🧹 MergeMessages: Skipping temp message with server equivalent:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
           return;
         } else {
-          console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
-          console.log('🧹 MergeMessages: Available server messages:', serverMessages.map(s => ({ id: s._id, sender: s.senderId, text: s.text?.substring(0, 20) })));
+          console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20), 'sender:', msg.senderId);
+          console.log('🧹 MergeMessages: Checking against server messages:');
+          serverMessages.forEach(s => {
+            const senderMatch = s.senderId === msg.senderId;
+            const textMatch = (s.text || '') === (msg.text || '');
+            const serverTime = new Date(s.createdAt || s.timestamp || 0);
+            const msgTime = new Date(msg.createdAt || msg.timestamp || msg.sentAt || 0);
+            const timeDiff = Math.abs(serverTime - msgTime);
+            console.log(`  - Server msg ${s._id}: sender=${senderMatch ? '✓' : '✗'} text=${textMatch ? '✓' : '✗'} time=${timeDiff}ms sender="${s.senderId}" text="${s.text?.substring(0, 20)}"`);
+          });
         }
       }
       
