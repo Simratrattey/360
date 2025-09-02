@@ -228,6 +228,7 @@ export default function MessagesPage() {
           return;
         } else {
           console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
+          console.log('🧹 MergeMessages: Available server messages:', serverMessages.map(s => ({ id: s._id, sender: s.senderId, text: s.text?.substring(0, 20) })));
         }
       }
       
@@ -975,17 +976,21 @@ export default function MessagesPage() {
         }
         
         const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
+        console.log('🌐 Raw server messages received:', serverMessages.length, 'IDs:', serverMessages.map(m => m._id));
         
         // Validate server messages belong to this conversation
         const validServerMessages = serverMessages.filter(msg => 
           msg.conversation === convId || msg.conversationId === convId
         );
+        console.log('✅ Valid server messages:', validServerMessages.length, 'IDs:', validServerMessages.map(m => m._id));
         
         // Only merge if we have cached messages that might contain newer real-time messages
         // Otherwise, just use server messages directly to avoid potential duplication
         let finalMessages;
         if (cachedMessages.length > 0) {
+          console.log('🔄 Cached messages for merging:', cachedMessages.length, 'IDs:', cachedMessages.map(m => m._id || m.tempId));
           finalMessages = mergeMessages(validServerMessages, cachedMessages);
+          console.log('🔄 After merging:', finalMessages.length, 'IDs:', finalMessages.map(m => m._id || m.tempId));
         } else {
           finalMessages = validServerMessages;
         }
