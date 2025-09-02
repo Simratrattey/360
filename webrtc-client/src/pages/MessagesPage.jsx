@@ -205,15 +205,29 @@ export default function MessagesPage() {
       // CRITICAL: Skip temp messages that have server equivalents by content matching
       // This handles cases where server message doesn't include tempId
       if ((msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending) && msg.senderId) {
-        const hasServerEquivalent = serverMessages.some(serverMsg => 
-          serverMsg.senderId === msg.senderId && 
-          serverMsg.text === msg.text &&
-          Math.abs(new Date(serverMsg.createdAt) - new Date(msg.createdAt || msg.timestamp)) < 300000 // 5 minutes
-        );
+        const hasServerEquivalent = serverMessages.some(serverMsg => {
+          // Must be from same sender
+          if (serverMsg.senderId !== msg.senderId) return false;
+          
+          // Must have identical text content (including null/undefined handling)
+          const serverText = serverMsg.text || '';
+          const msgText = msg.text || '';
+          if (serverText !== msgText) return false;
+          
+          // Flexible timestamp comparison - try multiple timestamp fields
+          const serverTime = new Date(serverMsg.createdAt || serverMsg.timestamp || 0);
+          const msgTime = new Date(msg.createdAt || msg.timestamp || msg.sentAt || 0);
+          const timeDiff = Math.abs(serverTime - msgTime);
+          
+          // Extended time window to 10 minutes to handle edge cases
+          return timeDiff < 600000; // 10 minutes
+        });
         
         if (hasServerEquivalent) {
-          console.log('🧹 MergeMessages: Skipping temp message with server equivalent:', msg._id || msg.tempId);
+          console.log('🧹 MergeMessages: Skipping temp message with server equivalent:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
           return;
+        } else {
+          console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
         }
       }
       
@@ -238,7 +252,36 @@ export default function MessagesPage() {
         return dateA - dateB;
       });
     
-    return merged;
+    // Final aggressive cleanup: Remove temp messages that have real server equivalents
+    // This is a failsafe in case the earlier content matching missed something
+    const finalCleaned = merged.filter((msg, index) => {
+      // Only check temp messages
+      if (!(msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending)) {
+        return true; // Keep non-temp messages
+      }
+      
+      // Check if any later message in the array is a server equivalent
+      const hasLaterServerEquivalent = merged.slice(index + 1).some(laterMsg => {
+        // Must not be a temp message itself
+        if (laterMsg._id?.startsWith('temp-') || laterMsg.tempId || laterMsg.pending || laterMsg.sending) {
+          return false;
+        }
+        
+        // Same sender and text check
+        return laterMsg.senderId === msg.senderId && 
+               (laterMsg.text || '') === (msg.text || '') &&
+               Math.abs(new Date(laterMsg.createdAt || 0) - new Date(msg.createdAt || msg.timestamp || 0)) < 600000; // 10 minutes
+      });
+      
+      if (hasLaterServerEquivalent) {
+        console.log('🧹 MergeMessages: FINAL CLEANUP - Removing temp message with later server equivalent:', msg._id || msg.tempId);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    return finalCleaned;
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
