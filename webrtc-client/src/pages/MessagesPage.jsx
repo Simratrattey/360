@@ -173,38 +173,55 @@ export default function MessagesPage() {
   const allConversationsRef = useRef(allConversations);
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
-  // Utility function to merge server messages with cached messages
+  // Enhanced merge function with better deduplication
   const mergeMessages = (serverMessages, cachedMessages) => {
     const messageMap = new Map();
+    const tempIdMap = new Map(); // Track tempId to _id mapping
     
-    // Add server messages first (they are the source of truth)
+    // First pass: Add all server messages (source of truth)
     serverMessages.forEach(msg => {
       if (msg._id) {
         messageMap.set(msg._id, msg);
-      }
-    });
-    
-    // Add cached messages that aren't in server messages
-    // This preserves real-time messages that might not be in server yet
-    cachedMessages.forEach(msg => {
-      if (msg._id && !messageMap.has(msg._id)) {
-        // Only add if it's not already in server messages
-        messageMap.set(msg._id, msg);
-      } else if (!msg._id && msg.tempId) {
-        // Handle temporary messages (optimistic updates)
-        const existingByTempId = Array.from(messageMap.values()).find(m => m.tempId === msg.tempId);
-        if (!existingByTempId) {
-          messageMap.set(msg.tempId || `temp-${Date.now()}`, msg);
+        // Track tempId mapping if present
+        if (msg.tempId) {
+          tempIdMap.set(msg.tempId, msg._id);
         }
       }
     });
     
-    // Convert back to array and sort by timestamp
-    const merged = Array.from(messageMap.values()).sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.timestamp || 0);
-      const dateB = new Date(b.createdAt || b.timestamp || 0);
-      return dateA - dateB;
+    // Second pass: Add cached messages that aren't duplicates
+    cachedMessages.forEach(msg => {
+      // Skip if this is a server message we already have
+      if (msg._id && messageMap.has(msg._id)) {
+        return;
+      }
+      
+      // Skip if this temp message has a corresponding server message
+      if (msg.tempId && tempIdMap.has(msg.tempId)) {
+        return;
+      }
+      
+      // Add temporary/optimistic messages that don't have server equivalents
+      if (msg.tempId || (msg._id && msg._id.startsWith('temp-'))) {
+        // Only add if no server message with same tempId exists
+        const key = msg._id || msg.tempId || `temp-${Date.now()}`;
+        if (!messageMap.has(key)) {
+          messageMap.set(key, msg);
+        }
+      } else if (msg._id) {
+        // Add real messages that aren't in server response (newer real-time messages)
+        messageMap.set(msg._id, msg);
+      }
     });
+    
+    // Convert back to array and sort by timestamp
+    const merged = Array.from(messageMap.values())
+      .filter(msg => msg && (msg._id || msg.tempId)) // Filter out invalid messages
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.timestamp || 0);
+        const dateB = new Date(b.createdAt || b.timestamp || 0);
+        return dateA - dateB;
+      });
     
     return merged;
   };
@@ -814,12 +831,41 @@ export default function MessagesPage() {
     // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
     
-    // Clear previous conversation messages immediately to prevent wrong chat display
-    setMessages([]);
-    setMessagesLoading(true);
-    setReactions({});
+    // WhatsApp-like experience: Show cached messages instantly if available
+    if (cachedMessages.length > 0) {
+      // Show cached messages immediately for instant response
+      setMessages(cachedMessages);
+      setMessagesLoading(false);
+      
+      // Set up unread indicators and reactions from cache
+      const unreadCount = selected.unread || 0;
+      if (unreadCount > 0 && cachedMessages.length >= unreadCount) {
+        const unreadStart = cachedMessages.length - unreadCount;
+        setUnreadStartIndex(unreadStart);
+      } else {
+        setUnreadStartIndex(null);
+      }
+      
+      const cachedReactions = {};
+      cachedMessages.forEach(msg => {
+        if (msg.reactions && msg.reactions.length > 0) {
+          cachedReactions[msg._id] = msg.reactions;
+        }
+      });
+      setReactions(cachedReactions);
+      
+      // Reset conversation switch flag immediately after showing cached messages
+      setTimeout(() => {
+        setIsConversationSwitch(false);
+      }, 50);
+    } else {
+      // No cache - show loading state
+      setMessages([]);
+      setMessagesLoading(true);
+      setReactions({});
+    }
     
-    // Always fetch from server to ensure we have latest messages
+    // Always fetch from server in background to ensure we have latest messages
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
         const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
@@ -960,31 +1006,33 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
-          const isDuplicate = prev.some(m => {
-            // Skip if we already have this exact server message (by _id)
-            if (m._id && msg._id && m._id === msg._id) {
-              return true;
-            }
-            return false;
-          });
-          if (isDuplicate) {
-            console.log('Skipping duplicate message in current view by _id:', msg._id);
-            return prev;
+          // Enhanced deduplication logic
+          let filtered = prev;
+          
+          // First, remove any duplicates by _id (exact matches)
+          if (msg._id) {
+            filtered = filtered.filter(m => m._id !== msg._id);
           }
           
-          // For my messages, remove optimistic versions
-          let filtered = prev;
-          if (isMyMessage && msg.tempId) {
-            filtered = prev.filter(m => {
-              // Remove if tempIds match (this optimistic message is being replaced)
-              if (m.tempId === msg.tempId) {
-                console.log('Removing optimistic message from current view:', m.tempId, 'for real message:', msg._id);
+          // Second, remove optimistic messages that this server message replaces
+          if (msg.tempId) {
+            filtered = filtered.filter(m => {
+              // Remove optimistic message with matching tempId
+              if (m.tempId === msg.tempId && (!m._id || m._id.startsWith('temp-'))) {
+                console.log('Removing optimistic message by tempId:', m.tempId, 'for real message:', msg._id);
                 return false;
               }
-              // Remove if it's a pending/sending message from this user with same tempId
-              if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-                console.log('Removing pending message from current view:', m.tempId, 'for real message:', msg._id);
+              return true;
+            });
+          }
+          
+          // Third, for sent messages, remove any temporary messages from the same user with similar content
+          if (isMyMessage) {
+            filtered = filtered.filter(m => {
+              // Remove if it's a temp message from same user with same text (fallback deduplication)
+              if (m.senderId === user.id && (m.pending || m.sending || m.tempId) && 
+                  m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 30000) {
+                console.log('Removing similar temp message for sent message:', msg._id);
                 return false;
               }
               return true;
