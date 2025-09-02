@@ -129,6 +129,7 @@ export default function MessagesPage() {
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [isConversationSwitch, setIsConversationSwitch] = useState(false);
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -809,13 +810,18 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
+    // Clear messages immediately when switching to prevent showing wrong chat
+    setMessages([]);
+    setMessagesLoading(true);
+    
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
-    // Use ref to get the most current cache (important for navigation from notifications)
+    // Use ref to get the most current cache (important for navigation from notifications)  
     const cachedMessages = messagesCacheRef.current[convId] || [];
     
     // Show cached messages immediately for better UX, but only if we have them
     if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
+      setMessagesLoading(false);
       
       // Calculate unread indicator position
       const unreadCount = selected.unread || 0;
@@ -835,12 +841,9 @@ export default function MessagesPage() {
         }
       });
       setReactions(cachedReactions);
-      setMessagesLoading(false);
     } else {
-      // Only show loading state if we don't have cached messages
-      setMessages([]);
+      // No cached messages - clear reactions and keep loading state
       setReactions({});
-      setMessagesLoading(true);
     }
     
     // Always fetch from server to ensure we have latest messages
@@ -886,6 +889,11 @@ export default function MessagesPage() {
         }));
         
         chatSocket.joinConversation(convId);
+        
+        // Reset conversation switch flag after messages are loaded
+        setTimeout(() => {
+          setIsConversationSwitch(false);
+        }, 100); // Small delay to ensure scroll happens first
       })
       .catch(error => {
         console.error('Failed to load messages:', error);
@@ -894,6 +902,11 @@ export default function MessagesPage() {
           setMessages([]);
         }
         chatSocket.joinConversation(convId);
+        
+        // Reset flag even on error
+        setTimeout(() => {
+          setIsConversationSwitch(false);
+        }, 100);
       })
       .finally(() => {
         setMessagesLoading(false);
@@ -1425,6 +1438,8 @@ export default function MessagesPage() {
     
     console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
     
+    // Mark as conversation switch for instant scrolling
+    setIsConversationSwitch(true);
     setSelected(conv);
     setReplyTo(null);
     setShowEmojiPicker(false);
@@ -2629,6 +2644,7 @@ export default function MessagesPage() {
               onLoadMore={handleLoadMoreMessages}
               hasMoreMessages={hasMoreMessages}
               loadingMore={loadingMore}
+              isConversationSwitch={isConversationSwitch}
             />
           )}
 

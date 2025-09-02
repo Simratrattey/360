@@ -75,6 +75,7 @@ export default function ChatWindow({
   hasMoreMessages = false,
   loadingMore = false,
   unreadStartIndex = null,
+  isConversationSwitch = false,
 }) {
   const chatRef = useRef(null);
   const lastScrollHeight = useRef(0);
@@ -96,20 +97,26 @@ export default function ChatWindow({
     const previousScrollHeight = lastScrollHeight.current;
     
     if (shouldAutoScroll && !isUserScrolling.current) {
-      // Smooth scroll to bottom for new messages
       isScrollingToBottom.current = true;
       
-      // Use CSS scroll-behavior for smooth native scrolling
-      chatElement.style.scrollBehavior = 'smooth';
-      chatElement.scrollTop = chatElement.scrollHeight;
-      
-      // Reset after scrolling completes
-      setTimeout(() => {
-        if (chatElement) {
-          chatElement.style.scrollBehavior = 'auto';
-        }
+      if (isConversationSwitch) {
+        // Instant scroll for conversation switches - no animation
+        chatElement.style.scrollBehavior = 'auto';
+        chatElement.scrollTop = chatElement.scrollHeight;
         isScrollingToBottom.current = false;
-      }, 500);
+      } else {
+        // Smooth scroll for new messages in the same conversation
+        chatElement.style.scrollBehavior = 'smooth';
+        chatElement.scrollTop = chatElement.scrollHeight;
+        
+        // Reset after scrolling completes
+        setTimeout(() => {
+          if (chatElement) {
+            chatElement.style.scrollBehavior = 'auto';
+          }
+          isScrollingToBottom.current = false;
+        }, 500);
+      }
       
     } else if (previousScrollHeight > 0 && currentScrollHeight > previousScrollHeight) {
       // When loading previous messages, maintain scroll position without animation
@@ -199,7 +206,7 @@ export default function ChatWindow({
   return (
     <div
       ref={chatRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative smooth-scroll"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative"
     >
       {/* Loading more messages indicator */}
       {loadingMore && (
