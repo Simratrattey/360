@@ -306,7 +306,7 @@ export default function MessagesPage() {
         if (!existingCache || existingCache.length === 0) {
           messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
             .then(res => {
-              const msgs = res.data?.messages || res.data || [];
+              const msgs = (res.data?.messages || res.data || []).reverse(); // Reverse since API now returns newest first
               // Only update cache if it's still empty (avoid overwriting real-time messages)
               setMessagesCache(prev => {
                 if (prev[conv._id] && prev[conv._id].length > 0) {
@@ -846,7 +846,7 @@ export default function MessagesPage() {
     // Always fetch from server to ensure we have latest messages
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
-        const serverMessages = res.data.messages || [];
+        const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
         
         // Only merge if we have cached messages that might contain newer real-time messages
         // Otherwise, just use server messages directly to avoid potential duplication
@@ -1970,7 +1970,7 @@ export default function MessagesPage() {
         skip: messageOffset
       });
       
-      const olderMessages = response.data.messages || [];
+      const olderMessages = (response.data.messages || []).reverse(); // Reverse since API now returns newest first
       
       if (olderMessages.length > 0) {
         // Use mergeMessages to properly deduplicate and merge older messages
