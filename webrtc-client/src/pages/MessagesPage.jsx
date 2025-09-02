@@ -145,6 +145,10 @@ export default function MessagesPage() {
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
   
+  // Track where unread messages start (for unread indicator)
+  const [unreadStartIndex, setUnreadStartIndex] = useState(null);
+  const [lastReadMessageId, setLastReadMessageId] = useState(null);
+  
   // Track conversations already marked as read to prevent duplicate API calls
   const readConversationsRef = useRef(new Set());
   const markReadTimeoutRef = useRef(null);
@@ -794,6 +798,16 @@ export default function MessagesPage() {
     if (cachedMessages.length > 0) {
       setMessages(cachedMessages);
       
+      // Calculate unread indicator position
+      const unreadCount = selected.unread || 0;
+      if (unreadCount > 0 && cachedMessages.length >= unreadCount) {
+        // Find the index where unread messages start (from the end)
+        const unreadStart = cachedMessages.length - unreadCount;
+        setUnreadStartIndex(unreadStart);
+      } else {
+        setUnreadStartIndex(null);
+      }
+      
       // Initialize reactions state from cached messages
       const cachedReactions = {};
       cachedMessages.forEach(msg => {
@@ -827,6 +841,15 @@ export default function MessagesPage() {
         setMessages(finalMessages);
         setMessageOffset(finalMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
+        
+        // Recalculate unread indicator position for server messages
+        const unreadCount = selected.unread || 0;
+        if (unreadCount > 0 && finalMessages.length >= unreadCount) {
+          const unreadStart = finalMessages.length - unreadCount;
+          setUnreadStartIndex(unreadStart);
+        } else {
+          setUnreadStartIndex(null);
+        }
         
         // Initialize reactions state from loaded messages
         const initialReactions = {};
@@ -1405,6 +1428,9 @@ export default function MessagesPage() {
       
       // Mark as read on server in background (no delay needed for UI)
       debouncedMarkAsRead(conv._id);
+      
+      // Clear unread indicator since conversation is now read
+      setUnreadStartIndex(null);
     }
   };
 
@@ -2563,6 +2589,7 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
+              unreadStartIndex={unreadStartIndex}
               shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker && !reactionInProgress && showEmojiPicker !== 'input'}
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}

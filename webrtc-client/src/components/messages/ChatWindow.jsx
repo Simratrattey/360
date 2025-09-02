@@ -74,6 +74,7 @@ export default function ChatWindow({
   onLoadMore,
   hasMoreMessages = false,
   loadingMore = false,
+  unreadStartIndex = null,
 }) {
   const chatRef = useRef(null);
   const lastScrollHeight = useRef(0);
@@ -225,12 +226,16 @@ export default function ChatWindow({
                 </div>
               </div>
               <div className="space-y-2 sm:space-y-4">
-                {msgs.map((msg, index) => {
+                {msgs.map((msg, msgIndex) => {
                   const isSystemMsg = isSystemMessage(msg);
                   
                   if (isSystemMsg) {
                     // System message detected - render as centered notification
                   }
+                  
+                  // Calculate global index for unread indicator
+                  const globalIndex = messages.findIndex(m => m._id === msg._id);
+                  const showUnreadIndicator = unreadStartIndex !== null && globalIndex === unreadStartIndex;
                   
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
                   const isCurrentSearchResult = searchResults.length > 0 && 
@@ -259,17 +264,28 @@ export default function ChatWindow({
                   }
                   
                   return (
-                    <div 
-                      key={msg._id || msg.id}
-                      id={`message-${msg._id || msg.id}`}
-                      className={`transition-all duration-300 ${
-                        isCurrentSearchResult 
-                          ? 'ring-2 ring-blue-400 ring-opacity-75 bg-blue-50 rounded-lg p-2 -m-2'
-                          : isSearchResult 
-                          ? 'bg-yellow-50 rounded-lg p-1 -m-1'
-                          : ''
-                      }`}
-                    >
+                    <>
+                      {/* Unread messages indicator */}
+                      {showUnreadIndicator && (
+                        <div className="flex items-center justify-center my-6">
+                          <div className="flex items-center bg-blue-500/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-blue-200/50">
+                            <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+                            <span className="text-sm font-semibold text-white">New Messages</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div 
+                        key={msg._id || msg.id}
+                        id={`message-${msg._id || msg.id}`}
+                        className={`transition-all duration-300 ${
+                          isCurrentSearchResult 
+                            ? 'ring-2 ring-blue-400 ring-opacity-75 bg-blue-50 rounded-lg p-2 -m-2'
+                            : isSearchResult 
+                            ? 'bg-yellow-50 rounded-lg p-1 -m-1'
+                            : ''
+                        }`}
+                      >
                       <MessageBubble
                         msg={msg}
                         isOwn={
@@ -301,7 +317,8 @@ export default function ChatWindow({
                         isPinned={pinnedMessages.includes(msg._id || msg.id)}
                         isStarred={starredMessages.includes(msg._id || msg.id)}
                       />
-                    </div>
+                      </div>
+                    </>
                   );
                 })}
               </div>
