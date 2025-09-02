@@ -831,16 +831,12 @@ export default function MessagesPage() {
     // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
     
-    // Always clear first to prevent wrong conversation display, then set correct messages
-    setMessages([]);
-    
-    // WhatsApp-like experience: Show cached messages instantly if available
+    // Immediately set the correct messages for this conversation (no delay, no flicker)
     if (cachedMessages.length > 0) {
-      // Use requestAnimationFrame to ensure clear happens first, then show cached
-      requestAnimationFrame(() => {
-        setMessages(cachedMessages);
-      });
+      // Show cached messages instantly for WhatsApp-like experience
+      setMessages(cachedMessages);
       setMessagesLoading(false);
+      console.log('⚡ Cached messages loaded immediately:', cachedMessages.length, 'for conversation:', convId);
       
       // Set up unread indicators and reactions from cache
       const unreadCount = selected.unread || 0;
@@ -868,6 +864,7 @@ export default function MessagesPage() {
       setMessages([]);
       setMessagesLoading(true);
       setReactions({});
+      console.log('⏳ No cached messages, showing loading for conversation:', convId);
     }
     
     // Always fetch from server in background to ensure we have latest messages
@@ -1490,6 +1487,10 @@ export default function MessagesPage() {
     }
     
     console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
+    
+    // CRITICAL: Clear messages immediately when user clicks to prevent wrong conversation display
+    setMessages([]);
+    console.log('🧹 Messages cleared immediately on conversation select');
     
     // Mark as conversation switch for instant scrolling
     setIsConversationSwitch(true);
