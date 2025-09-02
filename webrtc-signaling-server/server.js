@@ -1091,12 +1091,18 @@ io.on('connection', async socket => {
     try {
       await session.withTransaction(async () => {
         // Create and save the message
+        // Filter out invalid replyTo IDs (temp IDs are not valid ObjectIds)
+        let validReplyTo = null;
+        if (replyTo && mongoose.Types.ObjectId.isValid(replyTo)) {
+          validReplyTo = replyTo;
+        }
+        
         const message = new Message({
           conversation: conversationId,
           sender: userId,
           text,
           file,
-          replyTo,
+          replyTo: validReplyTo,
         });
         
         await message.save({ session });

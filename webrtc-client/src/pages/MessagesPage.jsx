@@ -757,18 +757,37 @@ export default function MessagesPage() {
       
       if (messageToRetry) {
         try {
+          console.log('Retrying message:', tempId);
+          
+          // Remove from failed queue if it's there
+          messageQueue.removeFromQueues(tempId);
+          
+          // Add to retry queue with reset attempt count
           if (messageQueue && typeof messageQueue.addToRetryQueue === 'function') {
             messageQueue.addToRetryQueue(messageToRetry, 0); // Reset retry count
           }
+          
+          // Update message status
           if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
             messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
           }
+          
+          // Update UI to show sending state
+          setMessages(prev => prev.map(msg => 
+            msg.tempId === tempId 
+              ? { ...msg, failed: false, sending: true, pending: false }
+              : msg
+          ));
+          
+          // Process the queues
           if (messageQueue && typeof messageQueue.processQueues === 'function') {
             messageQueue.processQueues();
           }
         } catch (error) {
           console.error('Error retrying message:', error);
         }
+      } else {
+        console.log('Message not found in queue for retry:', tempId);
       }
     };
 
