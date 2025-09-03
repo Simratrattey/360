@@ -85,8 +85,6 @@ export default function ChatWindow({
   const scrollTimeoutRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
   
-  // Debug: Log messages length to see if ChatWindow receives updated messages
-  console.log('📨 ChatWindow messages count:', messages.length, 'Latest message ID:', messages[messages.length - 1]?._id);
 
   // Pre-position scroll for conversation switches BEFORE render
   useLayoutEffect(() => {
@@ -109,12 +107,10 @@ export default function ChatWindow({
         scrollToBottom();
         // Reset the flag immediately after positioning
         requestAnimationFrame(() => {
-          console.log('🔧 Pre-positioned scroll completed, resetting flag');
         });
       }
     });
     
-    console.log('🔧 Pre-positioned scroll to bottom for conversation switch');
   }, [messages, isConversationSwitch]);
 
   // Enhanced scroll management with performance optimizations

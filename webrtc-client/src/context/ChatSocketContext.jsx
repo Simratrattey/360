@@ -21,11 +21,9 @@ export function ChatSocketProvider({ children }) {
   useEffect(() => {
     if (!user || !socket) return;
     
-    console.log('🔔 ChatSocket reusing socket from SocketContext:', socket.id);
     const s = socket; // Use existing socket
 
     s.on('connect', () => {
-      console.log('🔔 Chat socket connected - User ID:', user?.id, 'Socket ID:', s.id);
       setConnected(true);
       // Get online users when connected
       s.emit('getOnlineUsers');
@@ -37,7 +35,6 @@ export function ChatSocketProvider({ children }) {
         if (s.connected) {
           s.emit('heartbeat');
         } else {
-          console.log('🔔 Socket disconnected, stopping heartbeat');
           clearInterval(heartbeat);
         }
       }, 30000); // Send heartbeat every 30 seconds
@@ -47,7 +44,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('disconnect', (reason) => {
-      console.log('🔔 Chat socket disconnected - User ID:', user?.id, 'Reason:', reason);
       setConnected(false);
       
       // Clear heartbeat interval
@@ -63,7 +59,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('reconnect', (attemptNumber) => {
-      console.log('🔔 Chat socket reconnected - User ID:', user?.id, 'Attempt:', attemptNumber);
       setConnected(true);
       // Refresh online users after reconnection
       s.emit('getOnlineUsers');
@@ -77,7 +72,6 @@ export function ChatSocketProvider({ children }) {
 
     // Online status events
     s.on('user:online', ({ userId, user }) => {
-      console.log('User came online:', user?.username);
       setOnlineUsers(prev => new Map(prev).set(userId, user));
     });
 
@@ -91,7 +85,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('onlineUsers', (users) => {
-      console.log('Received online users:', users.length);
       const userMap = new Map();
       users.forEach(user => userMap.set(user.id, user));
       setOnlineUsers(userMap);
@@ -224,7 +217,6 @@ export function ChatSocketProvider({ children }) {
   const joinConversation = (conversationId) => {
     if (socket && conversationId) {
       try {
-        console.log('Joining conversation:', conversationId);
         socket.emit('joinConversation', conversationId);
       } catch (error) {
         console.error('Error joining conversation:', error);
@@ -235,7 +227,6 @@ export function ChatSocketProvider({ children }) {
   const leaveConversation = (conversationId) => {
     if (socket && conversationId) {
       try {
-        console.log('Leaving conversation:', conversationId);
         socket.emit('leaveConversation', conversationId);
       } catch (error) {
         console.error('Error leaving conversation:', error);
@@ -251,12 +242,10 @@ export function ChatSocketProvider({ children }) {
       }
 
       try {
-        console.log('Sending message:', data);
         
         // Set up one-time listeners for this message
         const successHandler = (response) => {
           if (response.tempId === data.tempId) {
-            console.log('Message sent successfully:', response);
             resolve(response);
             // Clean up listeners
             socket.off('chat:sent', successHandler);

@@ -225,20 +225,7 @@ export default function MessagesPage() {
         });
         
         if (hasServerEquivalent) {
-          console.log('🧹 MergeMessages: Skipping temp message with server equivalent:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20));
           return;
-        } else {
-          console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20), 'sender:', msg.senderId);
-          console.log('🧹 MergeMessages: Checking against server messages:');
-          serverMessages.forEach(s => {
-            const serverSenderId = s.senderId || (typeof s.sender === 'object' ? s.sender?._id : s.sender);
-            const senderMatch = serverSenderId === msg.senderId;
-            const textMatch = (s.text || '') === (msg.text || '');
-            const serverTime = new Date(s.createdAt || s.timestamp || 0);
-            const msgTime = new Date(msg.createdAt || msg.timestamp || msg.sentAt || 0);
-            const timeDiff = Math.abs(serverTime - msgTime);
-            console.log(`  - Server msg ${s._id}: sender=${senderMatch ? '✓' : '✗'} text=${textMatch ? '✓' : '✗'} time=${timeDiff}ms sender="${serverSenderId}" text="${s.text?.substring(0, 20)}"`);
-          });
         }
       }
       
@@ -285,7 +272,6 @@ export default function MessagesPage() {
       });
       
       if (hasLaterServerEquivalent) {
-        console.log('🧹 MergeMessages: FINAL CLEANUP - Removing temp message with later server equivalent:', msg._id || msg.tempId);
         return false;
       }
       
@@ -428,7 +414,6 @@ export default function MessagesPage() {
     
     // Only refresh on entry if we don't have conversations loaded yet
     if (allConversations.length === 0) {
-      console.log('🔄 Initial conversation load on messages page entry');
       fetchConversations();
     }
     
@@ -933,7 +918,6 @@ export default function MessagesPage() {
         // Show cached messages instantly for WhatsApp-like experience
         setMessages(validMessages);
         setMessagesLoading(false);
-        console.log('⚡ Cached messages loaded immediately:', validMessages.length, 'for conversation:', convId);
       } else {
         // Invalid cache - show loading
         setMessages([]);
@@ -986,21 +970,17 @@ export default function MessagesPage() {
         }
         
         const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
-        console.log('🌐 Raw server messages received:', serverMessages.length, 'IDs:', serverMessages.map(m => m._id));
         
         // Validate server messages belong to this conversation
         const validServerMessages = serverMessages.filter(msg => 
           msg.conversation === convId || msg.conversationId === convId
         );
-        console.log('✅ Valid server messages:', validServerMessages.length, 'IDs:', validServerMessages.map(m => m._id));
         
         // Only merge if we have cached messages that might contain newer real-time messages
         // Otherwise, just use server messages directly to avoid potential duplication
         let finalMessages;
         if (cachedMessages.length > 0) {
-          console.log('🔄 Cached messages for merging:', cachedMessages.length, 'IDs:', cachedMessages.map(m => m._id || m.tempId));
           finalMessages = mergeMessages(validServerMessages, cachedMessages);
-          console.log('🔄 After merging:', finalMessages.length, 'IDs:', finalMessages.map(m => m._id || m.tempId));
         } else {
           finalMessages = validServerMessages;
         }
@@ -1011,8 +991,6 @@ export default function MessagesPage() {
         );
         
         setMessages(validFinalMessages);
-        console.log('✅ Server messages loaded and validated:', validFinalMessages.length, 'for conversation:', convId);
-        console.log('🔍 Setting messages state with:', validFinalMessages.map(m => m._id));
         
         // Force a state update to ensure messages are applied even with React batching
         setTimeout(() => {
@@ -1086,10 +1064,6 @@ export default function MessagesPage() {
 
   // Debug: Track messages state changes
   useEffect(() => {
-    console.log('📊 Messages state changed:', messages.length, 'messages for conversation:', selected?._id);
-    if (messages.length > 0) {
-      console.log('📊 Message IDs:', messages.map(m => m._id));
-    }
   }, [messages, selected?._id]);
 
   // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
@@ -1121,26 +1095,22 @@ export default function MessagesPage() {
           return false;
         });
         if (isDuplicate) {
-          console.log('🧹 Cache: Skipping duplicate message by _id:', msg._id);
           return prev;
         }
         
         // ALWAYS remove optimistic duplicates from cache (whether current conversation or not)
         let cleanMessages = convMessages;
         if (isMyMessage) {
-          console.log('🧹 Cache: Cleaning optimistic messages for user message:', msg._id, 'tempId:', msg.tempId);
           
           // Find and remove ALL potential duplicates of this message
           cleanMessages = convMessages.filter(m => {
             // Remove if tempIds match (this optimistic message is being replaced)
             if (msg.tempId && m.tempId === msg.tempId) {
-              console.log('🧹 Cache: Removing optimistic by tempId:', m.tempId, '→', msg._id);
               return false;
             }
             
             // Remove if it's a pending/sending message from this user with same tempId
             if (msg.tempId && m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-              console.log('🧹 Cache: Removing pending by tempId:', m.tempId, '→', msg._id);
               return false;
             }
             
@@ -1148,7 +1118,6 @@ export default function MessagesPage() {
             // This handles the case where server message doesn't have tempId
             if (m.senderId === user.id && m.text === msg.text && 
                 (m._id?.startsWith('temp-') || m.tempId || m.pending || m.sending)) {
-              console.log('🧹 Cache: Removing temp/optimistic by content match:', m._id || m.tempId, '→', msg._id);
               return false;
             }
             
@@ -1156,7 +1125,6 @@ export default function MessagesPage() {
             if (m.senderId === user.id && m.text === msg.text) {
               const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
               if (timeDiff < 300000) { // 5 minutes window to catch all edge cases
-                console.log('🧹 Cache: Removing similar message by content + time:', m._id || m.tempId, 'timeDiff:', timeDiff + 'ms', '→', msg._id);
                 return false;
               }
             }
@@ -1164,10 +1132,8 @@ export default function MessagesPage() {
             return true;
           });
           
-          console.log('🧹 Cache: Removed', convMessages.length - cleanMessages.length, 'duplicate messages for:', msg._id);
         }
         
-        console.log('🧹 Cache: Adding real message:', msg._id, 'after cleaning', convMessages.length - cleanMessages.length, 'duplicates');
         
         const newCache = [...cleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
@@ -1185,13 +1151,6 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
-          console.log('🔄 Processing chat:new message:', {
-            id: msg._id,
-            tempId: msg.tempId,
-            text: msg.text?.substring(0, 20),
-            isMyMessage,
-            existingCount: prev.length
-          });
           
           // Enhanced deduplication logic
           let filtered = prev;
@@ -1257,13 +1216,6 @@ export default function MessagesPage() {
             sending: false
           };
           const newMessages = [...filtered, newMessage];
-          console.log('✅ Final message added:', {
-            id: msg._id,
-            tempId: msg.tempId,
-            text: msg.text?.substring(0, 20),
-            totalAfter: newMessages.length,
-            removedCount: initialCount - filtered.length
-          });
           return newMessages;
         });
         
@@ -1673,7 +1625,6 @@ export default function MessagesPage() {
       return;
     }
     
-    console.log(`📋 Selecting conversation: ${conv.name || conv._id}, unread: ${conv.unread}`);
     
     // Clear cache for conversations with unread messages to ensure fresh data
     if (conv.unread && conv.unread > 0) {
@@ -1687,7 +1638,6 @@ export default function MessagesPage() {
     // CRITICAL: Clear messages immediately and show loading when user clicks
     setMessages([]);
     setMessagesLoading(true);
-    console.log('🧹 Messages cleared and loading started on conversation select');
     
     // Mark as conversation switch for instant scrolling
     setIsConversationSwitch(true);
@@ -2655,7 +2605,6 @@ export default function MessagesPage() {
         selected,
         user,
         clearCache: () => {
-          console.log('🧹 Clearing all app cache...');
           localStorage.removeItem('messagesCache');
           localStorage.removeItem('chat_notifications');
           localStorage.removeItem('unread_count');
