@@ -207,7 +207,7 @@ export default function MessagesPage() {
       if ((msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending) && msg.senderId) {
         const hasServerEquivalent = serverMessages.some(serverMsg => {
           // Must be from same sender - handle both senderId and sender fields
-          const serverSenderId = serverMsg.senderId || serverMsg.sender;
+          const serverSenderId = serverMsg.senderId || (typeof serverMsg.sender === 'object' ? serverMsg.sender?._id : serverMsg.sender);
           if (serverSenderId !== msg.senderId) return false;
           
           // Must have identical text content (including null/undefined handling)
@@ -231,7 +231,7 @@ export default function MessagesPage() {
           console.log('🧹 MergeMessages: No server equivalent found for temp message:', msg._id || msg.tempId, 'text:', msg.text?.substring(0, 20), 'sender:', msg.senderId);
           console.log('🧹 MergeMessages: Checking against server messages:');
           serverMessages.forEach(s => {
-            const serverSenderId = s.senderId || s.sender;
+            const serverSenderId = s.senderId || (typeof s.sender === 'object' ? s.sender?._id : s.sender);
             const senderMatch = serverSenderId === msg.senderId;
             const textMatch = (s.text || '') === (msg.text || '');
             const serverTime = new Date(s.createdAt || s.timestamp || 0);
