@@ -212,7 +212,7 @@ export default function MeetingsPage() {
                    mode="single"
                    selected={selectedDate}
                    onSelect={setSelectedDate}
-                   className="rounded-md border-0 mx-auto w-full max-w-[320px] md:max-w-[360px]"
+                   className="rounded-md border-0 mx-auto w-full max-w-[320px]"
                  />
                  {/* Meeting indicators */}
                  {meetingsByDate.size > 0 && (
