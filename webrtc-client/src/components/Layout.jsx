@@ -67,8 +67,8 @@ export default function Layout({ children }) {
   return (
     <MessageNotificationContext.Provider value={{ unreadCount, refreshUnreadCount }}>
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50">
-        {/* Mobile sidebar */}
-        <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
+        {/* Mobile/Tablet sidebar (up to xl) */}
+        <div className={`fixed inset-0 z-50 xl:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <motion.div
             initial={{ x: -300 }}
@@ -124,8 +124,8 @@ export default function Layout({ children }) {
           </motion.div>
         </div>
 
-        {/* Desktop sidebar */}
-        <div className={`hidden lg:fixed lg:inset-y-0 lg:flex ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} lg:flex-col z-30 transition-all duration-300`}>
+        {/* Desktop sidebar (xl and up) */}
+        <div className={`hidden xl:fixed xl:inset-y-0 xl:flex ${sidebarCollapsed ? 'xl:w-20' : 'xl:w-72'} xl:flex-col z-30 transition-all duration-300`}>
           <div className="flex flex-col flex-grow bg-white/20 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20 h-full transition-all duration-300">
             <div className={`flex h-20 items-center ${sidebarCollapsed ? 'px-2 justify-center' : 'px-8'} transition-all duration-300`}>
               <h1 className={`text-2xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm transition-all duration-300 ${sidebarCollapsed ? 'hidden' : 'block'}`}>Comm360</h1>
@@ -181,14 +181,14 @@ export default function Layout({ children }) {
         </div>
 
         {/* Main content */}
-        <div className={`${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all duration-300`}>
+        <div className={`${sidebarCollapsed ? 'xl:pl-20' : 'xl:pl-72'} transition-all duration-300`}>
           {/* Header */}
           <header className="backdrop-blur-xl bg-white/60 bg-gradient-to-r from-blue-100/60 via-white/60 to-purple-100/60 shadow-xl border-b border-white/30 relative z-20">
             <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative gap-2">
               {/* Mobile sidebar button */}
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 mr-1 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
+                className="xl:hidden p-2 mr-1 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
               >
                 <Menu className="h-7 w-7" />
               </button>
