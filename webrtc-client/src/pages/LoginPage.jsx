@@ -146,7 +146,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900">
+    <div className="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 overflow-x-hidden">
       {/* Left: Hero with Interactive Globe */}
       <div className="relative flex-1 flex flex-col justify-center items-center p-8 overflow-hidden">
         <div className="absolute inset-0 z-0">
@@ -261,20 +261,21 @@ export default function LoginPage() {
             <span className="h-px w-10 bg-secondary-200" />
           </div>
           <div className="flex flex-col gap-4">
-            <GoogleLogin
-              onSuccess={async credentialResponse => {
-                const idToken = credentialResponse.credential;
-                const result = await googleLogin(idToken);
-                if (result?.success) {
-                  navigate(from, { replace: true });
-                }
-              }}
-              onError={() => alert('Google login failed')}
-              width="400"
-              theme="filled_blue"
-              shape="pill"
-              text="signin_with"
-            />
+            <div className="w-full max-w-[320px] sm:max-w-[360px] mx-auto">
+              <GoogleLogin
+                onSuccess={async credentialResponse => {
+                  const idToken = credentialResponse.credential;
+                  const result = await googleLogin(idToken);
+                  if (result?.success) {
+                    navigate(from, { replace: true });
+                  }
+                }}
+                onError={() => alert('Google login failed')}
+                theme="filled_blue"
+                shape="pill"
+                text="signin_with"
+              />
+            </div>
           </div>
           <div className="mt-8 text-center text-secondary-500 text-sm">
             Don&apos;t have an account?{' '}
