@@ -153,12 +153,12 @@ export default function MeetingsPage() {
                 Manage your meetings and schedule new ones
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 w-full md:w-auto">
+            <div className="flex flex-col md:flex-row flex-wrap items-stretch justify-start md:justify-end gap-3 w-full md:w-auto">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsModalOpen(true)}
-                className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg"
+                className="btn-primary inline-flex items-center justify-center gap-2 w-full md:w-auto md:min-w-[180px] px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg"
               >
                 <Plus className="h-5 w-5" />
                 <span>Schedule Meeting</span>
@@ -167,7 +167,7 @@ export default function MeetingsPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={startNow}
-                className="btn-outline flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline inline-flex items-center justify-center gap-2 w-full md:w-auto md:min-w-[180px] px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Video className="h-5 w-5" />
                 <span>Start Now</span>
@@ -179,7 +179,7 @@ export default function MeetingsPage() {
                   const joinId = prompt('Enter meeting ID to join');
                   if (joinId) openMeetingWindow(joinId);
                 }}
-                className="btn-outline flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline inline-flex items-center justify-center gap-2 w-full md:w-auto md:min-w-[180px] px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Eye className="h-5 w-5" />
                 <span>Join Meeting</span>
@@ -212,7 +212,7 @@ export default function MeetingsPage() {
                    mode="single"
                    selected={selectedDate}
                    onSelect={setSelectedDate}
-                   className="rounded-md border-0 mx-auto max-w-[320px]"
+                   className="rounded-md border-0 w-full"
                  />
                  {/* Meeting indicators */}
                  {meetingsByDate.size > 0 && (
