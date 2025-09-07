@@ -191,13 +191,13 @@ export default function MeetingsPage() {
         </motion.div>
 
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Left Column - Calendar */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }} 
             animate={{ opacity: 1, x: 0 }} 
             transition={{ duration: 0.7, delay: 0.2 }}
-            className="lg:col-span-1 space-y-6"
+            className="xl:col-span-1 space-y-6"
           >
                          {/* Calendar Card */}
              <Card className="glass-effect bg-white/80 shadow-xl rounded-2xl border border-white/30 overflow-hidden">
@@ -212,7 +212,7 @@ export default function MeetingsPage() {
                    mode="single"
                    selected={selectedDate}
                    onSelect={setSelectedDate}
-                   className="rounded-md border-0 mx-auto w-full max-w-[320px]"
+                   className="rounded-md border-0 mx-auto w-full max-w-[360px]"
                  />
                  {/* Meeting indicators */}
                  {meetingsByDate.size > 0 && (
@@ -296,7 +296,7 @@ export default function MeetingsPage() {
             initial={{ opacity: 0, x: 30 }} 
             animate={{ opacity: 1, x: 0 }} 
             transition={{ duration: 0.7, delay: 0.4 }}
-            className="lg:col-span-2 space-y-6"
+            className="xl:col-span-2 space-y-6"
           >
             {/* Selected Date Meetings */}
             <Card className="glass-effect bg-white/80 shadow-xl rounded-2xl border border-white/30">
