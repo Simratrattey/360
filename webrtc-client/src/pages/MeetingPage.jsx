@@ -2125,9 +2125,9 @@ To convert to MP4:
                       autoPlay
                       muted={isLocal}
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                       style={{ 
-                        background: '#1f2937',
+                        background: '#000000',
                         transform: isLocal ? 'scaleX(-1)' : 'none'
                       }}
                       srcObject={isLocal ? undefined : stream}
@@ -2172,9 +2172,9 @@ To convert to MP4:
                       autoPlay
                       muted={isLocal}
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                       style={{ 
-                        background: '#1f2937',
+                        background: '#000000',
                         transform: isLocal ? 'scaleX(-1)' : 'none'
                       }}
                       srcObject={isLocal ? undefined : stream}
