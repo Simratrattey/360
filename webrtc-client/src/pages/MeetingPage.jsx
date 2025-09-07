@@ -119,6 +119,26 @@ export default function MeetingPage() {
   }, [participantMap]);
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
+  const [isSmallScreen, setIsSmallScreen] = useState(typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false);
+
+  // Track screen size to optimize mobile layout
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const onChange = (e) => setIsSmallScreen(e.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', onChange);
+    } else {
+      // Safari
+      mq.addListener(onChange);
+    }
+    return () => {
+      if (mq.removeEventListener) {
+        mq.removeEventListener('change', onChange);
+      } else {
+        mq.removeListener(onChange);
+      }
+    };
+  }, []);
 
   // FFmpeg state for video conversion
   const [ffmpeg, setFfmpeg] = useState(null);
@@ -2002,7 +2022,8 @@ To convert to MP4:
   // Memoized grid calculation
   const { gridColumns, gridRows, isScreenShareMode } = useMemo(() => {
     const participantCount = videoTiles.length;
-    const columns = participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount));
+    // On small screens, always use a single column to avoid side-by-side tiles
+    const columns = isSmallScreen ? 1 : (participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount)));
     const rows = Math.ceil(participantCount / columns);
     const screenShareMode = screenSharingUserId !== null && viewMode === 'speaker';
     
@@ -2011,7 +2032,7 @@ To convert to MP4:
       gridRows: rows,
       isScreenShareMode: screenShareMode
     };
-  }, [videoTiles.length, screenSharingUserId, viewMode]);
+  }, [videoTiles.length, screenSharingUserId, viewMode, isSmallScreen]);
 
   if (!user) {
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
