@@ -153,12 +153,12 @@ export default function MeetingsPage() {
                 Manage your meetings and schedule new ones
               </p>
             </div>
-            <div className="flex flex-col xl:flex-row flex-wrap items-stretch justify-start xl:justify-end gap-3 w-full xl:w-auto">
+            <div className="w-full xl:w-auto xl:ml-auto grid grid-cols-1 xl:grid-cols-3 gap-3">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsModalOpen(true)}
-                className="btn-primary inline-flex items-center justify-center gap-2 w-full xl:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg"
+                className="btn-primary inline-flex items-center justify-center gap-2 w-full px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg"
               >
                 <Plus className="h-5 w-5" />
                 <span>Schedule Meeting</span>
@@ -167,7 +167,7 @@ export default function MeetingsPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={startNow}
-                className="btn-outline inline-flex items-center justify-center gap-2 w-full xl:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline inline-flex items-center justify-center gap-2 w-full px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Video className="h-5 w-5" />
                 <span>Start Now</span>
@@ -179,7 +179,7 @@ export default function MeetingsPage() {
                   const joinId = prompt('Enter meeting ID to join');
                   if (joinId) openMeetingWindow(joinId);
                 }}
-                className="btn-outline inline-flex items-center justify-center gap-2 w-full xl:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline inline-flex items-center justify-center gap-2 w-full px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Eye className="h-5 w-5" />
                 <span>Join Meeting</span>
