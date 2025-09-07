@@ -184,11 +184,11 @@ export default function Layout({ children }) {
         <div className={`${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all duration-300`}>
           {/* Header */}
           <header className="backdrop-blur-xl bg-white/60 bg-gradient-to-r from-blue-100/60 via-white/60 to-purple-100/60 shadow-xl border-b border-white/30 relative z-20">
-            <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative">
+            <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative gap-2">
               {/* Mobile sidebar button */}
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
+                className="lg:hidden p-2 mr-1 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
               >
                 <Menu className="h-7 w-7" />
               </button>
@@ -196,26 +196,26 @@ export default function Layout({ children }) {
               {/* Search bar */}
               <form
                 onSubmit={handleSearch}
-                className="flex-1 flex justify-center"
+                className="flex-1 flex justify-center px-2 sm:px-0"
               >
-                <div className="relative w-full max-w-md z-10">
+                <div className="relative w-full max-w-[260px] sm:max-w-md z-10">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-400/80" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search…"
-                    className="w-full pl-12 pr-24 py-2 rounded-full bg-white border border-blue-200 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 transition placeholder:text-blue-300 text-blue-900 text-base"
+                    className="w-full pl-12 pr-20 sm:pr-24 py-2 rounded-full bg-white border border-blue-200 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 transition placeholder:text-blue-300 text-blue-900 text-sm sm:text-base"
                   />
                   {/* brand label inside the input */}
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm pointer-events-none select-none">
+                  <span className="hidden sm:inline absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm pointer-events-none select-none">
                     Comm360
                   </span>
                 </div>
               </form>
 
               {/* Right icons */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 sm:space-x-4">
                 <button
                   onClick={() => navigate('/messages')}
                   className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative"
