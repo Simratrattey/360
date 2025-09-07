@@ -304,23 +304,25 @@ export default function DashboardPage() {
         <div className="absolute right-0 bottom-0 w-64 h-64 bg-gradient-to-br from-purple-400/30 to-blue-400/10 rounded-full blur-2xl opacity-40" />
       </div>
       {/* Welcome Section */}
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-8 flex items-center justify-between bg-white/70 shadow-2xl rounded-2xl border border-white/30">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
-            <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
-            Welcome back, {user?.fullName || user?.username}!
-          </h1>
-          <p className="text-secondary-700 mt-2 text-lg">Here's what's happening with your meetings today.</p>
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-6 sm:p-8 bg-white/70 shadow-2xl rounded-2xl border border-white/30">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 w-full">
+          <div className="min-w-0">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
+              <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
+              Welcome back, {user?.fullName || user?.username}!
+            </h1>
+            <p className="text-secondary-700 mt-2 text-lg">Here's what's happening with your meetings today.</p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.07 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={createNewMeeting}
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base sm:text-lg rounded-xl shadow-lg"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Meeting</span>
+          </motion.button>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.07 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={createNewMeeting}
-          className="btn-primary flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          <span>New Meeting</span>
-        </motion.button>
       </motion.div>
 
       {/* Notifications Section */}
