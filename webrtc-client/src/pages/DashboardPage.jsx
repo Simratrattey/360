@@ -69,9 +69,20 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // Fetch active rooms
+    // Initial fetch
     loadRooms();
-  }, []);
+    // Real-time updates via socket events
+    if (sfuSocket) {
+      const handleOpened = () => loadRooms();
+      const handleClosed = () => loadRooms();
+      sfuSocket.on('roomOpened', handleOpened);
+      sfuSocket.on('roomClosed', handleClosed);
+      return () => {
+        sfuSocket.off('roomOpened', handleOpened);
+        sfuSocket.off('roomClosed', handleClosed);
+      };
+    }
+  }, [sfuSocket]);
 
   // Fetch unread message notifications
 

@@ -722,6 +722,13 @@ io.on('connection', async socket => {
         visibility: rooms[roomId].visibility,
         host: rooms[roomId].host
       });
+      // Notify clients that a new room opened (dashboard can refresh)
+      io.emit('roomOpened', {
+        roomId,
+        name: rooms[roomId].name,
+        visibility: rooms[roomId].visibility,
+        createdAt: rooms[roomId].createdAt
+      });
     }
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
