@@ -141,9 +141,9 @@ export default function MeetingsPage() {
           initial={{ opacity: 0, y: 30 }} 
           animate={{ opacity: 1, y: 0 }} 
           transition={{ duration: 0.7 }}
-          className="glass-effect card bg-white/80 shadow-2xl rounded-2xl p-8 border border-white/30"
+          className="glass-effect card bg-white/80 shadow-2xl rounded-2xl p-6 md:p-8 border border-white/30"
         >
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 w-full">
             <div>
               <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-3">
                 <Sparkles className="h-8 w-8 text-blue-400 animate-bounce" />
@@ -153,12 +153,12 @@ export default function MeetingsPage() {
                 Manage your meetings and schedule new ones
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 w-full md:w-auto">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsModalOpen(true)}
-                className="btn-primary flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg"
+                className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg"
               >
                 <Plus className="h-5 w-5" />
                 <span>Schedule Meeting</span>
@@ -167,7 +167,7 @@ export default function MeetingsPage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={startNow}
-                className="btn-outline flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Video className="h-5 w-5" />
                 <span>Start Now</span>
@@ -179,7 +179,7 @@ export default function MeetingsPage() {
                   const joinId = prompt('Enter meeting ID to join');
                   if (joinId) openMeetingWindow(joinId);
                 }}
-                className="btn-outline flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg border-2"
+                className="btn-outline flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base md:text-lg rounded-xl shadow-lg border-2"
               >
                 <Eye className="h-5 w-5" />
                 <span>Join Meeting</span>
@@ -212,7 +212,7 @@ export default function MeetingsPage() {
                    mode="single"
                    selected={selectedDate}
                    onSelect={setSelectedDate}
-                   className="rounded-md border-0"
+                   className="rounded-md border-0 mx-auto max-w-[320px]"
                  />
                  {/* Meeting indicators */}
                  {meetingsByDate.size > 0 && (
