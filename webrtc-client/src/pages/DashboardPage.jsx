@@ -458,9 +458,9 @@ export default function DashboardPage() {
                   }}
                 >
                   <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="font-bold text-primary-800 truncate max-w-[140px] sm:max-w-[180px]">{room.name}</p>
+                        <p className="font-bold text-primary-800 truncate min-w-0">{room.name}</p>
                         {room.isRecording && (
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
                         )}
