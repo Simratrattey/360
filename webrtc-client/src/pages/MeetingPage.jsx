@@ -2022,8 +2022,10 @@ To convert to MP4:
   // Memoized grid calculation
   const { gridColumns, gridRows, isScreenShareMode } = useMemo(() => {
     const participantCount = videoTiles.length;
-    // On small screens, always use a single column to avoid side-by-side tiles
-    const columns = isSmallScreen ? 1 : (participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount)));
+    // On small screens: 1 column for up to 2 participants; 2 columns for 3+ participants
+    const columns = isSmallScreen
+      ? (participantCount <= 2 ? 1 : 2)
+      : (participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount)));
     const rows = Math.ceil(participantCount / columns);
     const screenShareMode = screenSharingUserId !== null && viewMode === 'speaker';
     
