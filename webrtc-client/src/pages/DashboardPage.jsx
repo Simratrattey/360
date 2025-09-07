@@ -448,7 +448,7 @@ export default function DashboardPage() {
                 <motion.div
                   key={room.roomId}
                   whileHover={{ scale: 1.03 }}
-                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
+                  className="p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => {
                     if (room.visibility === 'approval' && !approvedRooms.has(room.roomId)) {
                       requestJoinMeeting(room.roomId);
@@ -457,27 +457,29 @@ export default function DashboardPage() {
                     }
                   }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-primary-800 truncate">{room.name}</p>
-                      {room.isRecording && (
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
-                      )}
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-bold text-primary-800 truncate max-w-[140px] sm:max-w-[180px]">{room.name}</p>
+                        {room.isRecording && (
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-secondary-600 whitespace-nowrap">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</span>
+                        <span className="text-[10px] sm:text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          {room.visibility === 'public' ? 'Public' : 'Approval Required'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-secondary-600">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</p>
-                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
-                        {room.visibility === 'public' ? 'Public' : 'Approval Required'}
-                      </span>
-                    </div>
+                    <button className={`ml-auto shrink-0 text-sm py-1 px-3 sm:px-4 rounded-lg shadow transition-colors ${
+                      room.visibility === 'approval' && !approvedRooms.has(room.roomId)
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'btn-primary'
+                    }`}>
+                      {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
+                    </button>
                   </div>
-                  <button className={`text-sm py-1 px-4 rounded-lg shadow transition-colors ${
-                    room.visibility === 'approval' && !approvedRooms.has(room.roomId)
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'btn-primary'
-                  }`}>
-                    {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
-                  </button>
                 </motion.div>
               ))}
             </div>
