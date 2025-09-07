@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,6 +43,22 @@ export default function LoginPage() {
   useEffect(() => {
     const timer = setTimeout(() => setShowFeatures(true), 500);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Responsive width for Google button based on container size
+  const googleContainerRef = useRef(null);
+  const [googleWidth, setGoogleWidth] = useState(0);
+  useEffect(() => {
+    const updateWidth = () => {
+      if (googleContainerRef.current) {
+        const containerWidth = googleContainerRef.current.offsetWidth || 0;
+        // Cap the button width to 420px for large screens
+        setGoogleWidth(Math.min(containerWidth, 420));
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
   const handleChange = (e) => {
@@ -148,7 +164,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 overflow-x-hidden">
       {/* Left: Hero with Interactive Globe */}
-      <div className="relative flex-1 flex flex-col justify-center items-center p-8 overflow-hidden">
+      <div className="relative flex-1 flex flex-col justify-center items-center p-8">
         <div className="absolute inset-0 z-0">
           <Canvas camera={{ position: [0, 0, 3.5], fov: 50 }} style={{ width: '100%', height: '100%' }}>
             <ambientLight intensity={0.7} />
@@ -261,7 +277,7 @@ export default function LoginPage() {
             <span className="h-px w-10 bg-secondary-200" />
           </div>
           <div className="flex flex-col gap-4">
-            <div className="w-full max-w-[320px] sm:max-w-[360px] mx-auto">
+            <div ref={googleContainerRef} className="w-full max-w-[400px] mx-auto">
               <GoogleLogin
                 onSuccess={async credentialResponse => {
                   const idToken = credentialResponse.credential;
@@ -271,6 +287,7 @@ export default function LoginPage() {
                   }
                 }}
                 onError={() => alert('Google login failed')}
+                width={googleWidth ? googleWidth.toString() : undefined}
                 theme="filled_blue"
                 shape="pill"
                 text="signin_with"
