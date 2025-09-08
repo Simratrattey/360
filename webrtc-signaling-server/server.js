@@ -436,6 +436,19 @@ app.get('/api/stt-health', async (req, res) => {
   }
 });
 
+// AssemblyAI ephemeral token proxy (returns your permanent key as a short-lived token
+// NOTE: For production, consider using AssemblyAI's proper ephemeral token flow if available)
+app.post('/api/stt/token', authMiddleware, async (req, res) => {
+  try {
+    const key = process.env.ASSEMBLYAI_API_KEY;
+    if (!key) return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
+    // Minimal proxy: return key with an expiry hint so client can reconnect before timeout
+    return res.json({ token: key, expiresAt: Date.now() + 1000 * 60 * 10 });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to mint token' });
+  }
+});
+
 // Test FFmpeg availability endpoint
 app.get('/api/test-ffmpeg', async (req, res) => {
   try {
