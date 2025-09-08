@@ -7,7 +7,7 @@ import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users, FileText, X } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import AssemblyRealtimeClient from '../api/assemblyClient';
@@ -49,6 +49,8 @@ export default function MeetingPage() {
   const subtitlesEnabledRef = useRef(false);
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [subtitleHistory, setSubtitleHistory] = useState([]);
+  const [permanentSubtitleHistory, setPermanentSubtitleHistory] = useState([]); // Full meeting transcript
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
   const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
   
@@ -1074,24 +1076,29 @@ To convert to MP4:
     };
   };
 
-  // Speech recognition for subtitles - processes each participant separately
-  const startSubtitles = async () => {
-    console.log('Starting AssemblyAI realtime subtitles for individual participants');
-    setSubtitlesEnabled(true);
-    subtitlesEnabledRef.current = true;
-
+  // Start continuous transcript recording (always recording to history)
+  const startTranscriptRecording = async () => {
+    console.log('Starting continuous AssemblyAI transcript recording for all participants');
+    
     // Process each remote participant's audio stream separately
     remoteStreams.forEach((stream, peerId) => {
       const participantName = participantMap[peerId];
       if (participantName && stream.getAudioTracks().length > 0) {
-        console.log(`Setting up subtitles for ${participantName} (${peerId})`);
-        startParticipantSubtitles(stream, peerId, participantName);
+        console.log(`Setting up transcript recording for ${participantName} (${peerId})`);
+        startParticipantTranscriptRecording(stream, peerId, participantName);
       }
     });
   };
 
-  // Process individual participant audio for subtitles
-  const startParticipantSubtitles = async (stream, peerId, participantName) => {
+  // Toggle live subtitle display (but recording continues)
+  const startSubtitles = async () => {
+    console.log('Enabling live subtitle display');
+    setSubtitlesEnabled(true);
+    subtitlesEnabledRef.current = true;
+  };
+
+  // Process individual participant audio for continuous transcript recording
+  const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
       // Create separate AssemblyAI client for this participant
       const client = new AssemblyRealtimeClient({
@@ -1119,13 +1126,19 @@ To convert to MP4:
             createdAt: Date.now()
           };
           
-          setSubtitleHistory(prev => {
-            const updated = [...prev.slice(-4), subtitleEntry];
-            setTimeout(() => {
-              setSubtitleHistory(cur => cur.filter(s => s.id !== subtitleEntry.id));
-            }, 8000);
-            return updated;
-          });
+          // ALWAYS add to permanent history (continuous recording)
+          setPermanentSubtitleHistory(prev => [...prev, subtitleEntry]);
+
+          // Only add to temporary subtitle display if subtitles are enabled
+          if (subtitlesEnabledRef.current) {
+            setSubtitleHistory(prev => {
+              const updated = [...prev.slice(-4), subtitleEntry];
+              setTimeout(() => {
+                setSubtitleHistory(cur => cur.filter(s => s.id !== subtitleEntry.id));
+              }, 8000);
+              return updated;
+            });
+          }
         },
         onError: (e) => console.warn(`Assembly error for ${participantName}:`, e),
         onClose: () => console.log(`Assembly socket closed for ${participantName}`)
@@ -1806,10 +1819,33 @@ To convert to MP4:
     }
   };
 
+  // Auto-start transcript recording when participants join
+  useEffect(() => {
+    if (remoteStreams.size > 0) {
+      console.log(`🎙️ Participants joined, starting transcript recording for ${remoteStreams.size} participants`);
+      startTranscriptRecording();
+    }
+  }, [remoteStreams.size, participantMap]);
+
+  // Cleanup transcript recording when leaving meeting
+  useEffect(() => {
+    return () => {
+      stopTranscriptRecording();
+    };
+  }, []);
+
   // Multilingual processing removed - using AssemblyAI only
 
   const stopSubtitles = () => {
-    console.log('🛑 Stopping subtitles for all participants...');
+    console.log('🛑 Disabling live subtitle display...');
+    setSubtitlesEnabled(false);
+    subtitlesEnabledRef.current = false;
+    // Clear temporary subtitle display
+    setSubtitleHistory([]);
+  };
+
+  const stopTranscriptRecording = () => {
+    console.log('🛑 Stopping transcript recording for all participants...');
     
     // Close all individual AssemblyAI clients
     if (assemblyClientsRef.current) {
@@ -2403,6 +2439,20 @@ To convert to MP4:
             <Download size={20}/>
           </button>
         )}
+
+        {/* Transcript History Button */}
+        <button 
+          onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} 
+          className={`relative p-3 rounded-full text-white ${isHistoryPanelOpen ? 'bg-blue-600' : 'bg-gray-600'} hover:bg-blue-700`}
+          title={isHistoryPanelOpen ? "Close transcript history" : "View transcript history"}
+        >
+          <FileText size={20}/>
+          {permanentSubtitleHistory.length > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center">
+              {permanentSubtitleHistory.length}
+            </span>
+          )}
+        </button>
         
         <button 
           onClick={handleLeave} 
@@ -2488,8 +2538,11 @@ To convert to MP4:
                       subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                   >
-                    💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
+                    💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
+                  <p className="text-xs text-gray-400 mt-1 px-3">
+                    Transcripts are always recorded during meetings. This setting only controls subtitle display.
+                  </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
@@ -2656,6 +2709,108 @@ To convert to MP4:
           </div>
         </div>
       )}
+
+      {/* Transcript History Panel */}
+      <div 
+        className={`fixed top-0 right-0 h-full w-96 bg-gray-900 border-l border-gray-700 z-50 transform transition-transform duration-300 ease-in-out ${
+          isHistoryPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white flex items-center">
+            <FileText size={20} className="mr-2" />
+            Meeting Transcript
+          </h3>
+          <button
+            onClick={() => setIsHistoryPanelOpen(false)}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Panel Content */}
+        <div className="flex-1 overflow-y-auto p-4 h-full pb-20">
+          {permanentSubtitleHistory.length === 0 ? (
+            <div className="text-gray-400 text-center mt-8">
+              <FileText size={48} className="mx-auto mb-4 opacity-50" />
+              <p>No transcript available yet.</p>
+              <p className="text-sm mt-2">Start subtitles to begin recording the conversation.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {permanentSubtitleHistory.map((subtitle, index) => (
+                <div 
+                  key={subtitle.id} 
+                  className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:bg-gray-750 transition-colors"
+                >
+                  {/* Header with speaker name and timestamp */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-blue-300 text-sm">
+                      {subtitle.speaker}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {subtitle.timestamp}
+                    </span>
+                  </div>
+                  
+                  {/* Transcript text */}
+                  <div className="text-white text-sm leading-relaxed">
+                    {subtitle.text}
+                  </div>
+                  
+                  {/* Translation indicator */}
+                  {subtitle.isTranslated && (
+                    <div className="mt-2 text-xs text-green-400">
+                      🌐 Translated from {subtitle.sourceLanguage} to {subtitle.targetLanguage}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Panel Footer with stats */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-3">
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <span>{permanentSubtitleHistory.length} transcript entries</span>
+            <div className="flex space-x-4">
+              <button 
+                onClick={() => {
+                  const transcript = permanentSubtitleHistory.map(entry => 
+                    `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`
+                  ).join('\n\n');
+                  navigator.clipboard.writeText(transcript);
+                }}
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+                title="Copy transcript to clipboard"
+              >
+                Copy All
+              </button>
+              <button 
+                onClick={() => {
+                  const transcript = permanentSubtitleHistory.map(entry => 
+                    `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`
+                  ).join('\n\n');
+                  const blob = new Blob([transcript], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `meeting-transcript-${new Date().toISOString().split('T')[0]}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="text-green-400 hover:text-green-300 transition-colors"
+                title="Download transcript as text file"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </div>
   );
