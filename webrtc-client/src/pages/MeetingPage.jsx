@@ -467,8 +467,8 @@ export default function MeetingPage() {
         }
       }
       
-      // Start processing this stream if subtitles or multilingual is enabled
-      if ((subtitlesEnabled || multilingualEnabled) && stream.getAudioTracks().length > 0) {
+      // Start processing this stream only for multilingual mode (Assembly handles subtitles)
+      if (multilingualEnabled && stream.getAudioTracks().length > 0) {
         const participantName = participantMap[id];
         console.log(`Starting audio processing for ${participantName} (${id})`);
         startRemoteStreamRecognition(stream, id, participantName);
@@ -1778,9 +1778,9 @@ To convert to MP4:
     }
   };
 
-  // Handle new remote participants joining during active subtitles
+  // Handle new remote participants joining during active multilingual processing
   useEffect(() => {
-    if (subtitlesEnabled && remoteStreams.size > 0) {
+    if (multilingualEnabled && remoteStreams.size > 0) {
       // Start recognition for any new remote streams
       remoteStreams.forEach((stream, peerId) => {
         // Skip departed participants
@@ -1792,7 +1792,7 @@ To convert to MP4:
         }
       });
     }
-  }, [remoteStreams, subtitlesEnabled, participantMap]);
+  }, [remoteStreams, multilingualEnabled, participantMap]);
 
   const stopSubtitles = () => {
     console.log('🛑 Stopping subtitles for all participants...');
