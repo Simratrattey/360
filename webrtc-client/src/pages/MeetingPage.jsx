@@ -414,6 +414,12 @@ export default function MeetingPage() {
       if (localStream.getAudioTracks().length > 0 && !audioAnalyzers.current.has('local')) {
         startAudioAnalyzer(localStream, 'local', true);
       }
+
+      // Start transcript recording for local user
+      if (localStream.getAudioTracks().length > 0) {
+        console.log('🎙️ Local stream available, starting transcript recording for local user');
+        startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+      }
     }
   }, [localStream]);
 
@@ -1078,16 +1084,30 @@ To convert to MP4:
 
   // Start continuous transcript recording (always recording to history)
   const startTranscriptRecording = async () => {
-    console.log('Starting continuous AssemblyAI transcript recording for all participants');
+    console.log('🚀 Starting continuous AssemblyAI transcript recording for all participants');
     
     // Process each remote participant's audio stream separately
+    let remoteCount = 0;
     remoteStreams.forEach((stream, peerId) => {
       const participantName = participantMap[peerId];
       if (participantName && stream.getAudioTracks().length > 0) {
-        console.log(`Setting up transcript recording for ${participantName} (${peerId})`);
+        console.log(`✅ Setting up transcript recording for ${participantName} (${peerId})`);
         startParticipantTranscriptRecording(stream, peerId, participantName);
+        remoteCount++;
+      } else {
+        console.log(`⚠️ Skipping ${peerId} - no name or audio: name=${participantName}, audio=${stream.getAudioTracks().length}`);
       }
     });
+
+    // Also start recording local user's speech
+    if (localStream && localStream.getAudioTracks().length > 0) {
+      console.log('✅ Setting up transcript recording for local user');
+      startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+    } else {
+      console.log('⚠️ No local stream or audio available for transcript recording');
+    }
+    
+    console.log(`📊 Transcript recording started for ${remoteCount} remote participants + local user`);
   };
 
   // Toggle live subtitle display (but recording continues)
@@ -1100,6 +1120,8 @@ To convert to MP4:
   // Process individual participant audio for continuous transcript recording
   const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
+      console.log(`🎯 Creating AssemblyAI client for ${participantName} (${peerId})`);
+      
       // Create separate AssemblyAI client for this participant
       const client = new AssemblyRealtimeClient({
         sampleRate: 16000,
@@ -1127,10 +1149,16 @@ To convert to MP4:
           };
           
           // ALWAYS add to permanent history (continuous recording)
-          setPermanentSubtitleHistory(prev => [...prev, subtitleEntry]);
+          console.log(`🔄 Adding to permanent history: [${participantName}] ${text}`);
+          setPermanentSubtitleHistory(prev => {
+            const updated = [...prev, subtitleEntry];
+            console.log(`📝 Permanent history now has ${updated.length} entries`);
+            return updated;
+          });
 
           // Only add to temporary subtitle display if subtitles are enabled
           if (subtitlesEnabledRef.current) {
+            console.log(`👁️ Subtitles enabled - adding to display`);
             setSubtitleHistory(prev => {
               const updated = [...prev.slice(-4), subtitleEntry];
               setTimeout(() => {
@@ -1138,6 +1166,8 @@ To convert to MP4:
               }, 8000);
               return updated;
             });
+          } else {
+            console.log(`🚫 Subtitles disabled - not adding to display (but recorded in permanent history)`);
           }
         },
         onError: (e) => console.warn(`Assembly error for ${participantName}:`, e),
@@ -1822,8 +1852,12 @@ To convert to MP4:
   // Auto-start transcript recording when participants join
   useEffect(() => {
     if (remoteStreams.size > 0) {
-      console.log(`🎙️ Participants joined, starting transcript recording for ${remoteStreams.size} participants`);
+      console.log(`🎙️ Participants joined (${remoteStreams.size} participants), starting transcript recording...`);
+      console.log(`🔍 Current remoteStreams:`, Array.from(remoteStreams.keys()));
+      console.log(`🔍 Current participantMap:`, participantMap);
       startTranscriptRecording();
+    } else {
+      console.log(`⏸️ No participants in meeting yet - transcript recording will start when participants join`);
     }
   }, [remoteStreams.size, participantMap]);
 
