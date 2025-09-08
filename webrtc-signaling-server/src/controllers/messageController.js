@@ -11,7 +11,7 @@ export async function listMessages(req, res, next) {
       .populate('sender', 'username fullName avatarUrl')
       .populate('replyTo', 'text file')
       .populate('reactions.user', 'username fullName')
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .skip(parseInt(skip))
       .limit(parseInt(limit))
       // Use lean() to reduce overhead and return plain objects

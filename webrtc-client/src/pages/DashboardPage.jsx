@@ -24,6 +24,7 @@ import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useSocket } from '../context/SocketContext';
 
 const stats = [
@@ -44,8 +45,9 @@ export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications, clearNotificationsForConversation } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   // Using only global notifications to avoid duplicates
@@ -344,32 +346,66 @@ export default function DashboardPage() {
             Notifications
           </h2>
         </div>
-        {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
+        {(() => {
+          // Filter unread notifications, excluding message notifications for currently selected conversation
+          const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+            .filter(notif => !notif.read)
+            .filter(notif => {
+              // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+              // Don't hide notifications just because user was previously on messages page
+              if (notif.type === 'message' && 
+                  isOnMessagesPage && 
+                  currentConversationId === notif.data?.conversationId &&
+                  window.location.pathname === '/messages') {
+                console.log('🔍 Hiding notification for current conversation:', notif.data?.conversationId);
+                return false;
+              }
+              return true;
+            });
+          
+          return unreadNotifications.length > 0;
+        })() ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             
             {/* General notifications (group/conversation events) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).map((notif, idx) => (
+            {(() => {
+              // Filter unread notifications, excluding message notifications for currently selected conversation
+              const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+                .filter(notif => !notif.read)
+                .filter(notif => {
+                  // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+                  if (notif.type === 'message' && 
+                      isOnMessagesPage && 
+                      currentConversationId === notif.data?.conversationId &&
+                      window.location.pathname === '/messages') {
+                    return false;
+                  }
+                  return true;
+                });
+              
+              return filteredNotifications;
+            })().map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={async () => {
-                  // Mark notification as read
-                  if (markAsRead && notif._id) {
-                    await markAsRead(notif._id);
-                    // Refresh notifications to ensure UI is in sync with server
-                    if (refreshNotifications) {
-                      refreshNotifications();
-                    }
-                  }
-                  // Navigate based on notification type
+                onClick={() => {
+                  // Navigate immediately for instant response
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
                     navigate('/messages');
                   } else if (notif.type === 'message' && notif.data?.conversationId) {
                     // Navigate to specific conversation for message notifications
+                    // Notifications will be cleared when the conversation is actually opened in MessagesPage
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
+                  }
+                  
+                  // Mark notification as read in background (non-blocking)
+                  if (markAsRead && notif._id) {
+                    markAsRead(notif._id).catch(err => {
+                      console.error('Error marking notification as read:', err);
+                    });
                   }
                 }}
               >
@@ -379,14 +415,25 @@ export default function DashboardPage() {
                       ? 'from-green-500 to-emerald-500' 
                       : notif.type === 'conversation_deleted' 
                       ? 'from-red-500 to-pink-500'
+                      : notif.type === 'message'
+                      ? 'from-purple-500 to-blue-500'
                       : 'from-blue-500 to-cyan-500'
                   } flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
                     {notif.type === 'conversation_created' || notif.type === 'community_created' ? '🎉' : 
-                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
+                     notif.type === 'conversation_deleted' ? '🗑️' : 
+                     notif.type === 'message' ? '💬' : '🔔'}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-secondary-800 truncate">{notif.title}</p>
+                  {/* Show conversation name for group/community notifications */}
+                  {(notif.type === 'conversation_created' || notif.type === 'community_created') && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-blue-600 truncate">"{notif.data.conversationName}"</p>
+                  )}
+                  {/* Show conversation context for message notifications */}
+                  {notif.type === 'message' && notif.data?.conversationType && notif.data?.conversationType !== 'dm' && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-green-600 truncate">in "{notif.data.conversationName}"</p>
+                  )}
                   <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
                   <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>
                 </div>

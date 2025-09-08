@@ -923,12 +923,18 @@ io.on('connection', async socket => {
     try {
       await session.withTransaction(async () => {
         // Create and save the message
+        // Filter out invalid replyTo IDs (temp IDs are not valid ObjectIds)
+        let validReplyTo = null;
+        if (replyTo && mongoose.Types.ObjectId.isValid(replyTo)) {
+          validReplyTo = replyTo;
+        }
+        
         const message = new Message({
           conversation: conversationId,
           sender: userId,
           text,
           file,
-          replyTo,
+          replyTo: validReplyTo,
         });
         
         await message.save({ session });
@@ -999,9 +1005,6 @@ io.on('connection', async socket => {
         }
       });
       
-      // Also send to the conversation room for anyone currently viewing it
-      io.to(conversationId).emit('chat:new', messageForClient);
-      
       // Create and send notifications
       const messagePreview = text 
         ? (text.length > 50 ? text.substring(0, 50) + '...' : text)
@@ -1012,15 +1015,28 @@ io.on('connection', async socket => {
           // Skip notification for sender
           if (recipientId === userId) continue;
           
-          // Create notification
+          // Create notification with conversation context for better differentiation
+          const senderName = populatedMessage.sender.fullName || populatedMessage.sender.username;
+          let notificationTitle = senderName;
+          
+          // Add conversation context to differentiate DM vs Group/Community messages
+          if (conversation.type === 'group' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          } else if (conversation.type === 'community' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          }
+          // For DMs, keep it simple with just sender name
+          
           const notification = await createNotification(
             recipientId,
             userId,
             'message',
-            `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+            notificationTitle,
             messagePreview,
             {
               conversationId: conversationId,
+              conversationType: conversation.type,
+              conversationName: conversation.name,
               messageId: populatedMessage._id.toString(),
               senderAvatar: populatedMessage.sender.avatarUrl
             }
@@ -1122,9 +1138,6 @@ io.on('connection', async socket => {
                 io.to(memberSocket.socketId).emit('chat:read', readData);
               }
             });
-            
-            // Also send to the conversation room for anyone currently viewing it
-            io.to(conversation._id.toString()).emit('chat:read', readData);
             
             // Update in-memory status if it exists
             const status = messageStatus.get(messageId);

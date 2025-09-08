@@ -7,6 +7,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { ChatSocketProvider } from './context/ChatSocketContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
+import { CurrentConversationProvider } from './context/CurrentConversationContext.jsx';
 import { setupGlobalErrorHandlers, initializeErrorReporting } from './utils/errorHandler.js';
 import './index.css';
 
@@ -31,18 +32,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
     <AuthProvider>
       <SocketProvider>
-        <ChatSocketProvider>
-          <NotificationProvider>
-            <BrowserRouter
-              future={{
-                v7_startTransition: true,
-                v7_relativeSplatPath: true
-              }}
-            >
-              <App />
-            </BrowserRouter>
-          </NotificationProvider>
-        </ChatSocketProvider>
+        <CurrentConversationProvider>
+          <ChatSocketProvider>
+            <NotificationProvider>
+              <BrowserRouter
+                future={{
+                  v7_startTransition: true,
+                  v7_relativeSplatPath: true
+                }}
+              >
+                <App />
+              </BrowserRouter>
+            </NotificationProvider>
+          </ChatSocketProvider>
+        </CurrentConversationProvider>
       </SocketProvider>
     </AuthProvider>
   </GoogleOAuthProvider>

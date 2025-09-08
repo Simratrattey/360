@@ -82,12 +82,19 @@ export const getNotificationConfig = (type) => {
   };
 };
 
-export const shouldShowNotification = (notification) => {
-  // Don't show if user is on the conversation page for message notifications
-  if (notification.type === NOTIFICATION_TYPES.MESSAGE && 
-      window.location.pathname.startsWith('/messages') &&
-      new URLSearchParams(window.location.search).get('conversation') === notification.data?.conversationId) {
-    return false;
+export const shouldShowNotification = (notification, currentConversationId = null, isOnMessagesPage = false) => {
+  // Don't show message notifications for currently selected conversation
+  if (notification.type === NOTIFICATION_TYPES.MESSAGE) {
+    // If user is on messages page and this is the current conversation, don't show
+    if (isOnMessagesPage && currentConversationId === notification.data?.conversationId) {
+      return false;
+    }
+    
+    // Fallback: check URL parameter method (for backwards compatibility)
+    if (window.location.pathname.startsWith('/messages') &&
+        new URLSearchParams(window.location.search).get('conversation') === notification.data?.conversationId) {
+      return false;
+    }
   }
   
   // Always show conversation creation/deletion notifications (they're important)
