@@ -19,11 +19,6 @@ import Message from './src/models/message.js';
 import Conversation, { ReadReceipt } from './src/models/conversation.js';
 
 import { generateReply } from './llm.js';
-import { 
-  transcribeAudio, 
-  generateAudio, 
-  translateText 
-} from './realtime-speech/index.js';
 
 import authRoutes from './src/routes/auth.js';
 import authMiddleware from './src/middleware/auth.js';
@@ -242,262 +237,79 @@ app.use(
 );
 // ──────────────────────────────────────────────────────────────────────────
 
-// Bot reply endpoint:
-//  • If client POSTs multipart/form-data with field "audio", we STT → LLM.
-//  • Else if client POSTs JSON { text }, we skip STT and go straight to LLM.
-// Returns JSON { reply: "…assistant response text…" }.
+// Bot reply endpoint - text only
 app.post(
   '/api/bot/reply',
-  upload.single('audio'),           // parse an uploaded audio file
-  express.json({ limit: '1mb' }),   // parse JSON text fallback
+  express.json({ limit: '1mb' }),
   async (req, res) => {
     try {
-      let userText;
-
-      // 1) JSON text path (highest priority)
-      if (req.body?.text) {
-        userText = req.body.text;
-      }
-      // 2) Audio path
-      else if (req.file) {
-        // 1) Audio path: read and transcribe
-        const audioBuf = await fs.promises.readFile(req.file.path);
-        userText = await transcribeAudio(audioBuf, {
-          prompt:   '',        // optional STT prompt
-          language: 'auto',
-          translate: false
-        });
-      }
-      // 3) Neither provided
-      else {
-        return res.status(400).json({ error: 'No audio or text provided' });
+      const userText = req.body?.text;
+      
+      if (!userText) {
+        return res.status(400).json({ error: 'No text provided' });
       }
 
-      // 3) LLM reply
       const replyText = await generateReply(userText);
-
-      // 4) Return JSON
       return res.json({ reply: replyText });
     } catch (err) {
       console.error('❌ /api/bot/reply error:', err);
       return res.status(500).json({ error: 'Bot reply failed', details: err.toString() });
-    } finally {
-      // Clean up uploaded file
-      if (req.file) {
-        await fs.promises.unlink(req.file.path).catch(() => {/* ignore */});
-      }
     }
   }
 );
 
-// TTS endpoint: accepts { text } and returns audio bytes (Opus/WebM)
-app.post(
-  '/bot/tts',
-  express.json({ limit: '200kb' }),
-  async (req, res) => {
-    try {
-      const text = req.body?.text;
-      if (!text) return res.status(400).json({ error: 'No "text" provided' });
 
-      // 1) get the raw axios response from ElevenLabs
-      const elevenResp = await generateAudio(text);
-      const audioBuffer = Buffer.from(elevenResp.data);
-      const contentType = elevenResp.headers['content-type'] || 'application/octet-stream';
 
-      // 2) proxy back the exact Content-Type
-      res.set({
-        'Content-Type':        contentType,
-        'Content-Length':      audioBuffer.length,
-        'Cache-Control':       'no-cache'
-      });
-      return res.send(audioBuffer);
-    } catch (err) {
-      // Unwrap any Buffer payload from Axios
-      let detail = err.response?.data;
-      if (detail && Buffer.isBuffer(detail)) {
-        const str = detail.toString('utf8');
-        try {
-          detail = JSON.parse(str);
-        } catch {
-          detail = str;
-        }
-      }
-      console.error('❌ /bot/tts error:', err.message, detail);
-      return res.status(500).json({
-        error:   'TTS generation failed',
-        details: detail || err.message
-      });
-    }
-  }
-);
 
-// Translation endpoint: accepts { text, sourceLanguage, targetLanguage }
-app.post(
-  '/api/translate',
-  express.json({ limit: '200kb' }),
-  async (req, res) => {
-    try {
-      const { text, sourceLanguage = 'auto', targetLanguage = 'en' } = req.body;
-      
-      if (!text) {
-        return res.status(400).json({ error: 'No "text" provided' });
-      }
 
-      const translatedText = await translateText(text, sourceLanguage, targetLanguage);
-      
-      return res.json({ 
-        originalText: text,
-        translatedText,
-        sourceLanguage,
-        targetLanguage
-      });
-
-    } catch (err) {
-      console.error('❌ /api/translate error:', err.message);
-      return res.status(500).json({
-        error: 'Translation failed',
-        details: err.message
-      });
-    }
-  }
-);
-
-// STT endpoint with fallback for non-FFmpeg environments
-app.post(
-  '/api/stt',
-  upload.single('audio'),
-  async (req, res) => {
-    try {
-      console.log('[STT] Request received:', {
-        hasFile: !!req.file,
-        body: req.body,
-        fileSize: req.file?.size,
-        filename: req.file?.filename,
-        mimetype: req.file?.mimetype
-      });
-
-      if (!req.file) {
-        console.error('[STT] No audio file provided');
-        return res.status(400).json({ error: 'No audio file provided' });
-      }
-
-      console.log('[STT] Reading audio file...');
-      const audioBuffer = await fs.promises.readFile(req.file.path);
-      const { language = 'auto', translate = false } = req.body;
-      
-      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, language=${language}, translate=${translate}`);
-      console.log(`[STT] GROQ_API_KEY exists: ${!!process.env.GROQ_API_KEY}`);
-      
-      const transcription = await transcribeAudio(audioBuffer, {
-        language,
-        translate: translate === 'true'
-      });
-      
-      console.log(`[STT] Transcription successful: ${transcription}`);
-      
-      return res.json({ 
-        transcription,
-        language,
-        translate
-      });
-
-    } catch (err) {
-      console.error('❌ /api/stt error:', err.message);
-      console.error('❌ /api/stt stack:', err.stack);
-      return res.status(500).json({
-        error: 'Speech-to-text failed',
-        details: err.message
-      });
-    } finally {
-      // Clean up uploaded file
-      if (req.file) {
-        await fs.promises.unlink(req.file.path).catch(() => {});
-      }
-    }
-  }
-);
-
-// STT health check endpoint
-app.get('/api/stt-health', async (req, res) => {
-  try {
-    const { transcribeAudio } = await import('./realtime-speech/index.js');
-    res.json({ 
-      status: 'ok',
-      sttAvailable: typeof transcribeAudio === 'function',
-      groqKeyConfigured: !!process.env.GROQ_API_KEY,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    res.json({ 
-      status: 'error', 
-      error: err.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// AssemblyAI ephemeral token proxy (returns your permanent key as a short-lived token
-// NOTE: For production, consider using AssemblyAI's proper ephemeral token flow if available)
+// AssemblyAI ephemeral token generation
 app.post('/api/stt/token', authMiddleware, async (req, res) => {
   try {
-    const key = process.env.ASSEMBLYAI_API_KEY;
-    if (!key) return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
-    // Minimal proxy: return key with an expiry hint so client can reconnect before timeout
-    return res.json({ token: key, expiresAt: Date.now() + 1000 * 60 * 10 });
-  } catch (err) {
-    return res.status(500).json({ error: 'Failed to mint token' });
-  }
-});
-
-// Test FFmpeg availability endpoint
-app.get('/api/test-ffmpeg', async (req, res) => {
-  try {
-    const { checkFFmpegAvailable } = await import('./realtime-speech/audioConverter.js');
-    const available = await checkFFmpegAvailable();
-    res.json({ ffmpegAvailable: available });
-  } catch (err) {
-    res.json({ ffmpegAvailable: false, error: err.message });
-  }
-});
-
-// Debug STT endpoint (for testing without real API keys)
-app.post('/api/stt-debug', upload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
+    const apiKey = process.env.ASSEMBLYAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
     }
 
-    const audioBuffer = await fs.promises.readFile(req.file.path);
-    const { language = 'auto', translate = false } = req.body;
+    const { expires_in_seconds = 600 } = req.body;
     
-    console.log(`[STT-DEBUG] Processing ${audioBuffer.length} bytes of audio`);
-    console.log(`[STT-DEBUG] Language: ${language}, Translate: ${translate}`);
-    console.log(`[STT-DEBUG] GROQ_API_KEY set: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
-    console.log(`[STT-DEBUG] GROQ_API_KEY value: ${process.env.GROQ_API_KEY?.substring(0, 10)}...`);
-    
-    // Return mock transcription for testing
-    const mockTranscription = `Mock transcription for ${audioBuffer.length} bytes of audio data`;
-    
-    return res.json({ 
-      transcription: mockTranscription,
-      language,
-      translate,
-      debug: true
-    });
+    // Generate ephemeral token from AssemblyAI
+    const tokenResponse = await fetch(
+      `https://streaming.assemblyai.com/v3/token?expires_in_seconds=${expires_in_seconds}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': apiKey
+        }
+      }
+    );
 
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error('AssemblyAI token generation failed:', errorData);
+      return res.status(500).json({ 
+        error: 'Failed to generate ephemeral token',
+        details: errorData
+      });
+    }
+
+    const tokenData = await tokenResponse.json();
+    
+    return res.json({
+      token: tokenData.token,
+      expiresIn: tokenData.expires_in_seconds,
+      expiresAt: Date.now() + (tokenData.expires_in_seconds * 1000)
+    });
+    
   } catch (err) {
-    console.error('❌ /api/stt-debug error:', err.message);
-    return res.status(500).json({
-      error: 'STT debug failed',
+    console.error('Token generation error:', err);
+    return res.status(500).json({ 
+      error: 'Failed to generate ephemeral token',
       details: err.message
     });
-  } finally {
-    // Clean up uploaded file
-    if (req.file) {
-      await fs.promises.unlink(req.file.path).catch(() => {});
-    }
   }
 });
+
+
 // ─────────────────────────────────────────────────────────────────────
 
 // Health check for Render

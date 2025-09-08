@@ -10,7 +10,6 @@ import { AuthContext } from '../context/AuthContext';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
-import SubtitleService from '../api/subtitleService';
 import AssemblyRealtimeClient from '../api/assemblyClient';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
@@ -467,12 +466,7 @@ export default function MeetingPage() {
         }
       }
       
-      // Start processing this stream only for multilingual mode (Assembly handles subtitles)
-      if (multilingualEnabled && stream.getAudioTracks().length > 0) {
-        const participantName = participantMap[id];
-        console.log(`Starting audio processing for ${participantName} (${id})`);
-        startRemoteStreamRecognition(stream, id, participantName);
-      }
+      // Audio processing for multilingual mode removed - using AssemblyAI only
     });
     
     // Cleanup audio analyzers for streams that are no longer present or participants who have left
@@ -1778,21 +1772,7 @@ To convert to MP4:
     }
   };
 
-  // Handle new remote participants joining during active multilingual processing
-  useEffect(() => {
-    if (multilingualEnabled && remoteStreams.size > 0) {
-      // Start recognition for any new remote streams
-      remoteStreams.forEach((stream, peerId) => {
-        // Skip departed participants
-        if (participantMap[peerId] === undefined) return;
-        
-        if (!speechRecognitionRef.current?.has(peerId)) {
-          const participantName = participantMap[peerId];
-          startRemoteStreamRecognition(stream, peerId, participantName);
-        }
-      });
-    }
-  }, [remoteStreams, multilingualEnabled, participantMap]);
+  // Multilingual processing removed - using AssemblyAI only
 
   const stopSubtitles = () => {
     console.log('🛑 Stopping subtitles for all participants...');
