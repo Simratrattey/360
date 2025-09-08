@@ -88,10 +88,16 @@ export class AssemblyRealtimeClient {
   // Send Int16Array PCM frame (mono, sampleRate)
   sendPcmFrame(int16) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    
+    // Convert Int16Array to base64 string for v3 streaming API
     const base64 = btoa(
       String.fromCharCode(...new Uint8Array(int16.buffer))
     );
-    this.ws.send(JSON.stringify({ audio_data: base64 }));
+    
+    // v3 streaming API expects raw base64 string, not JSON
+    this.ws.send(base64);
+    
+    console.log('📡 Sent audio frame:', int16.length, 'samples,', base64.length, 'base64 chars');
   }
 
   close() {
