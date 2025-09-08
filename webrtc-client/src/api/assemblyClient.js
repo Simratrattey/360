@@ -23,7 +23,7 @@ export class AssemblyRealtimeClient {
       }
       
       console.log('✅ Token received, length:', token.length);
-      const url = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=${this.sampleRate}&token=${token}`;
+      const url = `wss://streaming.assemblyai.com/v3/ws?sample_rate=${this.sampleRate}&token=${token}`;
       console.log('🔗 Connecting to AssemblyAI WebSocket with token...');
 
       return new Promise((resolve, reject) => {
