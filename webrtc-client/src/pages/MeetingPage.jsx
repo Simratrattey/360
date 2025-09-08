@@ -57,7 +57,9 @@ export default function MeetingPage() {
   const [activeAudioSources, setActiveAudioSources] = useState(new Map());
   const audioContextRef = useRef(null);
   const speechRecognitionRef = useRef(null);
-  const assemblyRef = useRef(null);
+  const assemblyRef = useRef(null); // Legacy ref (not used in new implementation)
+  const assemblyClientsRef = useRef(null); // Map of peerId -> AssemblyAI client
+  const audioProcessorsRef = useRef(null); // Map of peerId -> audio processor
   const pcmWorkerRef = useRef(null);
 
   // Supported languages for subtitles and translation
@@ -1072,67 +1074,99 @@ To convert to MP4:
     };
   };
 
-  // Speech recognition for subtitles - processes remote participant audio only
+  // Speech recognition for subtitles - processes each participant separately
   const startSubtitles = async () => {
-    console.log('Starting AssemblyAI realtime subtitles');
+    console.log('Starting AssemblyAI realtime subtitles for individual participants');
     setSubtitlesEnabled(true);
     subtitlesEnabledRef.current = true;
 
-    // Create AAI client
-    const client = new AssemblyRealtimeClient({
-      sampleRate: 16000,
-      onPartial: () => {},
-      onFinal: (evt) => {
-        const text = evt.text?.trim();
-        if (!text) return;
-        const subtitleEntry = {
-          id: `aai-${Date.now()}`,
-          original: text,
-          translated: null,
-          text,
-          timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-          speaker: 'Live',
-          sourceLanguage: 'en',
-          targetLanguage: 'en',
-          isTranslated: false,
-          createdAt: Date.now()
-        };
-        setSubtitleHistory(prev => {
-          const updated = [...prev.slice(-4), subtitleEntry];
-          setTimeout(() => {
-            setSubtitleHistory(cur => cur.filter(s => s.id !== subtitleEntry.id));
-          }, 8000);
-          return updated;
-        });
-      },
-      onError: (e) => console.warn('Assembly error', e),
-      onClose: () => console.log('Assembly socket closed')
-    });
-    await client.connect();
-    assemblyRef.current = client;
-
-    // Create mixed audio and start resampling to 16k mono PCM frames
-    const mixed = await createMixedAudioStream();
-    if (!mixed) return;
-
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const source = audioCtx.createMediaStreamSource(mixed);
-    const processor = audioCtx.createScriptProcessor(2048, 1, 1);
-    source.connect(processor);
-    processor.connect(audioCtx.destination);
-    pcmWorkerRef.current = { audioCtx, processor };
-
-    processor.onaudioprocess = (e) => {
-      if (!subtitlesEnabledRef.current) return;
-      const input = e.inputBuffer.getChannelData(0);
-      // Float32 [-1,1] → Int16 PCM
-      const int16 = new Int16Array(input.length);
-      for (let i = 0; i < input.length; i++) {
-        const s = Math.max(-1, Math.min(1, input[i]));
-        int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    // Process each remote participant's audio stream separately
+    remoteStreams.forEach((stream, peerId) => {
+      const participantName = participantMap[peerId];
+      if (participantName && stream.getAudioTracks().length > 0) {
+        console.log(`Setting up subtitles for ${participantName} (${peerId})`);
+        startParticipantSubtitles(stream, peerId, participantName);
       }
-      assemblyRef.current?.sendPcmFrame(int16);
-    };
+    });
+  };
+
+  // Process individual participant audio for subtitles
+  const startParticipantSubtitles = async (stream, peerId, participantName) => {
+    try {
+      // Create separate AssemblyAI client for this participant
+      const client = new AssemblyRealtimeClient({
+        sampleRate: 16000,
+        onPartial: (evt) => {
+          const text = evt.text?.trim();
+          if (!text) return;
+          console.log(`[${participantName}] Partial: ${text}`);
+        },
+        onFinal: (evt) => {
+          const text = evt.text?.trim();
+          if (!text) return;
+          console.log(`[${participantName}] Final: ${text}`);
+          
+          const subtitleEntry = {
+            id: `${peerId}-${Date.now()}`,
+            original: text,
+            translated: null,
+            text,
+            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            speaker: participantName, // Show actual participant name
+            sourceLanguage: 'en',
+            targetLanguage: 'en',
+            isTranslated: false,
+            createdAt: Date.now()
+          };
+          
+          setSubtitleHistory(prev => {
+            const updated = [...prev.slice(-4), subtitleEntry];
+            setTimeout(() => {
+              setSubtitleHistory(cur => cur.filter(s => s.id !== subtitleEntry.id));
+            }, 8000);
+            return updated;
+          });
+        },
+        onError: (e) => console.warn(`Assembly error for ${participantName}:`, e),
+        onClose: () => console.log(`Assembly socket closed for ${participantName}`)
+      });
+
+      await client.connect();
+      
+      // Store client for cleanup
+      if (!assemblyClientsRef.current) {
+        assemblyClientsRef.current = new Map();
+      }
+      assemblyClientsRef.current.set(peerId, client);
+
+      // Create audio context for this participant
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      processor.onaudioprocess = (e) => {
+        if (!subtitlesEnabledRef.current) return;
+        const input = e.inputBuffer.getChannelData(0);
+        // Float32 [-1,1] → Int16 PCM
+        const int16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        client.sendPcmFrame(int16);
+      };
+
+      // Store audio context for cleanup
+      if (!audioProcessorsRef.current) {
+        audioProcessorsRef.current = new Map();
+      }
+      audioProcessorsRef.current.set(peerId, { audioCtx, processor });
+
+    } catch (error) {
+      console.error(`Failed to setup subtitles for ${participantName}:`, error);
+    }
   };
 
   // Process individual remote stream for speech recognition
@@ -1776,7 +1810,35 @@ To convert to MP4:
 
   const stopSubtitles = () => {
     console.log('🛑 Stopping subtitles for all participants...');
-    // Close Assembly client
+    
+    // Close all individual AssemblyAI clients
+    if (assemblyClientsRef.current) {
+      assemblyClientsRef.current.forEach((client, peerId) => {
+        try {
+          console.log(`🛑 Closing AssemblyAI client for ${peerId}`);
+          client.close();
+        } catch (error) {
+          console.warn(`Failed to close client for ${peerId}:`, error);
+        }
+      });
+      assemblyClientsRef.current.clear();
+    }
+
+    // Close all audio processors
+    if (audioProcessorsRef.current) {
+      audioProcessorsRef.current.forEach((processor, peerId) => {
+        try {
+          console.log(`🛑 Closing audio processor for ${peerId}`);
+          processor.processor.disconnect();
+          processor.audioCtx.close();
+        } catch (error) {
+          console.warn(`Failed to close audio processor for ${peerId}:`, error);
+        }
+      });
+      audioProcessorsRef.current.clear();
+    }
+
+    // Legacy cleanup (for backward compatibility)
     if (assemblyRef.current) {
       try { assemblyRef.current.close(); } catch {}
       assemblyRef.current = null;
