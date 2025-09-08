@@ -270,7 +270,7 @@ app.post('/api/stt/token', authMiddleware, async (req, res) => {
       return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
     }
 
-    const { expires_in_seconds = 600 } = req.body;
+    const { expires_in_seconds = 300 } = req.body; // Reduced to 5 minutes for testing
     
     // Generate ephemeral token from AssemblyAI
     const tokenResponse = await fetch(

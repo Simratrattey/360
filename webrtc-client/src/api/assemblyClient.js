@@ -23,8 +23,8 @@ export class AssemblyRealtimeClient {
       }
       
       console.log('✅ Token received, length:', token.length);
-      const url = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=${this.sampleRate}&token=${encodeURIComponent(token)}`;
-      console.log('🔗 Connecting to AssemblyAI WebSocket...');
+      const url = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=${this.sampleRate}&token=${token}`;
+      console.log('🔗 Connecting to AssemblyAI WebSocket with token...');
 
       return new Promise((resolve, reject) => {
         const ws = new WebSocket(url);
@@ -53,15 +53,25 @@ export class AssemblyRealtimeClient {
         ws.onmessage = (msg) => {
           try {
             const evt = JSON.parse(msg.data);
-            console.log('📨 AssemblyAI message:', evt.message_type, evt.text || '');
+            console.log('📨 AssemblyAI message:', evt.type, evt.transcript || evt.error || '');
             
-            if (evt.message_type === 'partial_transcript') {
-              this.onPartial && this.onPartial(evt);
-            } else if (evt.message_type === 'final_transcript') {
-              this.onFinal && this.onFinal(evt);
-            } else if (evt.message_type === 'error') {
-              console.error('❌ AssemblyAI error message:', evt);
+            if (evt.type === 'Begin') {
+              console.log('🎬 AssemblyAI session started:', evt.id);
+            } else if (evt.type === 'Turn') {
+              if (evt.end_of_turn) {
+                // Final transcript
+                this.onFinal && this.onFinal({ text: evt.transcript });
+              } else {
+                // Partial transcript
+                this.onPartial && this.onPartial({ text: evt.transcript });
+              }
+            } else if (evt.type === 'Termination') {
+              console.log('🏁 AssemblyAI session terminated');
+            } else if (evt.type === 'Error') {
+              console.error('❌ AssemblyAI error:', evt);
               this.onError && this.onError(new Error(evt.error || 'AssemblyAI error'));
+            } else {
+              console.log('🤔 Unknown AssemblyAI message type:', evt.type, evt);
             }
           } catch (err) {
             console.error('❌ Error parsing AssemblyAI message:', err, msg.data);
