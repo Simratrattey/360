@@ -12,7 +12,9 @@ import {
   MessageSquare,
   CheckCircle2,
   AlertCircle,
-  FileText
+  FileText,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import API from '../api/client.js';
@@ -21,8 +23,9 @@ const MeetingDetailsModal = ({ isOpen, onClose, meetingId }) => {
   const [meeting, setMeeting] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'transcript'
+  const [activeTab, setActiveTab] = useState('details'); // 'details', 'summary', or 'transcript'
   const [copySuccess, setCopySuccess] = useState(false);
+  const [regeneratingSummary, setRegeneratingSummary] = useState(false);
 
   useEffect(() => {
     if (isOpen && meetingId) {
@@ -73,6 +76,52 @@ const MeetingDetailsModal = ({ isOpen, onClose, meetingId }) => {
       const a = document.createElement('a');
       a.href = url;
       a.download = `${meeting.title.replace(/[^a-z0-9]/gi, '_')}_transcript.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const regenerateSummary = async () => {
+    try {
+      setRegeneratingSummary(true);
+      const response = await API.post(`/meetings/${meetingId}/regenerate-summary`);
+      
+      if (response.data.success) {
+        // Update the meeting with the new summary
+        setMeeting(prev => ({
+          ...prev,
+          summary: response.data.summary
+        }));
+        // Switch to summary tab to show the updated content
+        setActiveTab('summary');
+      } else {
+        console.error('Failed to regenerate summary:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error regenerating summary:', error);
+    } finally {
+      setRegeneratingSummary(false);
+    }
+  };
+
+  const copySummaryToClipboard = () => {
+    if (meeting && meeting.summary) {
+      navigator.clipboard.writeText(meeting.summary).then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      });
+    }
+  };
+
+  const downloadSummary = () => {
+    if (meeting && meeting.summary) {
+      const blob = new Blob([meeting.summary], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${meeting.title.replace(/[^a-z0-9]/gi, '_')}_summary.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -172,6 +221,22 @@ const MeetingDetailsModal = ({ isOpen, onClose, meetingId }) => {
                   >
                     <FileText className="h-4 w-4 inline mr-2" />
                     Details
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('summary')}
+                    className={`px-6 py-4 font-medium transition-colors ${
+                      activeTab === 'summary'
+                        ? 'border-b-2 border-blue-500 text-blue-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Sparkles className="h-4 w-4 inline mr-2" />
+                    AI Summary
+                    {meeting.summary && (
+                      <span className="ml-1 text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
+                        AI
+                      </span>
+                    )}
                   </button>
                   <button
                     onClick={() => setActiveTab('transcript')}
@@ -301,6 +366,82 @@ const MeetingDetailsModal = ({ isOpen, onClose, meetingId }) => {
                           </div>
                         </div>
                       </div>
+                    </div>
+                  ) : activeTab === 'summary' ? (
+                    <div className="p-6">
+                      {meeting.summary ? (
+                        <>
+                          {/* Summary Actions */}
+                          <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                              <Sparkles className="h-5 w-5 text-purple-500" />
+                              AI-Generated Meeting Summary
+                            </h3>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={regenerateSummary}
+                                disabled={regeneratingSummary}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                                  regeneratingSummary
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                                }`}
+                              >
+                                <RefreshCw className={`h-4 w-4 ${regeneratingSummary ? 'animate-spin' : ''}`} />
+                                {regeneratingSummary ? 'Regenerating...' : 'Regenerate'}
+                              </button>
+                              <button
+                                onClick={copySummaryToClipboard}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                                  copySuccess
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                <Copy className="h-4 w-4" />
+                                {copySuccess ? 'Copied!' : 'Copy'}
+                              </button>
+                              <button
+                                onClick={downloadSummary}
+                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                              >
+                                <Download className="h-4 w-4" />
+                                Download
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Summary Content */}
+                          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-6 max-h-96 overflow-y-auto">
+                            <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
+                              {meeting.summary}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-64 text-center">
+                          <Sparkles className="h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900">No AI Summary Available</h3>
+                          <p className="text-gray-600 mt-2 mb-4">
+                            This meeting doesn't have an AI-generated summary yet. If a transcript is available, 
+                            you can generate one now.
+                          </p>
+                          {meeting.hasTranscript && (
+                            <button
+                              onClick={regenerateSummary}
+                              disabled={regeneratingSummary}
+                              className={`px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                                regeneratingSummary
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : 'bg-purple-500 text-white hover:bg-purple-600'
+                              }`}
+                            >
+                              <Sparkles className={`h-5 w-5 ${regeneratingSummary ? 'animate-pulse' : ''}`} />
+                              {regeneratingSummary ? 'Generating AI Summary...' : 'Generate AI Summary'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="p-6">

@@ -162,14 +162,37 @@ MeetingSchema.methods.generateSummary = async function() {
       // Link the transcript to this meeting
       this.transcript = transcript._id;
       
-      // For now, use the transcript as the summary
-      // In the future, this could be enhanced with AI summarization
+      console.log(`[Meeting] Found transcript for meeting ${this._id} with ${transcript.entries.length} entries`);
+      
+      // Try to generate AI summary if Gemini is configured
+      try {
+        const { summarizeMeeting, validateGeminiConfig } = await import('../services/geminiSummaryService.js');
+        
+        if (validateGeminiConfig()) {
+          console.log(`[Meeting] Generating AI summary for meeting: ${this.title}`);
+          const aiSummary = await summarizeMeeting(transcript.entries, this.title);
+          
+          if (aiSummary) {
+            this.summary = aiSummary;
+            console.log(`[Meeting] ✅ AI summary generated for meeting ${this._id}`);
+            return;
+          } else {
+            console.log(`[Meeting] AI summary failed, falling back to transcript text`);
+          }
+        } else {
+          console.log(`[Meeting] Gemini not configured, using transcript text`);
+        }
+      } catch (aiError) {
+        console.error('[Meeting] Error with AI summarization, falling back to transcript:', aiError);
+      }
+      
+      // Fallback: Use formatted transcript as summary
       const transcriptText = transcript.entries
         .map(entry => `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`)
         .join('\n');
       
       this.summary = transcriptText;
-      console.log(`[Meeting] Generated summary for meeting ${this._id} with ${transcript.entries.length} transcript entries`);
+      console.log(`[Meeting] Generated fallback summary for meeting ${this._id} with ${transcript.entries.length} transcript entries`);
     } else {
       console.log(`[Meeting] No transcript found for meeting ${this._id} (roomId: ${this.roomId})`);
     }

@@ -283,5 +283,52 @@ router.get('/:id/details', authMiddleware, async (req, res) => {
   }
 });
 
+// Regenerate AI summary for a meeting
+router.post('/:id/regenerate-summary', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    // Find the meeting and check if user has access
+    const meeting = await Meeting.findById(id);
+    
+    if (!meeting) {
+      return res.status(404).json({
+        success: false,
+        error: 'Meeting not found'
+      });
+    }
+    
+    // Check if user was a participant or organizer
+    const hasAccess = meeting.organizer.toString() === userId ||
+                     meeting.participantSessions?.some(session => 
+                       session.userId.toString() === userId);
+    
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You were not a participant in this meeting.'
+      });
+    }
+    
+    // Regenerate the summary
+    await meeting.generateSummary();
+    await meeting.save();
+    
+    res.json({
+      success: true,
+      message: 'Summary regenerated successfully',
+      summary: meeting.summary
+    });
+    
+  } catch (error) {
+    console.error('Error regenerating meeting summary:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to regenerate meeting summary'
+    });
+  }
+});
+
 // ← add this if it isn't there already:
 export default router;
