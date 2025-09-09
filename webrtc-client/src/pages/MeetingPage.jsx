@@ -432,6 +432,8 @@ export default function MeetingPage() {
       audioTracks: stream.getAudioTracks().length
     })));
     
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    
     remoteStreams.forEach((stream, id) => {
       // Skip processing for participants who have left (not in participantMap)
       if (participantMap[id] === undefined) {
@@ -445,19 +447,10 @@ export default function MeetingPage() {
 
       // Start transcript recording for this remote participant (only if 2+ participants total)
       const participantName = participantMap[id];
-      const totalParticipants = remoteStreams.size + 1; // +1 for local user
       if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
         if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
           console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
           startParticipantTranscriptRecording(stream, id, participantName);
-        }
-        
-        // Also start local transcript recording if not already started and we have local stream
-        if (localStream && localStream.getAudioTracks().length > 0) {
-          if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
-            console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
-            startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
-          }
         }
       }
       const videoElement = document.getElementById(`remote-video-${id}`);
@@ -494,6 +487,14 @@ export default function MeetingPage() {
       
       // Audio processing for multilingual mode removed - using AssemblyAI only
     });
+
+    // Start local transcript recording if conditions are met (outside the loop to avoid duplicates)
+    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
+      if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
+        console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
+        startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+      }
+    }
     
     // Cleanup audio analyzers for streams that are no longer present or participants who have left
     const currentStreamIds = new Set(Array.from(remoteStreams.keys()));
@@ -1157,8 +1158,13 @@ To convert to MP4:
   // Process individual participant audio for continuous transcript recording
   const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
+      // Initialize the clients ref if it doesn't exist
+      if (!assemblyClientsRef.current) {
+        assemblyClientsRef.current = new Map();
+      }
+
       // Check if client already exists for this participant
-      if (assemblyClientsRef.current && assemblyClientsRef.current.has(peerId)) {
+      if (assemblyClientsRef.current.has(peerId)) {
         console.log(`⚠️ AssemblyAI client already exists for ${participantName} (${peerId}) - skipping`);
         return;
       }
@@ -1889,14 +1895,11 @@ To convert to MP4:
     }
   };
 
-  // Auto-start transcript recording when there are 2+ participants
+  // Log participant status - transcript recording handled by remote streams useEffect
   useEffect(() => {
     const totalParticipants = remoteStreams.size + 1; // +1 for local user
     if (totalParticipants >= 2) {
-      console.log(`🎙️ Meeting has ${totalParticipants} participants, starting transcript recording...`);
-      console.log(`🔍 Current remoteStreams:`, Array.from(remoteStreams.keys()));
-      console.log(`🔍 Current participantMap:`, participantMap);
-      startTranscriptRecording();
+      console.log(`🎙️ Meeting has ${totalParticipants} participants - transcript recording will be managed by stream handlers`);
     } else {
       console.log(`⏸️ Only ${totalParticipants} participant(s) in meeting - transcript recording will start when 2+ participants join`);
     }
