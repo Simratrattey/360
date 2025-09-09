@@ -297,6 +297,27 @@ export default function MessagesPage() {
   const fetchDebounceRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
 
+  // Helper function to sort conversations with avatar always at top
+  const sortConversationsWithAvatarTop = (conversations) => {
+    return conversations.sort((a, b) => {
+      // Check if either conversation is an avatar conversation
+      const aIsAvatar = a.conversationType === 'ai_avatar' || a.settings?.isAvatarConversation;
+      const bIsAvatar = b.conversationType === 'ai_avatar' || b.settings?.isAvatarConversation;
+      
+      // Avatar conversations always go to the top
+      if (aIsAvatar && !bIsAvatar) return -1;
+      if (!aIsAvatar && bIsAvatar) return 1;
+      
+      // If both are avatar conversations, sort by creation (but this is unlikely)
+      if (aIsAvatar && bIsAvatar) return 0;
+      
+      // Normal sorting by last message date for non-avatar conversations
+      const dateA = new Date(a.lastMessageAt || a.createdAt);
+      const dateB = new Date(b.lastMessageAt || b.createdAt);
+      return dateB - dateA;
+    });
+  };
+
   // Define fetchConversations function early to avoid hoisting issues  
   const fetchConversations = useCallback(async (forceRefresh = false) => {
     try {
@@ -311,8 +332,20 @@ export default function MessagesPage() {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
       
-      // Sort conversations by lastMessageAt within each type
+      // Sort conversations by lastMessageAt within each type, but keep avatar conversations at top
       const sortByLastMessage = (a, b) => {
+        // Check if either conversation is an avatar conversation
+        const aIsAvatar = a.conversationType === 'ai_avatar' || a.settings?.isAvatarConversation;
+        const bIsAvatar = b.conversationType === 'ai_avatar' || b.settings?.isAvatarConversation;
+        
+        // Avatar conversations always go to the top
+        if (aIsAvatar && !bIsAvatar) return -1;
+        if (!aIsAvatar && bIsAvatar) return 1;
+        
+        // If both are avatar conversations, sort by creation (but this is unlikely)
+        if (aIsAvatar && bIsAvatar) return 0;
+        
+        // Normal sorting by last message date for non-avatar conversations
         const dateA = new Date(a.lastMessageAt || a.createdAt);
         const dateB = new Date(b.lastMessageAt || b.createdAt);
         return dateB - dateA;
@@ -346,9 +379,8 @@ export default function MessagesPage() {
       const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
       const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
       
-      // Combine all conversations into a single unified list, sorted by most recent
-      let allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
-        .sort(sortByLastMessage);
+      // Combine all conversations into a single unified list, sorted by most recent with avatar at top
+      let allConversationsUnified = sortConversationsWithAvatarTop([...dmConversations, ...groupConversations, ...communityConversations]);
       
       // Add avatar conversation at the top - ALWAYS add it for testing
       const userId = user?._id || user?.id;
@@ -1825,6 +1857,56 @@ export default function MessagesPage() {
       return;
     }
 
+    // Special handling for avatar conversations
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Handling avatar conversation message');
+      setIsSending(true);
+      
+      try {
+        // Clear input immediately
+        const messageText = input.trim();
+        setInput('');
+        setReplyTo(null);
+        
+        // Create user message and add it to the conversation
+        const userId = user?._id || user?.id;
+        const userMessage = {
+          _id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          conversationId: selected._id,
+          senderId: userId,
+          senderName: user?.fullName || user?.username || 'You',
+          text: messageText,
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: false
+        };
+        
+        // Add user message to messages
+        setMessages(prevMessages => [...prevMessages, userMessage]);
+        
+        // Process avatar response
+        if (processAvatarQuery) {
+          console.log('🤖 MessagesPage: Processing avatar query:', messageText);
+          const avatarResponse = await processAvatarQuery(messageText);
+          console.log('🤖 MessagesPage: Got avatar response:', avatarResponse);
+          
+          // Handle the avatar response
+          await handleAvatarResponse(avatarResponse);
+        }
+        
+      } catch (error) {
+        console.error('🤖 MessagesPage: Error handling avatar message:', error);
+        setNotification({
+          message: 'Failed to process avatar message. Please try again.'
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } finally {
+        setIsSending(false);
+      }
+      
+      return; // Exit early, don't continue with normal message sending
+    }
+
     setIsSending(true);
     setUploadProgress(0);
 
@@ -2003,6 +2085,9 @@ export default function MessagesPage() {
               }
               return conv;
             })
+          })).map(section => ({
+            ...section,
+            items: sortConversationsWithAvatarTop(section.items)
           }));
           return updatedSections;
         });
