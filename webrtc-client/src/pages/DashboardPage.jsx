@@ -71,16 +71,37 @@ export default function DashboardPage() {
     try {
       setDashboardLoading(true);
       
-      // Load dashboard statistics
-      const statsResponse = await API.get('/dashboard/stats');
+      // Make parallel requests for better performance
+      const [statsResponse, meetingsResponse] = await Promise.all([
+        API.get('/dashboard/stats').catch(err => {
+          console.error('Error loading stats:', err);
+          return { data: { success: false } };
+        }),
+        API.get('/dashboard/recent-meetings').catch(err => {
+          console.error('Error loading meetings:', err);
+          return { data: { success: false } };
+        })
+      ]);
+      
+      // Handle stats response
       if (statsResponse.data.success) {
         setStats(statsResponse.data.stats);
+      } else {
+        console.warn('Stats API failed, using fallback');
+        setStats([
+          { name: 'Total Meetings', value: '0', icon: 'Video', change: '0%', changeType: 'neutral' },
+          { name: 'Active Contacts', value: '0', icon: 'Users', change: '0%', changeType: 'neutral' },
+          { name: 'Hours This Week', value: '0', icon: 'Clock', change: '0%', changeType: 'neutral' },
+          { name: 'Upcoming', value: '0', icon: 'Calendar', change: '0%', changeType: 'neutral' },
+        ]);
       }
       
-      // Load recent meetings
-      const meetingsResponse = await API.get('/dashboard/recent-meetings');
+      // Handle meetings response
       if (meetingsResponse.data.success) {
         setRecentMeetings(meetingsResponse.data.meetings);
+      } else {
+        console.warn('Recent meetings API failed, using empty array');
+        setRecentMeetings([]);
       }
       
     } catch (error) {
