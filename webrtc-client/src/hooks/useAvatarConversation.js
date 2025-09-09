@@ -28,23 +28,49 @@ export const useAvatarConversation = () => {
 
       console.log('🤖 Hook: Initializing avatar conversation for user:', user._id);
 
-      // Check if avatar conversation already exists
-      const conversations = await API.get('/conversations');
-      const existingAvatarConv = conversations.data.find(conv => 
-        conv.conversationType === 'ai_avatar' || 
-        conv.settings?.isAvatarConversation === true ||
-        conv.name === 'Avatar'
-      );
+      // For now, create a client-side avatar conversation object
+      // This doesn't require backend changes and will appear in the UI
+      const avatarConversationObj = {
+        _id: `avatar_conversation_${user._id}`,
+        name: 'Avatar',
+        type: 'dm',
+        conversationType: 'ai_avatar',
+        members: [
+          {
+            _id: user._id,
+            fullName: user.fullName || user.username,
+            username: user.username,
+            email: user.email
+          },
+          {
+            _id: 'avatar_system_user',
+            fullName: 'Avatar',
+            username: 'avatar',
+            userType: 'ai_avatar',
+            isSystem: true
+          }
+        ],
+        lastMessage: {
+          text: 'Ask me anything about your projects and videos!',
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          timestamp: new Date().toISOString()
+        },
+        lastMessageAt: new Date().toISOString(),
+        unread: 0,
+        settings: {
+          isAvatarConversation: true,
+          aiEnabled: true,
+          allowMentions: true,
+          isPermanent: true,
+          alwaysOnTop: true
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-      if (existingAvatarConv) {
-        console.log('🤖 Hook: Found existing avatar conversation:', existingAvatarConv._id);
-        setAvatarConversation(existingAvatarConv);
-      } else {
-        // Create new avatar conversation
-        console.log('🤖 Hook: Creating new avatar conversation');
-        const newAvatarConv = await createAvatarConversation();
-        setAvatarConversation(newAvatarConv);
-      }
+      console.log('🤖 Hook: Created client-side avatar conversation:', avatarConversationObj._id);
+      setAvatarConversation(avatarConversationObj);
 
       setIsInitialized(true);
     } catch (err) {
@@ -55,34 +81,6 @@ export const useAvatarConversation = () => {
     }
   };
 
-  /**
-   * Create new avatar conversation
-   */
-  const createAvatarConversation = async () => {
-    try {
-      const conversationData = {
-        name: 'Avatar',
-        type: 'dm',
-        conversationType: 'ai_avatar',
-        members: [user._id],
-        settings: {
-          isAvatarConversation: true,
-          aiEnabled: true,
-          allowMentions: true,
-          isPermanent: true,
-          alwaysOnTop: true
-        }
-      };
-
-      const response = await API.post('/conversations', conversationData);
-      console.log('🤖 Hook: Created avatar conversation:', response.data._id);
-      
-      return response.data;
-    } catch (error) {
-      console.error('🤖 Hook: Error creating avatar conversation:', error);
-      throw error;
-    }
-  };
 
   /**
    * Process avatar query
@@ -128,7 +126,9 @@ export const useAvatarConversation = () => {
 
   // Initialize on user change
   useEffect(() => {
+    console.log('🤖 Hook: useEffect triggered:', { userId: user?._id, isInitialized });
     if (user?._id && !isInitialized) {
+      console.log('🤖 Hook: Starting avatar conversation initialization');
       initializeAvatarConversation();
     }
   }, [user?._id, isInitialized]);

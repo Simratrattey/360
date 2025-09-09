@@ -343,7 +343,15 @@ export default function MessagesPage() {
         .sort(sortByLastMessage);
       
       // Add avatar conversation at the top if it exists and is not already in the list
+      console.log('🤖 MessagesPage: Avatar conversation check:', { 
+        avatarConversation: !!avatarConversation, 
+        alreadyExists: avatarConversation ? allConversationsUnified.some(conv => conv._id === avatarConversation._id) : false,
+        conversationsCount: allConversationsUnified.length 
+      });
+      
       if (avatarConversation && !allConversationsUnified.some(conv => conv._id === avatarConversation._id)) {
+        console.log('🤖 MessagesPage: Adding avatar conversation to list');
+        
         // Create enhanced avatar conversation object for display
         const enhancedAvatarConv = {
           ...avatarConversation,
@@ -364,6 +372,7 @@ export default function MessagesPage() {
         
         // Always place avatar conversation at the very top
         allConversationsUnified = [enhancedAvatarConv, ...allConversationsUnified];
+        console.log('🤖 MessagesPage: Avatar conversation added, new count:', allConversationsUnified.length);
       }
       
       // Use a single section for all conversations
@@ -428,7 +437,7 @@ export default function MessagesPage() {
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
-  }, [messagesCache]);
+  }, [messagesCache, avatarConversation]);
   
   // Keep refs in sync with state
   useEffect(() => {
