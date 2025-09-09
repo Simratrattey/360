@@ -600,8 +600,8 @@ export default function MeetingsPage() {
                 Search Past Meetings
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-5 gap-4 items-end">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 items-end">
+                <div className="md:col-span-2 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Search by name
                   </label>
@@ -615,7 +615,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Start Date
                   </label>
@@ -627,7 +627,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     End Date
                   </label>
@@ -640,17 +640,17 @@ export default function MeetingsPage() {
                 </div>
                 
                 <div className="md:col-span-4 xl:col-span-1 flex flex-col justify-end">
-                  <div className="flex gap-2 md:justify-end">
+                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
                     <button
                       onClick={handleSearch}
-                      className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
+                      className="btn-primary px-3 py-2 text-sm rounded-lg flex items-center gap-2 md:px-3 md:py-2"
                     >
                       <Search className="h-4 w-4" />
                       Search
                     </button>
                     <button
                       onClick={clearFilters}
-                      className="btn-outline px-4 py-2 rounded-lg flex items-center gap-2"
+                      className="btn-outline px-3 py-2 text-sm rounded-lg flex items-center gap-2 md:px-3 md:py-2"
                     >
                       <Filter className="h-4 w-4" />
                       Clear
