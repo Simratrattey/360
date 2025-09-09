@@ -164,7 +164,17 @@ export default function SidebarConversation({
   };
 
   // Special rendering for avatar conversations
-  if (isAvatarConversation(conv)) {
+  const isAvatar = isAvatarConversation(conv);
+  console.log('🤖 SidebarConversation: Rendering conversation:', {
+    id: conv._id,
+    name: conv.name,
+    type: conv.type,
+    conversationType: conv.conversationType,
+    isAvatar: isAvatar,
+    settings: conv.settings
+  });
+  
+  if (isAvatar) {
     return (
       <div
         className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-xl cursor-pointer transition-all duration-300 border-2 ${

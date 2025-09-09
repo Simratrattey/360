@@ -124,6 +124,14 @@ export default function MessagesPage() {
   const { updateCurrentConversation, updateMessagesPageStatus, clearCurrentConversation } = useCurrentConversation();
   const { clearNotificationsForConversation } = useNotifications();
   const { avatarConversation, isAvatarConversation, processAvatarQuery } = useAvatarConversation();
+  
+  // Debug avatar conversation state
+  useEffect(() => {
+    console.log('🤖 MessagesPage: Avatar conversation state changed:', {
+      avatarConversation: avatarConversation ? { id: avatarConversation._id, name: avatarConversation.name } : null,
+      user: user ? { id: user._id, name: user.fullName || user.username } : null
+    });
+  }, [avatarConversation, user]);
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
@@ -342,37 +350,64 @@ export default function MessagesPage() {
       let allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
         .sort(sortByLastMessage);
       
-      // Add avatar conversation at the top if it exists and is not already in the list
+      // Add avatar conversation at the top - ALWAYS add it for testing
       console.log('🤖 MessagesPage: Avatar conversation check:', { 
         avatarConversation: !!avatarConversation, 
-        alreadyExists: avatarConversation ? allConversationsUnified.some(conv => conv._id === avatarConversation._id) : false,
+        user: !!user,
+        userId: user?._id,
         conversationsCount: allConversationsUnified.length 
       });
       
-      if (avatarConversation && !allConversationsUnified.some(conv => conv._id === avatarConversation._id)) {
-        console.log('🤖 MessagesPage: Adding avatar conversation to list');
+      // Force create avatar conversation if user exists (for testing)
+      if (user?._id) {
+        const testAvatarId = `avatar_conversation_${user._id}`;
+        const alreadyExists = allConversationsUnified.some(conv => conv._id === testAvatarId);
         
-        // Create enhanced avatar conversation object for display
-        const enhancedAvatarConv = {
-          ...avatarConversation,
-          conversationType: 'ai_avatar',
-          isPermanent: true,
-          alwaysOnTop: true,
-          lastMessage: avatarConversation.lastMessage || {
-            text: 'Ask me anything!',
-            senderId: 'avatar_system_user',
-            senderName: 'Avatar',
-            timestamp: new Date().toISOString()
-          },
-          unread: 0, // Avatar conversation doesn't have unread count
-          name: 'Avatar',
-          members: avatarConversation.members || [user],
-          type: 'dm'
-        };
+        console.log('🤖 MessagesPage: Force adding avatar conversation, already exists:', alreadyExists);
         
-        // Always place avatar conversation at the very top
-        allConversationsUnified = [enhancedAvatarConv, ...allConversationsUnified];
-        console.log('🤖 MessagesPage: Avatar conversation added, new count:', allConversationsUnified.length);
+        if (!alreadyExists) {
+          const forceAvatarConv = {
+            _id: testAvatarId,
+            name: 'Avatar',
+            type: 'dm',
+            conversationType: 'ai_avatar',
+            isPermanent: true,
+            alwaysOnTop: true,
+            lastMessage: {
+              text: 'Ask me anything about your projects and videos!',
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              timestamp: new Date().toISOString()
+            },
+            lastMessageAt: new Date().toISOString(),
+            unread: 0,
+            members: [
+              {
+                _id: user._id,
+                fullName: user.fullName || user.username,
+                username: user.username,
+                email: user.email
+              },
+              {
+                _id: 'avatar_system_user',
+                fullName: 'Avatar',
+                username: 'avatar',
+                userType: 'ai_avatar',
+                isSystem: true
+              }
+            ],
+            settings: {
+              isAvatarConversation: true,
+              aiEnabled: true
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Always place avatar conversation at the very top
+          allConversationsUnified = [forceAvatarConv, ...allConversationsUnified];
+          console.log('🤖 MessagesPage: FORCE added avatar conversation, new count:', allConversationsUnified.length);
+        }
       }
       
       // Use a single section for all conversations
@@ -1625,7 +1660,7 @@ export default function MessagesPage() {
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
-          const displayName = getConversationDisplayName(conv, user?.id);
+          const displayName = getConversationDisplayName(conv, user?._id);
           
           const memberNames = Array.isArray(conv.members)
             ? conv.members.map(m => {
@@ -2757,7 +2792,7 @@ export default function MessagesPage() {
                   onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
                   starred={starred.includes(conv._id)}
                   getInitials={getInitials}
-                  currentUserId={user?.id}
+                  currentUserId={user?._id}
                   typing={typing[conv._id] || {}}
                   draftMessage={draftMessages[conv._id]}
                   canDelete={
@@ -2806,7 +2841,7 @@ export default function MessagesPage() {
                       <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-8 w-8 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
                     ) : (
                       <div className="h-8 w-8 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg">
-                        {getInitials(getConversationDisplayName(selected, user?.id))}
+                        {getInitials(getConversationDisplayName(selected, user?._id))}
                       </div>
                     )}
                     {selected.status && (
@@ -2814,7 +2849,7 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?.id)}</h2>
+                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?._id)}</h2>
                     {selected && (selected.type === 'group' || selected.type === 'community') && (
                       <p className="text-xs text-gray-600">
                         {selected.members?.length || 0} members
