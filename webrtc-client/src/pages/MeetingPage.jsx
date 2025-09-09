@@ -15,6 +15,22 @@ import transcriptAPI from '../api/transcriptApi';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
 
+// Helper function to format UTC timestamp to user's local timezone
+const formatTimestamp = (utcTimestamp) => {
+  try {
+    // Handle both ISO string timestamps and legacy formatted timestamps
+    const date = new Date(utcTimestamp);
+    if (isNaN(date.getTime())) {
+      // If it's not a valid date, return the original timestamp (for backward compatibility)
+      return utcTimestamp;
+    }
+    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  } catch (error) {
+    // Fallback to original timestamp if parsing fails
+    return utcTimestamp;
+  }
+};
+
 export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -335,7 +351,7 @@ export default function MeetingPage() {
       if (sfuSocket) {
         sfuSocket.emit('screenShareStarted', {
           userId: user.id,
-          userName: user.name,
+          userName: user.fullName || user.username,
           roomId: roomId
         });
       }
@@ -508,7 +524,7 @@ export default function MeetingPage() {
     if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
       if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
         console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
-        startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+        startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
       }
     }
     
@@ -1157,7 +1173,7 @@ To convert to MP4:
     // Also start recording local user's speech
     if (localStream && localStream.getAudioTracks().length > 0) {
       console.log('✅ Setting up transcript recording for local user');
-      startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+      startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
     } else {
       console.log('⚠️ No local stream or audio available for transcript recording');
     }
@@ -1209,11 +1225,11 @@ To convert to MP4:
           console.log(`[${participantName}] Final: ${text}`);
           
           const subtitleEntry = {
-            id: `${peerId}-${Date.now()}`,
+            id: `${peerId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             original: text,
             translated: null,
             text,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            timestamp: new Date().toISOString(),
             speaker: participantName, // Show actual participant name
             sourceLanguage: 'en',
             targetLanguage: 'en',
@@ -1223,6 +1239,19 @@ To convert to MP4:
           
           // ALWAYS add to permanent history (continuous recording)
           setPermanentSubtitleHistory(prev => {
+            // Check for duplicates in recent history (last 10 entries) based on text and speaker
+            const recentEntries = prev.slice(-10);
+            const isDuplicate = recentEntries.some(entry => 
+              entry.text.trim().toLowerCase() === text.trim().toLowerCase() && 
+              entry.speaker === participantName &&
+              Math.abs(entry.createdAt - subtitleEntry.createdAt) < 5000 // Within 5 seconds
+            );
+            
+            if (isDuplicate) {
+              console.log(`🚫 Skipping duplicate transcript: [${participantName}] ${text}`);
+              return prev;
+            }
+            
             const updated = [...prev, subtitleEntry];
             console.log(`📝 Recorded: [${participantName}] ${text} (${updated.length} total)`);
             
@@ -1758,7 +1787,7 @@ To convert to MP4:
             original: `[STT Error: ${sttResult.error}]`,
             translated: null,
             text: `[STT Error: ${sttResult.error}]`,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            timestamp: new Date().toISOString(),
             speaker: participantName,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
@@ -2870,7 +2899,7 @@ To convert to MP4:
             </div>
           ) : (
             <div className="space-y-3">
-              {permanentSubtitleHistory.map((subtitle, index) => (
+              {[...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map((subtitle, index) => (
                 <div 
                   key={subtitle.id} 
                   className="bg-gray-800/90 rounded-xl p-3 border border-gray-700 hover:bg-gray-750 transition-colors shadow-lg"
@@ -2881,7 +2910,7 @@ To convert to MP4:
                       {subtitle.speaker}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {subtitle.timestamp}
+                      {formatTimestamp(subtitle.timestamp)}
                     </span>
                   </div>
                   
@@ -2910,8 +2939,8 @@ To convert to MP4:
             <div className="flex space-x-4">
               <button 
                 onClick={() => {
-                  const transcript = permanentSubtitleHistory.map(entry => 
-                    `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`
+                  const transcript = [...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map(entry => 
+                    `[${formatTimestamp(entry.timestamp)}] ${entry.speaker}: ${entry.text}`
                   ).join('\n\n');
                   navigator.clipboard.writeText(transcript);
                 }}
@@ -2922,8 +2951,8 @@ To convert to MP4:
               </button>
               <button 
                 onClick={() => {
-                  const transcript = permanentSubtitleHistory.map(entry => 
-                    `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`
+                  const transcript = [...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map(entry => 
+                    `[${formatTimestamp(entry.timestamp)}] ${entry.speaker}: ${entry.text}`
                   ).join('\n\n');
                   const blob = new Blob([transcript], { type: 'text/plain' });
                   const url = URL.createObjectURL(blob);

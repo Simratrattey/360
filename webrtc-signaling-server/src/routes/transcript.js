@@ -20,9 +20,12 @@ router.get('/:roomId', authMiddleware, async (req, res) => {
       await transcript.save();
     }
     
+    // Sort entries by createdAt timestamp for chronological order
+    const sortedEntries = [...transcript.entries].sort((a, b) => a.createdAt - b.createdAt);
+    
     res.json({
       success: true,
-      transcript: transcript.entries,
+      transcript: sortedEntries,
       lastUpdated: transcript.lastUpdated
     });
   } catch (error) {
