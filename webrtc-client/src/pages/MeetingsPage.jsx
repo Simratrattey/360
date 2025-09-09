@@ -639,7 +639,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div className="md:col-span-1 flex flex-col justify-end">
+                <div className="md:col-span-4 xl:col-span-1 flex flex-col justify-end">
                   <div className="flex gap-2 md:justify-end">
                     <button
                       onClick={handleSearch}
