@@ -375,7 +375,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meetingId }) => {
                           <div className="flex justify-between items-center mb-6">
                             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                               <Sparkles className="h-5 w-5 text-purple-500" />
-                              AI-Generated Meeting Summary
+                              Meeting Summary
                             </h3>
                             <div className="flex gap-2">
                               <button
