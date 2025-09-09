@@ -90,6 +90,17 @@ const MeetingSchema = new Schema({
     ref: 'User',
     default: null
   },
+  // Meeting summary and transcript
+  summary: {
+    type: String,
+    default: null
+  },
+  transcript: {
+    type: Schema.Types.ObjectId,
+    ref: 'Transcript',
+    default: null
+  },
+  
   metadata: {
     avatarApiEnabled: {
       type: Boolean,
@@ -121,7 +132,7 @@ MeetingSchema.methods.startMeeting = function() {
 };
 
 // Method to end the meeting
-MeetingSchema.methods.endMeeting = function() {
+MeetingSchema.methods.endMeeting = async function() {
   if (this.status === 'active') {
     this.status = 'ended';
     this.actualEndTime = new Date();
@@ -134,8 +145,37 @@ MeetingSchema.methods.endMeeting = function() {
         session.durationMinutes = Math.ceil((session.leftAt - session.joinedAt) / 1000 / 60);
       }
     });
+    
+    // Generate summary from transcript if available
+    await this.generateSummary();
   }
   return this.save();
+};
+
+// Method to generate summary from transcript
+MeetingSchema.methods.generateSummary = async function() {
+  try {
+    const Transcript = this.constructor.db.model('Transcript');
+    const transcript = await Transcript.findOne({ roomId: this.roomId });
+    
+    if (transcript && transcript.entries && transcript.entries.length > 0) {
+      // Link the transcript to this meeting
+      this.transcript = transcript._id;
+      
+      // For now, use the transcript as the summary
+      // In the future, this could be enhanced with AI summarization
+      const transcriptText = transcript.entries
+        .map(entry => `[${entry.timestamp}] ${entry.speaker}: ${entry.text}`)
+        .join('\n');
+      
+      this.summary = transcriptText;
+      console.log(`[Meeting] Generated summary for meeting ${this._id} with ${transcript.entries.length} transcript entries`);
+    } else {
+      console.log(`[Meeting] No transcript found for meeting ${this._id} (roomId: ${this.roomId})`);
+    }
+  } catch (error) {
+    console.error('[Meeting] Error generating summary:', error);
+  }
 };
 
 // Method to add a participant session

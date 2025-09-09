@@ -20,6 +20,7 @@ import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
+import MeetingDetailsModal from '../components/MeetingDetailsModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
@@ -45,6 +46,10 @@ export default function DashboardPage() {
   const [stats, setStats] = useState([]);
   const [recentMeetings, setRecentMeetings] = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  
+  // Meeting details modal state
+  const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   
   // Join request system
   const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
@@ -295,6 +300,16 @@ export default function DashboardPage() {
     }, timeout);
     
     return notification.id;
+  };
+
+  const openMeetingDetails = (meetingId) => {
+    setSelectedMeetingId(meetingId);
+    setIsMeetingModalOpen(true);
+  };
+  
+  const closeMeetingDetails = () => {
+    setSelectedMeetingId(null);
+    setIsMeetingModalOpen(false);
   };
 
   const requestJoinMeeting = (roomId) => {
@@ -618,7 +633,11 @@ export default function DashboardPage() {
           ) : recentMeetings.length > 0 ? (
             <div className="space-y-3">
               {recentMeetings.map((meeting, index) => (
-                <div key={meeting.id || index} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
+                <div 
+                  key={meeting.id || index} 
+                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:bg-white/80 transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+                  onClick={() => openMeetingDetails(meeting.id)}
+                >
                   <div className="flex items-center space-x-3">
                     <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
                       <Video className="h-5 w-5 text-white" />
@@ -770,6 +789,13 @@ export default function DashboardPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Meeting Details Modal */}
+      <MeetingDetailsModal
+        isOpen={isMeetingModalOpen}
+        onClose={closeMeetingDetails}
+        meetingId={selectedMeetingId}
+      />
     </div>
   );
 } 

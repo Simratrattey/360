@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
+import MeetingDetailsModal from '../components/MeetingDetailsModal.jsx';
 import { fetchUpcomingMeetings } from '../services/meetingService';
 import API from '../api/client.js';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,10 @@ export default function MeetingsPage() {
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({});
+  
+  // Meeting details modal state
+  const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
 
   // Memoize meetings by date for calendar
   const meetingsByDate = useMemo(() => {
@@ -164,6 +169,16 @@ export default function MeetingsPage() {
     setEndDate('');
     setCurrentPage(1);
     loadPastMeetings(1);
+  };
+  
+  const openMeetingDetails = (meetingId) => {
+    setSelectedMeetingId(meetingId);
+    setIsMeetingModalOpen(true);
+  };
+  
+  const closeMeetingDetails = () => {
+    setSelectedMeetingId(null);
+    setIsMeetingModalOpen(false);
   };
 
   const getMeetingStatus = (meeting) => {
@@ -687,7 +702,8 @@ export default function MeetingsPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
-                        className="bg-white/60 rounded-xl border border-white/20 p-6 hover:bg-white/80 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg"
+                        className="bg-white/60 rounded-xl border border-white/20 p-6 hover:bg-white/80 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg cursor-pointer"
+                        onClick={() => openMeetingDetails(meeting.id)}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -802,6 +818,13 @@ export default function MeetingsPage() {
           </div>
         )}
       </div>
+
+      {/* Meeting Details Modal */}
+      <MeetingDetailsModal
+        isOpen={isMeetingModalOpen}
+        onClose={closeMeetingDetails}
+        meetingId={selectedMeetingId}
+      />
 
       {/* Schedule Meeting Modal */}
       <ScheduleMeetingModal
