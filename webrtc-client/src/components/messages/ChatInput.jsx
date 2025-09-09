@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Camera, Image as ImageIcon, FileText } from 'lucide-react';
 import { validateFile, formatFileSize, getFileIcon, isAvatarConversation } from '../../api/messageService';
 import { useAvatarConversation } from '../../hooks/useAvatarConversation';
-import AvatarService from '../../services/avatarService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 
@@ -30,9 +29,8 @@ export default function ChatInput({
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const attachmentMenuRef = useRef(null);
   
-  // Avatar conversation state
-  const { processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
-  const [isAvatarProcessing, setIsAvatarProcessing] = useState(false);
+  // Avatar conversation state (simplified - just for conversation detection)
+  const { isAvatarConversation: checkIsAvatarConversation } = useAvatarConversation();
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -85,39 +83,11 @@ export default function ChatInput({
       }
     }
 
-    // Check if this is an avatar conversation and process avatar query
-    if (isAvatarConversation(conversation) && input.trim()) {
-      try {
-        setIsAvatarProcessing(true);
-        console.log('🤖 ChatInput: Processing avatar query:', input.trim());
-        
-        // Send regular message first (user's question)
-        onSend();
-        
-        // Check if avatar conversation is initialized before processing
-        if (!isInitialized || isLoading) {
-          console.log('🤖 ChatInput: Avatar conversation not ready, skipping query');
-          setIsAvatarProcessing(false);
-          return;
-        }
-        
-        // Process avatar query and get response
-        if (processAvatarQuery && typeof processAvatarQuery === 'function') {
-          const avatarResponse = await processAvatarQuery(input.trim());
-          
-          // Call the avatar query handler if provided
-          if (onAvatarQuery && typeof onAvatarQuery === 'function') {
-            onAvatarQuery(avatarResponse);
-          }
-          
-          console.log('🤖 ChatInput: Avatar response processed:', avatarResponse);
-        }
-      } catch (error) {
-        console.error('🤖 ChatInput: Error processing avatar query:', error);
-        // Still send the regular message even if avatar processing fails
-      } finally {
-        setIsAvatarProcessing(false);
-      }
+    // For avatar conversations, just send the regular message
+    // MessagesPage will handle the avatar response processing automatically
+    if (checkIsAvatarConversation && checkIsAvatarConversation(conversation) && input.trim()) {
+      console.log('🤖 ChatInput: Sending message to avatar conversation');
+      onSend();
     } else {
       // Regular message sending for non-avatar conversations
       onSend();

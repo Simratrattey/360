@@ -50,6 +50,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useAvatarConversation } from '../hooks/useAvatarConversation';
 import AvatarService from '../services/avatarService';
+import BotService from '../api/botService';
 import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useMediaQuery } from 'react-responsive';
@@ -1956,101 +1957,124 @@ export default function MessagesPage() {
           return newMessages;
         });
         
-        // Process avatar response asynchronously
-        if (processAvatarQuery) {
-          console.log('🤖 MessagesPage: Processing avatar query:', messageText);
+        // Process avatar response asynchronously using direct API calls (like MeetingPage)
+        console.log('🤖 MessagesPage: Processing avatar query:', messageText);
+        
+        try {
+          // Direct API call to bot service (no conversation management needed)
+          const { success, data, error } = await BotService.getBotReply(messageText);
           
-          try {
-            // Check if avatar conversation is initialized before processing
-            if (!isInitialized || isLoading) {
-              console.log('🤖 MessagesPage: Avatar conversation not ready, skipping query');
-              // Remove typing indicator
-              setMessages(prevMessages => {
-                return prevMessages.filter(msg => msg._id !== typingMessage._id);
-              });
-              return;
+          if (success && data) {
+            console.log('🤖 MessagesPage: Got bot reply:', data);
+            
+            // Parse bot response (same pattern as MeetingPage)
+            let botText = '';
+            let clips = [];
+            
+            try {
+              if (data.reply) {
+                // Try to parse structured response
+                const outer = JSON.parse(data.reply);
+                const entries = Array.isArray(outer) && Array.isArray(outer[0]) ? outer[0] : [];
+                
+                if (entries.length > 0) {
+                  clips = entries.map(entry => ({
+                    title: entry.title || 'Untitled',
+                    snippet: entry.snippet || 'No description available',
+                    videodetails: entry.videodetails || {},
+                    originalEntry: entry
+                  }));
+                  
+                  // Use first clip's snippet as response text
+                  botText = clips[0]?.snippet || data.reply;
+                } else {
+                  // Fallback to raw reply
+                  botText = data.reply;
+                }
+              } else {
+                botText = 'I received your message but couldn\'t generate a response.';
+              }
+            } catch (parseError) {
+              // If JSON parsing fails, use raw response
+              botText = data.reply || 'I received your message but couldn\'t generate a response.';
+              console.log('🤖 MessagesPage: Using raw response due to parse error:', parseError);
             }
             
-            const avatarResponse = await processAvatarQuery(messageText);
-            console.log('🤖 MessagesPage: Got avatar response:', avatarResponse);
-            
-            // Remove typing indicator and add the actual avatar response
+            // Remove typing indicator and add bot response
             setMessages(prevMessages => {
               const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
               
-              if (avatarResponse) {
-                const finalAvatarMessage = {
-                  ...avatarResponse,
-                  _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                  conversationId: selected._id,
-                  timestamp: new Date().toISOString(),
-                  status: 'sent'
-                };
-                
-                const newMessages = [...withoutTyping, finalAvatarMessage];
-                // Save to avatar messages storage
-                setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
-                return newMessages;
-              } else {
-                // Save without typing indicator
-                setAvatarMessages(prev => new Map(prev.set(selected._id, withoutTyping)));
-                return withoutTyping;
-              }
-            });
-              
-              // Update conversation's last message for sidebar
-              setAllConversations(prevSections => {
-                const updatedSections = prevSections.map(section => ({
-                  ...section,
-                  items: section.items.map(conv => {
-                    if (conv._id === selected._id) {
-                      return {
-                        ...conv,
-                        lastMessage: {
-                          text: finalAvatarMessage.text.length > 50 
-                            ? finalAvatarMessage.text.substring(0, 50) + '...'
-                            : finalAvatarMessage.text,
-                          senderId: finalAvatarMessage.senderId,
-                          senderName: 'Avatar',
-                          timestamp: finalAvatarMessage.timestamp
-                        },
-                        lastMessageAt: finalAvatarMessage.timestamp
-                      };
-                    }
-                    return conv;
-                  })
-                })).map(section => ({
-                  ...section,
-                  items: sortConversationsWithAvatarTop(section.items)
-                }));
-                return updatedSections;
-              });
-            
-          } catch (processingError) {
-            console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
-            
-            // Remove typing indicator and add error message
-            setMessages(prevMessages => {
-              const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
-              
-              const errorMessage = {
-                _id: `avatar_error_${Date.now()}`,
+              const avatarMessage = {
+                _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 conversationId: selected._id,
                 senderId: 'avatar_system_user',
                 senderName: 'Avatar',
-                text: 'Sorry, I encountered an error while processing your request. Please try again.',
+                text: botText,
+                clips: clips, // Include parsed clips for potential future use
                 createdAt: new Date().toISOString(),
                 timestamp: new Date().toISOString(),
                 isAvatarMessage: true,
-                status: 'error'
+                status: 'sent'
               };
               
-              const newMessages = [...withoutTyping, errorMessage];
-              // Save to avatar messages storage
+              const newMessages = [...withoutTyping, avatarMessage];
               setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
               return newMessages;
             });
+            
+            // Update conversation's last message for sidebar
+            setAllConversations(prevSections => {
+              const updatedSections = prevSections.map(section => ({
+                ...section,
+                items: section.items.map(conv => {
+                  if (conv._id === selected._id) {
+                    return {
+                      ...conv,
+                      lastMessage: {
+                        text: botText.length > 50 ? botText.substring(0, 50) + '...' : botText,
+                        senderId: 'avatar_system_user',
+                        senderName: 'Avatar',
+                        timestamp: new Date().toISOString()
+                      },
+                      lastMessageAt: new Date().toISOString()
+                    };
+                  }
+                  return conv;
+                })
+              })).map(section => ({
+                ...section,
+                items: sortConversationsWithAvatarTop(section.items)
+              }));
+              return updatedSections;
+            });
+            
+          } else {
+            throw new Error(error || 'Bot service returned no data');
           }
+          
+        } catch (processingError) {
+          console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
+          
+          // Remove typing indicator and add error message
+          setMessages(prevMessages => {
+            const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+            
+            const errorMessage = {
+              _id: `avatar_error_${Date.now()}`,
+              conversationId: selected._id,
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              text: 'Sorry, I encountered an error while processing your request. Please try again.',
+              createdAt: new Date().toISOString(),
+              timestamp: new Date().toISOString(),
+              isAvatarMessage: true,
+              status: 'error'
+            };
+            
+            const newMessages = [...withoutTyping, errorMessage];
+            setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+            return newMessages;
+          });
         }
         
       } catch (error) {
