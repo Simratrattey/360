@@ -640,20 +640,22 @@ export default function MeetingsPage() {
                 </div>
                 
                 <div className="md:col-span-4 xl:col-span-1 flex flex-col justify-end">
-                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                  <div className="flex items-center gap-2 md:justify-end">
                     <button
                       onClick={handleSearch}
-                      className="btn-primary px-3 py-2 text-sm rounded-lg flex items-center gap-2 md:px-3 md:py-2"
+                      className="btn-primary flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-2 text-xs sm:text-sm rounded-lg flex items-center justify-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[90px] md:min-w-[110px] whitespace-nowrap"
                     >
-                      <Search className="h-4 w-4" />
-                      Search
+                      <Search className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Search</span>
+                      <span className="sm:hidden">🔍</span>
                     </button>
                     <button
                       onClick={clearFilters}
-                      className="btn-outline px-3 py-2 text-sm rounded-lg flex items-center gap-2 md:px-3 md:py-2"
+                      className="btn-outline flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-2 text-xs sm:text-sm rounded-lg flex items-center justify-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[90px] md:min-w-[110px] whitespace-nowrap"
                     >
-                      <Filter className="h-4 w-4" />
-                      Clear
+                      <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">Clear</span>
+                      <span className="sm:hidden">✕</span>
                     </button>
                   </div>
                 </div>
