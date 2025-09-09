@@ -142,6 +142,10 @@ export const getUpcomingMeetings = async (req, res, next) => {
 
 export const getMeetingById = async (req, res, next) => {
   try {
+    // Skip if this is a special route like 'past', 'upcoming', etc.
+    if (req.params.id === 'past' || req.params.id === 'upcoming') {
+      return next(); // Pass to next route handler
+    }
     const meeting = await Meeting.findById(req.params.id)
       .populate('organizer',    'fullName email')
       .populate('participants', 'fullName email');
