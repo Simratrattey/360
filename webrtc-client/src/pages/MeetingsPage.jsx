@@ -14,11 +14,18 @@ import {
   AlertCircle,
   CheckCircle2,
   Play,
-  Eye
+  Eye,
+  Search,
+  History,
+  Filter,
+  ChevronLeft,
+  ChevronDown,
+  User
 } from 'lucide-react';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
 import { fetchUpcomingMeetings } from '../services/meetingService';
+import API from '../api/client.js';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -37,6 +44,16 @@ export default function MeetingsPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  
+  // Past meetings state
+  const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming' or 'past'
+  const [pastMeetings, setPastMeetings] = useState([]);
+  const [pastMeetingsLoading, setPastMeetingsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({});
 
   // Memoize meetings by date for calendar
   const meetingsByDate = useMemo(() => {
@@ -93,6 +110,12 @@ export default function MeetingsPage() {
     };
     loadMeetings();
   }, []);
+  
+  useEffect(() => {
+    if (activeTab === 'past') {
+      loadPastMeetings();
+    }
+  }, [activeTab]);
 
   const reload = async () => {
     try {
@@ -101,6 +124,46 @@ export default function MeetingsPage() {
     } catch (error) {
       console.error('Error reloading meetings:', error);
     }
+  };
+  
+  const loadPastMeetings = async (page = 1) => {
+    try {
+      setPastMeetingsLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
+      });
+      
+      if (searchQuery) params.append('search', searchQuery);
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      
+      const response = await API.get(`/meetings/past?${params}`);
+      
+      if (response.data.success) {
+        setPastMeetings(response.data.meetings);
+        setPagination(response.data.pagination);
+        setCurrentPage(page);
+      }
+    } catch (error) {
+      console.error('Error loading past meetings:', error);
+      setPastMeetings([]);
+    } finally {
+      setPastMeetingsLoading(false);
+    }
+  };
+  
+  const handleSearch = () => {
+    setCurrentPage(1);
+    loadPastMeetings(1);
+  };
+  
+  const clearFilters = () => {
+    setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    setCurrentPage(1);
+    loadPastMeetings(1);
   };
 
   const getMeetingStatus = (meeting) => {
@@ -152,6 +215,32 @@ export default function MeetingsPage() {
               <p className="text-secondary-700 mt-2 text-lg">
                 Manage your meetings and schedule new ones
               </p>
+              
+              {/* Tab Navigation */}
+              <div className="flex gap-4 mt-4">
+                <button
+                  onClick={() => setActiveTab('upcoming')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === 'upcoming'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <CalendarIcon className="h-4 w-4 inline mr-2" />
+                  Upcoming
+                </button>
+                <button
+                  onClick={() => setActiveTab('past')}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    activeTab === 'past'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <History className="h-4 w-4 inline mr-2" />
+                  Past Meetings
+                </button>
+              </div>
             </div>
             <div className="w-full xl:w-auto xl:ml-auto grid grid-cols-1 xl:grid-cols-3 gap-3">
               <motion.button
@@ -191,7 +280,8 @@ export default function MeetingsPage() {
         </motion.div>
 
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {activeTab === 'upcoming' ? (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Left Column - Calendar */}
           <motion.div 
             initial={{ opacity: 0, x: -30 }} 
@@ -479,7 +569,238 @@ export default function MeetingsPage() {
               </Card>
             )}
           </motion.div>
-        </div>
+          </div>
+        ) : (
+          /* Past Meetings Section */
+          <div className="space-y-6">
+            {/* Search and Filter Controls */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.5 }}
+              className="glass-effect bg-white/80 shadow-xl rounded-2xl p-6 border border-white/30"
+            >
+              <h2 className="text-xl font-bold text-primary-800 mb-4 flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Search Past Meetings
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Search by name
+                  </label>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Meeting name..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                
+                <div className="flex flex-col justify-end">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSearch}
+                      className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <Search className="h-4 w-4" />
+                      Search
+                    </button>
+                    <button
+                      onClick={clearFilters}
+                      className="btn-outline px-4 py-2 rounded-lg flex items-center gap-2"
+                    >
+                      <Filter className="h-4 w-4" />
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+            
+            {/* Past Meetings List */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="glass-effect bg-white/80 shadow-xl rounded-2xl border border-white/30"
+            >
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-primary-800 flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Past Meetings
+                  {pagination.totalCount > 0 && (
+                    <span className="text-sm font-normal text-gray-500">
+                      ({pagination.totalCount} total)
+                    </span>
+                  )}
+                </h2>
+              </div>
+              
+              <div className="p-6">
+                {pastMeetingsLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : pastMeetings.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-center">
+                    <History className="w-16 h-16 mb-4 text-gray-300" />
+                    <p className="text-lg font-medium text-gray-500">No past meetings found</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {searchQuery || startDate || endDate 
+                        ? "Try adjusting your search filters" 
+                        : "You haven't attended any meetings yet"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pastMeetings.map((meeting, index) => (
+                      <motion.div
+                        key={meeting.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="bg-white/60 rounded-xl border border-white/20 p-6 hover:bg-white/80 transition-all duration-200 hover:scale-[1.01] hover:shadow-lg"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-3">
+                              <h3 className="text-lg font-semibold text-gray-900">
+                                {meeting.title}
+                              </h3>
+                              {meeting.isOrganizer && (
+                                <Badge className="bg-blue-100 text-blue-700 border-0">
+                                  <User className="h-3 w-3 mr-1" />
+                                  Organizer
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
+                              <div className="flex items-center gap-2">
+                                <CalendarIcon className="h-4 w-4 text-blue-500" />
+                                <span>
+                                  {new Date(meeting.startTime).toLocaleDateString([], {
+                                    weekday: 'short',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-green-500" />
+                                <span>
+                                  {new Date(meeting.startTime).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })} ({meeting.totalDuration})
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-purple-500" />
+                                <span>{meeting.participantCount} participant{meeting.participantCount !== 1 ? 's' : ''}</span>
+                              </div>
+                              
+                              {meeting.userDuration && (
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-orange-500" />
+                                  <span>You: {meeting.userDuration}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {meeting.organizer && (
+                              <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                                <span className="font-medium">Organized by:</span>
+                                <span>{meeting.organizer.fullName || meeting.organizer.username}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="ml-4 flex flex-col gap-2">
+                            <Badge className="bg-green-100 text-green-700 border-0">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Completed
+                            </Badge>
+                            {meeting.recordingEnabled && (
+                              <Badge className="bg-red-100 text-red-700 border-0">
+                                <Video className="h-3 w-3 mr-1" />
+                                Recorded
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Pagination */}
+                {pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+                    <div className="text-sm text-gray-600">
+                      Showing page {pagination.currentPage} of {pagination.totalPages}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadPastMeetings(currentPage - 1)}
+                        disabled={!pagination.hasPrevPage}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </button>
+                      
+                      <span className="px-4 py-2 text-sm text-gray-600">
+                        Page {pagination.currentPage} of {pagination.totalPages}
+                      </span>
+                      
+                      <button
+                        onClick={() => loadPastMeetings(currentPage + 1)}
+                        disabled={!pagination.hasNextPage}
+                        className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
 
       {/* Schedule Meeting Modal */}
