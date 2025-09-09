@@ -63,6 +63,7 @@ export default function MeetingPage() {
   const assemblyClientsRef = useRef(null); // Map of peerId -> AssemblyAI client
   const audioProcessorsRef = useRef(null); // Map of peerId -> audio processor
   const pcmWorkerRef = useRef(null);
+  const transcriptInitializingRef = useRef(new Set()); // Track which participants are being initialized
   const transcriptScrollRef = useRef(null);
   const transcriptEndRef = useRef(null);
 
@@ -516,6 +517,7 @@ export default function MeetingPage() {
             console.warn(`Failed to close client for ${id}:`, error);
           }
           assemblyClientsRef.current.delete(id);
+          transcriptInitializingRef.current.delete(id); // Also clean up initialization tracking
         }
       });
     }
@@ -1163,12 +1165,19 @@ To convert to MP4:
         assemblyClientsRef.current = new Map();
       }
 
-      // Check if client already exists for this participant
+      // Check if client already exists or is being initialized for this participant
       if (assemblyClientsRef.current.has(peerId)) {
         console.log(`⚠️ AssemblyAI client already exists for ${participantName} (${peerId}) - skipping`);
         return;
       }
 
+      if (transcriptInitializingRef.current.has(peerId)) {
+        console.log(`⚠️ AssemblyAI client already being initialized for ${participantName} (${peerId}) - skipping`);
+        return;
+      }
+
+      // Mark as being initialized to prevent duplicate creation
+      transcriptInitializingRef.current.add(peerId);
       console.log(`🎯 Creating AssemblyAI client for ${participantName} (${peerId})`);
       
       // Create separate AssemblyAI client for this participant
@@ -1221,11 +1230,9 @@ To convert to MP4:
 
       await client.connect();
       
-      // Store client for cleanup
-      if (!assemblyClientsRef.current) {
-        assemblyClientsRef.current = new Map();
-      }
+      // Store client for cleanup and remove from initializing set
       assemblyClientsRef.current.set(peerId, client);
+      transcriptInitializingRef.current.delete(peerId);
 
       // Create audio context for this participant
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -1253,7 +1260,9 @@ To convert to MP4:
       audioProcessorsRef.current.set(peerId, { audioCtx, processor });
 
     } catch (error) {
-      console.error(`Failed to setup subtitles for ${participantName}:`, error);
+      console.error(`Failed to setup transcript recording for ${participantName}:`, error);
+      // Clean up initialization tracking on error
+      transcriptInitializingRef.current.delete(peerId);
     }
   };
 
