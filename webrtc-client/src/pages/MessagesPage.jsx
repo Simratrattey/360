@@ -354,13 +354,16 @@ export default function MessagesPage() {
       console.log('🤖 MessagesPage: Avatar conversation check:', { 
         avatarConversation: !!avatarConversation, 
         user: !!user,
-        userId: user?._id,
+        userId_id: user?._id,
+        userId_alt: user?.id,
+        finalUserId: userId,
         conversationsCount: allConversationsUnified.length 
       });
       
       // Force create avatar conversation if user exists (for testing)
-      if (user?._id) {
-        const testAvatarId = `avatar_conversation_${user._id}`;
+      const userId = user?._id || user?.id;
+      if (userId) {
+        const testAvatarId = `avatar_conversation_${userId}`;
         const alreadyExists = allConversationsUnified.some(conv => conv._id === testAvatarId);
         
         console.log('🤖 MessagesPage: Force adding avatar conversation, already exists:', alreadyExists);
@@ -383,7 +386,7 @@ export default function MessagesPage() {
             unread: 0,
             members: [
               {
-                _id: user._id,
+                _id: userId,
                 fullName: user.fullName || user.username,
                 username: user.username,
                 email: user.email
@@ -1660,7 +1663,7 @@ export default function MessagesPage() {
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
-          const displayName = getConversationDisplayName(conv, user?._id);
+          const displayName = getConversationDisplayName(conv, user?._id || user?.id);
           
           const memberNames = Array.isArray(conv.members)
             ? conv.members.map(m => {
@@ -1689,7 +1692,7 @@ export default function MessagesPage() {
         items: filteredItems,
       };
     });
-  }, [allConversations, search, user?.id, forceUpdate]);
+  }, [allConversations, search, user?._id, user?.id, forceUpdate]);
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {
@@ -2792,7 +2795,7 @@ export default function MessagesPage() {
                   onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
                   starred={starred.includes(conv._id)}
                   getInitials={getInitials}
-                  currentUserId={user?._id}
+                  currentUserId={user?._id || user?.id}
                   typing={typing[conv._id] || {}}
                   draftMessage={draftMessages[conv._id]}
                   canDelete={
@@ -2841,7 +2844,7 @@ export default function MessagesPage() {
                       <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-8 w-8 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
                     ) : (
                       <div className="h-8 w-8 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg">
-                        {getInitials(getConversationDisplayName(selected, user?._id))}
+                        {getInitials(getConversationDisplayName(selected, user?._id || user?.id))}
                       </div>
                     )}
                     {selected.status && (
@@ -2849,7 +2852,7 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?._id)}</h2>
+                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?._id || user?.id)}</h2>
                     {selected && (selected.type === 'group' || selected.type === 'community') && (
                       <p className="text-xs text-gray-600">
                         {selected.members?.length || 0} members

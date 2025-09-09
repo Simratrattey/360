@@ -17,7 +17,9 @@ export const useAvatarConversation = () => {
    * Initialize avatar conversation for current user
    */
   const initializeAvatarConversation = async () => {
-    if (!user?._id) {
+    const userId = user?._id || user?.id;
+    if (!userId) {
+      console.log('🤖 Hook: No user ID found, cannot initialize avatar conversation');
       setIsLoading(false);
       return;
     }
@@ -26,18 +28,18 @@ export const useAvatarConversation = () => {
       setIsLoading(true);
       setError(null);
 
-      console.log('🤖 Hook: Initializing avatar conversation for user:', user._id);
+      console.log('🤖 Hook: Initializing avatar conversation for user:', userId);
 
       // For now, create a client-side avatar conversation object
       // This doesn't require backend changes and will appear in the UI
       const avatarConversationObj = {
-        _id: `avatar_conversation_${user._id}`,
+        _id: `avatar_conversation_${userId}`,
         name: 'Avatar',
         type: 'dm',
         conversationType: 'ai_avatar',
         members: [
           {
-            _id: user._id,
+            _id: userId,
             fullName: user.fullName || user.username,
             username: user.username,
             email: user.email
@@ -126,12 +128,19 @@ export const useAvatarConversation = () => {
 
   // Initialize on user change
   useEffect(() => {
-    console.log('🤖 Hook: useEffect triggered:', { userId: user?._id, isInitialized });
-    if (user?._id && !isInitialized) {
-      console.log('🤖 Hook: Starting avatar conversation initialization');
+    console.log('🤖 Hook: useEffect triggered:', { 
+      userId: user?._id, 
+      userIdAlt: user?.id,
+      userObj: user,
+      isInitialized 
+    });
+    
+    const userId = user?._id || user?.id;
+    if (userId && !isInitialized) {
+      console.log('🤖 Hook: Starting avatar conversation initialization with userId:', userId);
       initializeAvatarConversation();
     }
-  }, [user?._id, isInitialized]);
+  }, [user?._id, user?.id, isInitialized]);
 
   // Reset on user logout
   useEffect(() => {
