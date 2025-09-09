@@ -63,6 +63,8 @@ export default function MeetingPage() {
   const assemblyClientsRef = useRef(null); // Map of peerId -> AssemblyAI client
   const audioProcessorsRef = useRef(null); // Map of peerId -> audio processor
   const pcmWorkerRef = useRef(null);
+  const transcriptScrollRef = useRef(null);
+  const transcriptEndRef = useRef(null);
 
   // Supported languages for subtitles and translation
   const supportedLanguages = [
@@ -1871,6 +1873,19 @@ To convert to MP4:
     };
   }, []);
 
+  // Auto-scroll transcript panel to the latest entry when open
+  useEffect(() => {
+    if (!isHistoryPanelOpen) return;
+    try {
+      if (transcriptEndRef.current) {
+        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } else if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        el.scrollTop = el.scrollHeight;
+      }
+    } catch {}
+  }, [permanentSubtitleHistory, isHistoryPanelOpen]);
+
   // Multilingual processing removed - using AssemblyAI only
 
   const stopSubtitles = () => {
@@ -2399,7 +2414,7 @@ To convert to MP4:
           style={{
             left: subtitlePosition.x === 0 ? '50%' : `${subtitlePosition.x}px`,
             top: subtitlePosition.y === 0 ? 'auto' : `${subtitlePosition.y}px`,
-            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
+            bottom: subtitlePosition.y === 0 ? '8vh' : 'auto',
             transform: subtitlePosition.x === 0 && subtitlePosition.y === 0 ? 'translateX(-50%)' : 'none',
             pointerEvents: 'auto',
             userSelect: 'none'
@@ -2407,23 +2422,31 @@ To convert to MP4:
           onMouseDown={handleSubtitleMouseDown}
         >
           {subtitleHistory.slice(-1).map((subtitle) => (
-            <div key={subtitle.id} className="bg-black/90 text-white rounded-lg px-4 py-2 text-sm shadow-lg border border-gray-600 select-none">
+            <div 
+              key={subtitle.id} 
+              className="rounded-xl px-4 py-3 text-sm shadow-2xl select-none"
+              style={{
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.78) 100%)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(6px)'
+              }}
+            >
               <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-blue-300">{subtitle.speaker}</span>
+                <span className="font-semibold text-blue-300 tracking-wide">{subtitle.speaker}</span>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     resetSubtitlePosition();
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100 cursor-pointer"
+                  className="text-[11px] text-gray-400 hover:text-white ml-2 opacity-70 hover:opacity-100 cursor-pointer"
                   title="Reset position"
                 >
                   ⌂
                 </button>
               </div>
-              <div className="text-white">{subtitle.text}</div>
-              <div className="text-xs text-gray-400 mt-1 flex items-center">
+              <div className="text-white text-[15px] leading-relaxed tracking-wide">{subtitle.text}</div>
+              <div className="text-[11px] text-gray-400 mt-2 flex items-center">
                 <span>💬 Drag to move • Click ⌂ to center</span>
               </div>
             </div>
@@ -2763,7 +2786,7 @@ To convert to MP4:
         </div>
 
         {/* Panel Content */}
-        <div className="flex-1 overflow-y-auto p-4 h-full pb-20">
+        <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 h-full pb-24">
           {permanentSubtitleHistory.length === 0 ? (
             <div className="text-gray-400 text-center mt-8">
               <FileText size={48} className="mx-auto mb-4 opacity-50" />
@@ -2775,7 +2798,7 @@ To convert to MP4:
               {permanentSubtitleHistory.map((subtitle, index) => (
                 <div 
                   key={subtitle.id} 
-                  className="bg-gray-800 rounded-lg p-3 border border-gray-700 hover:bg-gray-750 transition-colors"
+                  className="bg-gray-800/90 rounded-xl p-3 border border-gray-700 hover:bg-gray-750 transition-colors shadow-lg"
                 >
                   {/* Header with speaker name and timestamp */}
                   <div className="flex items-center justify-between mb-2">
@@ -2800,12 +2823,13 @@ To convert to MP4:
                   )}
                 </div>
               ))}
+              <div ref={transcriptEndRef} />
             </div>
           )}
         </div>
 
         {/* Panel Footer with stats */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-3">
+        <div className="sticky bottom-0 left-0 right-0 bg-gray-800/95 border-t border-gray-700 p-3">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>{permanentSubtitleHistory.length} transcript entries</span>
             <div className="flex space-x-4">
