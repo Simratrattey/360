@@ -413,23 +413,20 @@ export default function ChatInput({
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={(!input.trim() && !uploadFile) || isSending || isAvatarProcessing}
+          disabled={(!input.trim() && !uploadFile) || isSending}
           className={`p-2 sm:p-3 rounded-xl text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative ${
             isAvatarConversation(conversation)
               ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
               : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
           } ${
-            (isSending || isAvatarProcessing)
+            isSending
               ? 'from-gray-300 to-gray-400 cursor-not-allowed'
               : ''
           }`}
         >
-          {(isSending || isAvatarProcessing) ? (
+          {isSending ? (
             <div className="flex items-center space-x-1">
               <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-              {isAvatarProcessing && (
-                <span className="text-xs hidden sm:inline">Processing...</span>
-              )}
             </div>
           ) : (
             <Send className="h-4 w-4 sm:h-5 sm:w-5" />
