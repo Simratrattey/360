@@ -417,11 +417,7 @@ export default function MeetingPage() {
         startAudioAnalyzer(localStream, 'local', true);
       }
 
-      // Start transcript recording for local user
-      if (localStream.getAudioTracks().length > 0) {
-        console.log('🎙️ Local stream available, starting transcript recording for local user');
-        startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
-      }
+      // Local stream available - transcript recording will start when meeting has 2+ participants
     }
   }, [localStream]);
 
@@ -445,6 +441,24 @@ export default function MeetingPage() {
       // Start audio analyzer for speaking detection
       if (stream.getAudioTracks().length > 0 && !audioAnalyzers.current.has(id)) {
         startAudioAnalyzer(stream, id, false);
+      }
+
+      // Start transcript recording for this remote participant (only if 2+ participants total)
+      const participantName = participantMap[id];
+      const totalParticipants = remoteStreams.size + 1; // +1 for local user
+      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
+        if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
+          console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
+          startParticipantTranscriptRecording(stream, id, participantName);
+        }
+        
+        // Also start local transcript recording if not already started and we have local stream
+        if (localStream && localStream.getAudioTracks().length > 0) {
+          if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
+            console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
+            startParticipantTranscriptRecording(localStream, 'local', user?.name || 'You');
+          }
+        }
       }
       const videoElement = document.getElementById(`remote-video-${id}`);
       if (videoElement && stream) {
@@ -489,6 +503,21 @@ export default function MeetingPage() {
         stopAudioAnalyzer(id);
       }
     });
+
+    // Cleanup AssemblyAI clients for participants who left
+    if (assemblyClientsRef.current) {
+      assemblyClientsRef.current.forEach((client, id) => {
+        if (id !== 'local' && (!currentStreamIds.has(id) || participantMap[id] === undefined)) {
+          console.log(`🛑 Cleaning up AssemblyAI client for departed participant ${id}`);
+          try {
+            client.close();
+          } catch (error) {
+            console.warn(`Failed to close client for ${id}:`, error);
+          }
+          assemblyClientsRef.current.delete(id);
+        }
+      });
+    }
   }, [remoteStreams, participantMap]); // Removed subtitlesEnabled dependency so transcript recording always works
 
   // parse incoming avatar output
@@ -1084,9 +1113,15 @@ To convert to MP4:
     };
   };
 
-  // Start continuous transcript recording (always recording to history)
+  // Start continuous transcript recording (only when 2+ participants)
   const startTranscriptRecording = async () => {
-    console.log('🚀 Starting continuous AssemblyAI transcript recording for all participants');
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    if (totalParticipants < 2) {
+      console.log(`⏸️ Transcript recording requires 2+ participants, currently have ${totalParticipants}`);
+      return;
+    }
+
+    console.log(`🚀 Starting continuous AssemblyAI transcript recording for ${totalParticipants} participants`);
     
     // Process each remote participant's audio stream separately
     let remoteCount = 0;
@@ -1854,15 +1889,16 @@ To convert to MP4:
     }
   };
 
-  // Auto-start transcript recording when participants join
+  // Auto-start transcript recording when there are 2+ participants
   useEffect(() => {
-    if (remoteStreams.size > 0) {
-      console.log(`🎙️ Participants joined (${remoteStreams.size} participants), starting transcript recording...`);
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    if (totalParticipants >= 2) {
+      console.log(`🎙️ Meeting has ${totalParticipants} participants, starting transcript recording...`);
       console.log(`🔍 Current remoteStreams:`, Array.from(remoteStreams.keys()));
       console.log(`🔍 Current participantMap:`, participantMap);
       startTranscriptRecording();
     } else {
-      console.log(`⏸️ No participants in meeting yet - transcript recording will start when participants join`);
+      console.log(`⏸️ Only ${totalParticipants} participant(s) in meeting - transcript recording will start when 2+ participants join`);
     }
   }, [remoteStreams.size, participantMap]);
 
@@ -2596,7 +2632,7 @@ To convert to MP4:
                     💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
                   <p className="text-xs text-gray-400 mt-1 px-3">
-                    Transcripts are always recorded during meetings. This setting only controls subtitle display.
+                    Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.
                   </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
