@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink, Clock, AlertCircle, RotateCcw } from 'lucide-react';
-import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
+import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl, isAvatarMessage } from '../../api/messageService';
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
+import AvatarMessageBubble from './AvatarMessageBubble';
 import { messageStatus, MESSAGE_STATUS, getMessageStatusInfo } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
@@ -659,6 +660,15 @@ function MessageBubble({
       r.user === currentUserId || r.user?._id === currentUserId
     ) || false;
   }, [reactionGroups, currentUserId]);
+
+  // Handle avatar messages with special rendering
+  if (isAvatarMessage(msg)) {
+    return (
+      <MessageErrorBoundary>
+        <AvatarMessageBubble message={msg} />
+      </MessageErrorBoundary>
+    );
+  }
 
   return (
     <div 

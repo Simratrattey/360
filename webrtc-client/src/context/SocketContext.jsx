@@ -100,6 +100,32 @@ export function SocketProvider({ children }) {
         setAvatarNavigate(index);
       });
 
+      // Avatar messaging events
+      sfuSocket.on('avatarQuery', ({ query, userId, conversationId }) => {
+        console.log('[SocketContext] Avatar query received:', { query, userId, conversationId });
+        // This will be handled by the message processing logic
+      });
+
+      sfuSocket.on('avatarResponse', ({ message, conversationId }) => {
+        console.log('[SocketContext] Avatar response received:', { message, conversationId });
+        // Emit as a regular chat message to be handled by existing message flow
+        if (socket) {
+          socket.emit('chat:new', message);
+        }
+      });
+
+      sfuSocket.on('avatarProcessing', ({ conversationId, isProcessing }) => {
+        console.log('[SocketContext] Avatar processing status:', { conversationId, isProcessing });
+        // Could be used to show typing indicator for avatar
+        if (socket) {
+          socket.emit('chat:typing', {
+            conversationId,
+            userId: 'avatar_system_user',
+            isTyping: isProcessing
+          });
+        }
+      });
+
       sfuSocket.on('recordingStarted', ({ recordedBy }) => {
         console.log('[SocketContext] Recording started by:', recordedBy);
         setRecordingStatus({ isRecording: true, recordedBy });
@@ -264,6 +290,41 @@ export function SocketProvider({ children }) {
     }
   };
 
+  // Avatar messaging functions
+  const sendAvatarQuery = (query, userId, conversationId) => {
+    if (sfuSocket) {
+      console.log('[SocketContext] Sending avatar query:', { query, userId, conversationId });
+      sfuSocket.emit('avatarQuery', {
+        query,
+        userId,
+        conversationId,
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
+  const notifyAvatarProcessing = (conversationId, isProcessing) => {
+    if (sfuSocket) {
+      console.log('[SocketContext] Notifying avatar processing:', { conversationId, isProcessing });
+      sfuSocket.emit('avatarProcessing', {
+        conversationId,
+        isProcessing,
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
+  const sendAvatarResponse = (message, conversationId) => {
+    if (sfuSocket) {
+      console.log('[SocketContext] Sending avatar response:', { message, conversationId });
+      sfuSocket.emit('avatarResponse', {
+        message,
+        conversationId,
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
+
   return (
     <SocketContext.Provider value={{
       socket: sfuSocket, // Alias for compatibility
@@ -289,6 +350,9 @@ export function SocketProvider({ children }) {
       roomSettings,
       avatarApiError,
       toggleAvatarApi,
+      sendAvatarQuery,
+      notifyAvatarProcessing,
+      sendAvatarResponse,
     }}>
       {children}
     </SocketContext.Provider>

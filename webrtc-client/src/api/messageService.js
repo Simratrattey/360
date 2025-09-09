@@ -385,4 +385,60 @@ export const validateFile = (file, maxSize = 50 * 1024 * 1024) => {
   }
 
   return true;
+};
+
+// Avatar-specific message functions
+export const sendAvatarQuery = async (conversationId, text, userId) => {
+  try {
+    console.log('📤 Sending avatar query:', { conversationId, text, userId });
+    
+    const response = await API.post(`/messages/conversation/${conversationId}/avatar-query`, {
+      text,
+      userId,
+      type: 'avatar_query'
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to send avatar query:', error);
+    throw error;
+  }
+};
+
+export const createAvatarMessage = (avatarResponseData) => {
+  return {
+    _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    tempId: `avatar_temp_${Date.now()}`,
+    conversationId: avatarResponseData.conversationId,
+    senderId: 'avatar_system_user',
+    sender: {
+      _id: 'avatar_system_user',
+      fullName: 'Avatar',
+      username: 'avatar',
+      userType: 'ai_avatar',
+      isSystem: true,
+      avatar: '/assets/avatar-profile.png'
+    },
+    text: avatarResponseData.text,
+    type: 'avatar',
+    isSystemMessage: false,
+    isAvatarMessage: true,
+    avatarData: avatarResponseData.avatarData,
+    timestamp: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    status: 'sent'
+  };
+};
+
+export const isAvatarMessage = (message) => {
+  return message?.isAvatarMessage === true || 
+         message?.sender?.userType === 'ai_avatar' ||
+         message?.type === 'avatar' ||
+         message?.senderId === 'avatar_system_user';
+};
+
+export const isAvatarConversation = (conversation) => {
+  return conversation?.conversationType === 'ai_avatar' || 
+         conversation?.settings?.isAvatarConversation === true ||
+         conversation?.name === 'Avatar';
 }; 

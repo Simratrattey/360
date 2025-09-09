@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Camera, Image as ImageIcon, FileText } from 'lucide-react';
-import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
+import { validateFile, formatFileSize, getFileIcon, isAvatarConversation } from '../../api/messageService';
+import { useAvatarConversation } from '../../hooks/useAvatarConversation';
+import AvatarService from '../../services/avatarService';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 
@@ -16,6 +18,8 @@ export default function ChatInput({
   members = [],
   isSending = false,
   uploadProgress = 0,
+  conversation = null, // Add conversation prop for avatar detection
+  onAvatarQuery = null, // Add avatar query handler prop
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
@@ -25,6 +29,10 @@ export default function ChatInput({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const attachmentMenuRef = useRef(null);
+  
+  // Avatar conversation state
+  const { processAvatarQuery } = useAvatarConversation();
+  const [isAvatarProcessing, setIsAvatarProcessing] = useState(false);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -68,7 +76,7 @@ export default function ChatInput({
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     // Stop typing when sending
     if (onTyping) {
       onTyping(false);
@@ -76,7 +84,37 @@ export default function ChatInput({
         clearTimeout(typingTimeoutRef.current);
       }
     }
-    onSend();
+
+    // Check if this is an avatar conversation and process avatar query
+    if (isAvatarConversation(conversation) && input.trim()) {
+      try {
+        setIsAvatarProcessing(true);
+        console.log('🤖 ChatInput: Processing avatar query:', input.trim());
+        
+        // Send regular message first (user's question)
+        onSend();
+        
+        // Process avatar query and get response
+        if (processAvatarQuery && typeof processAvatarQuery === 'function') {
+          const avatarResponse = await processAvatarQuery(input.trim());
+          
+          // Call the avatar query handler if provided
+          if (onAvatarQuery && typeof onAvatarQuery === 'function') {
+            onAvatarQuery(avatarResponse);
+          }
+          
+          console.log('🤖 ChatInput: Avatar response processed:', avatarResponse);
+        }
+      } catch (error) {
+        console.error('🤖 ChatInput: Error processing avatar query:', error);
+        // Still send the regular message even if avatar processing fails
+      } finally {
+        setIsAvatarProcessing(false);
+      }
+    } else {
+      // Regular message sending for non-avatar conversations
+      onSend();
+    }
   };
 
 
@@ -398,11 +436,24 @@ export default function ChatInput({
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={(!input.trim() && !uploadFile) || isSending}
-          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
+          disabled={(!input.trim() && !uploadFile) || isSending || isAvatarProcessing}
+          className={`p-2 sm:p-3 rounded-xl text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative ${
+            isAvatarConversation(conversation)
+              ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
+              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
+          } ${
+            (isSending || isAvatarProcessing)
+              ? 'from-gray-300 to-gray-400 cursor-not-allowed'
+              : ''
+          }`}
         >
-          {isSending ? (
-            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+          {(isSending || isAvatarProcessing) ? (
+            <div className="flex items-center space-x-1">
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+              {isAvatarProcessing && (
+                <span className="text-xs hidden sm:inline">Processing...</span>
+              )}
+            </div>
           ) : (
             <Send className="h-4 w-4 sm:h-5 sm:w-5" />
           )}
