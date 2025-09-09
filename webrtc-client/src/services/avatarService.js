@@ -1,4 +1,4 @@
-import { getBotReply } from '../api/botService';
+import BotService from '../api/botService';
 import API from '../api/client';
 
 /**
@@ -30,9 +30,41 @@ class AvatarService {
       const userName = userInfo?.fullName || userInfo?.username || 'User';
       
       // Call existing bot service to get AI response
-      const botResponse = await getBotReply(messageText);
+      const botServiceResponse = await BotService.getBotReply(messageText);
       
-      console.log('🤖 Avatar: Bot response received:', botResponse);
+      console.log('🤖 Avatar: Bot service response received:', botServiceResponse);
+      
+      // Extract the actual bot data from the service response
+      let botResponse = null;
+      
+      if (!botServiceResponse.success) {
+        console.warn('🤖 Avatar: Bot service returned error:', botServiceResponse.error);
+      } else if (botServiceResponse.data) {
+        // Handle the response format similar to MeetingPage
+        try {
+          // The data might have a 'reply' field that contains JSON
+          const rawData = botServiceResponse.data;
+          if (rawData.reply) {
+            // Parse the JSON reply to get the actual clips data
+            const parsedReply = JSON.parse(rawData.reply);
+            const entries = Array.isArray(parsedReply) && Array.isArray(parsedReply[0]) ? parsedReply[0] : [];
+            
+            // Convert entries to clips format
+            const clips = entries.map(entry => ({
+              title: entry.title || 'Untitled',
+              snippet: entry.snippet || 'No description available',
+              videodetails: entry.videodetails || {}
+            }));
+            
+            botResponse = { clips };
+          } else {
+            botResponse = rawData;
+          }
+        } catch (parseError) {
+          console.warn('🤖 Avatar: Error parsing bot response:', parseError);
+          botResponse = botServiceResponse.data;
+        }
+      }
       
       // Format response in the required avatar format
       const avatarResponseText = this.formatAvatarResponse(botResponse, userName, keywords);
@@ -68,7 +100,8 @@ class AvatarService {
       console.error('🤖 Avatar: Error processing user message:', error);
       
       // Return error message from avatar
-      return this.createErrorMessage(conversationId, userId, error.message);
+      const errorMessage = error.message || error.error || 'Failed to process your request';
+      return this.createErrorMessage(conversationId, userId, errorMessage);
     }
   }
   
