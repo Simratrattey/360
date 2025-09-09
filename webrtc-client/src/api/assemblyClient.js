@@ -53,16 +53,18 @@ export class AssemblyRealtimeClient {
         ws.onmessage = (msg) => {
           try {
             const evt = JSON.parse(msg.data);
-            console.log('📨 AssemblyAI message:', evt.type, evt.transcript || evt.error || '');
             
             if (evt.type === 'Begin') {
               console.log('🎬 AssemblyAI session started:', evt.id);
             } else if (evt.type === 'Turn') {
               if (evt.end_of_turn) {
-                // Final transcript
+                // Final transcript - only log if there's actual text
+                if (evt.transcript?.trim()) {
+                  console.log('📨 AssemblyAI Final:', evt.transcript);
+                }
                 this.onFinal && this.onFinal({ text: evt.transcript });
               } else {
-                // Partial transcript
+                // Partial transcript - don't log to reduce noise
                 this.onPartial && this.onPartial({ text: evt.transcript });
               }
             } else if (evt.type === 'Termination') {
@@ -92,7 +94,7 @@ export class AssemblyRealtimeClient {
     // Send raw binary data directly (not base64)
     this.ws.send(int16.buffer);
     
-    console.log('📡 Sent audio frame:', int16.length, 'samples as binary data');
+    // Removed repetitive audio frame logging - too verbose
   }
 
   close() {

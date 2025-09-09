@@ -1134,7 +1134,7 @@ To convert to MP4:
         onPartial: (evt) => {
           const text = evt.text?.trim();
           if (!text) return;
-          console.log(`[${participantName}] Partial: ${text}`);
+          // Partial transcripts - no logging to reduce noise
         },
         onFinal: (evt) => {
           const text = evt.text?.trim();
@@ -1155,16 +1155,14 @@ To convert to MP4:
           };
           
           // ALWAYS add to permanent history (continuous recording)
-          console.log(`🔄 Adding to permanent history: [${participantName}] ${text}`);
           setPermanentSubtitleHistory(prev => {
             const updated = [...prev, subtitleEntry];
-            console.log(`📝 Permanent history now has ${updated.length} entries`);
+            console.log(`📝 Recorded: [${participantName}] ${text} (${updated.length} total)`);
             return updated;
           });
 
           // Only add to temporary subtitle display if subtitles are enabled
           if (subtitlesEnabledRef.current) {
-            console.log(`👁️ Subtitles enabled - adding to display`);
             setSubtitleHistory(prev => {
               const updated = [...prev.slice(-4), subtitleEntry];
               setTimeout(() => {
@@ -1172,8 +1170,6 @@ To convert to MP4:
               }, 8000);
               return updated;
             });
-          } else {
-            console.log(`🚫 Subtitles disabled - not adding to display (but recorded in permanent history)`);
           }
         },
         onError: (e) => console.warn(`Assembly error for ${participantName}:`, e),
@@ -2584,36 +2580,6 @@ To convert to MP4:
                   <p className="text-xs text-gray-400 mt-1 px-3">
                     Transcripts are always recorded during meetings. This setting only controls subtitle display.
                   </p>
-                  {/* Debug button for testing transcript recording */}
-                  <button
-                    onClick={() => {
-                      console.log('🔧 DEBUG: Manual transcript recording test');
-                      console.log(`📊 Current state - Subtitles: ${subtitlesEnabled}, Remote streams: ${remoteStreams.size}, Permanent history: ${permanentSubtitleHistory.length}`);
-                      console.log(`📊 AssemblyAI clients:`, assemblyClientsRef.current ? assemblyClientsRef.current.size : 0);
-                      startTranscriptRecording();
-                      setShowSettings(false);
-                    }}
-                    className="w-full text-left px-3 py-2 mt-2 rounded text-sm bg-yellow-600 hover:bg-yellow-500 transition-colors"
-                  >
-                    🔧 Debug: Start Recording
-                  </button>
-                  <button
-                    onClick={() => {
-                      console.log('🔧 DEBUG: Current system state');
-                      console.log(`📊 Subtitles enabled: ${subtitlesEnabled} (ref: ${subtitlesEnabledRef.current})`);
-                      console.log(`📊 Remote streams: ${remoteStreams.size}`);
-                      console.log(`📊 Participant map:`, participantMap);
-                      console.log(`📊 Permanent history length: ${permanentSubtitleHistory.length}`);
-                      console.log(`📊 AssemblyAI clients: ${assemblyClientsRef.current ? assemblyClientsRef.current.size : 0}`);
-                      if (assemblyClientsRef.current) {
-                        console.log(`📊 Active client IDs:`, Array.from(assemblyClientsRef.current.keys()));
-                      }
-                      setShowSettings(false);
-                    }}
-                    className="w-full text-left px-3 py-2 mt-1 rounded text-sm bg-purple-600 hover:bg-purple-500 transition-colors"
-                  >
-                    🔍 Debug: Show State
-                  </button>
                   {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
