@@ -31,7 +31,7 @@ export default function ChatInput({
   const attachmentMenuRef = useRef(null);
   
   // Avatar conversation state
-  const { processAvatarQuery } = useAvatarConversation();
+  const { processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
   const [isAvatarProcessing, setIsAvatarProcessing] = useState(false);
 
   const handleInputChange = (e) => {
@@ -93,6 +93,13 @@ export default function ChatInput({
         
         // Send regular message first (user's question)
         onSend();
+        
+        // Check if avatar conversation is initialized before processing
+        if (!isInitialized || isLoading) {
+          console.log('🤖 ChatInput: Avatar conversation not ready, skipping query');
+          setIsAvatarProcessing(false);
+          return;
+        }
         
         // Process avatar query and get response
         if (processAvatarQuery && typeof processAvatarQuery === 'function') {

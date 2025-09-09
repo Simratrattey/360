@@ -123,7 +123,7 @@ export default function MessagesPage() {
   const chatSocket = useChatSocket();
   const { updateCurrentConversation, updateMessagesPageStatus, clearCurrentConversation } = useCurrentConversation();
   const { clearNotificationsForConversation } = useNotifications();
-  const { avatarConversation, isAvatarConversation, processAvatarQuery } = useAvatarConversation();
+  const { avatarConversation, isAvatarConversation, processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
   
   // Debug avatar conversation state
   useEffect(() => {
@@ -1949,6 +1949,16 @@ export default function MessagesPage() {
           console.log('🤖 MessagesPage: Processing avatar query:', messageText);
           
           try {
+            // Check if avatar conversation is initialized before processing
+            if (!isInitialized || isLoading) {
+              console.log('🤖 MessagesPage: Avatar conversation not ready, skipping query');
+              // Remove typing indicator
+              setMessages(prevMessages => {
+                return prevMessages.filter(msg => msg._id !== typingMessage._id);
+              });
+              return;
+            }
+            
             const avatarResponse = await processAvatarQuery(messageText);
             console.log('🤖 MessagesPage: Got avatar response:', avatarResponse);
             
@@ -3211,6 +3221,7 @@ export default function MessagesPage() {
               uploadProgress={uploadProgress}
               conversation={selected}
               onAvatarQuery={handleAvatarResponse}
+              isAvatarInitialized={isInitialized}
             />
           )}
 
