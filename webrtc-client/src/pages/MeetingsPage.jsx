@@ -600,8 +600,8 @@ export default function MeetingsPage() {
                 Search Past Meetings
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 items-end">
-                <div className="md:col-span-2 min-w-0">
+              <div className="grid grid-cols-1 md:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 items-end">
+                <div className="md:col-span-2 xl:col-span-2 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Search by name
                   </label>
@@ -615,7 +615,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div className="min-w-0">
+                <div className="md:col-span-1 xl:col-span-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Start Date
                   </label>
@@ -627,7 +627,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div className="min-w-0">
+                <div className="md:col-span-1 xl:col-span-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     End Date
                   </label>
@@ -639,7 +639,7 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div className="md:col-span-4 xl:col-span-1 flex flex-col justify-end">
+                <div className="md:col-span-2 xl:col-span-3 flex flex-col justify-end">
                   <div className="flex items-center gap-2 md:justify-end">
                     <button
                       onClick={handleSearch}
