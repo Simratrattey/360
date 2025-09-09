@@ -30,7 +30,10 @@ export const uploadMessageFile = (file) => {
   });
 };
 export const getFileUrl = (filename) => {
-  return `${import.meta.env.VITE_API_URL}/uploads/messages/${filename}`;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+  // Remove /api suffix if present, since file serving is directly from base URL
+  const fileBaseUrl = baseUrl.replace(/\/api$/, '');
+  return `${fileBaseUrl}/uploads/messages/${filename}`;
 };
 
 // Helper function to construct proper file URL from file object
@@ -46,25 +49,23 @@ export const constructFileUrl = (fileObj) => {
   }
   
   let url = fileObj.url;
-  const baseUrl = import.meta.env.VITE_API_URL;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  if (!baseUrl) {
-    console.error('[File URL] VITE_API_URL not defined! Make sure .env file exists with VITE_API_URL=http://localhost:8181/api');
-    return null;
-  }
+  // Remove /api suffix if present, since file serving is directly from base URL
+  const fileBaseUrl = baseUrl.replace(/\/api$/, '');
   
   // If it's already a complete URL, return as-is
   if (url.startsWith('http') || url.startsWith('blob:')) {
     return url;
   }
   
-  // If it starts with /, it's an absolute path
+  // If it starts with /, it's an absolute path from the file base URL
   if (url.startsWith('/')) {
-    return `${baseUrl}${url}`;
+    return `${fileBaseUrl}${url}`;
   }
   
   // If it's just a filename, construct full URL
-  return `${baseUrl}/uploads/messages/${url}`;
+  return `${fileBaseUrl}/uploads/messages/${url}`;
 };
 
 // File type utilities
@@ -208,7 +209,9 @@ export const downloadFile = async (url, filename, mimeType) => {
         const originalFilename = urlParts[urlParts.length - 1];
         
         // Use the file endpoint
-        const downloadUrl = `${import.meta.env.VITE_API_URL}/api/files/${originalFilename}`;
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+        const apiBaseUrl = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
+        const downloadUrl = `${apiBaseUrl}/files/${originalFilename}`;
         
         // Get auth token from localStorage
         const token = localStorage.getItem('token');

@@ -40,7 +40,8 @@ function MessageBubble({
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [imgLoading, setImgLoading] = useState(true);
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgRetryCount, setImgRetryCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 100, left: 100, placement: 'bottom-right' });
@@ -413,7 +414,7 @@ function MessageBubble({
             <div className="relative overflow-hidden rounded-lg bg-gray-100">
               {/* Always try to show the image first */}
               <img
-                src={previewUrl || fileUrl}
+                src={`${previewUrl || fileUrl}${imgRetryCount > 0 ? `?retry=${imgRetryCount}` : ''}`}
                 alt={msg.file.name}
                 onError={(e) => {
                   setImgError(true);
@@ -461,6 +462,7 @@ function MessageBubble({
                     onClick={() => {
                       setImgError(false);
                       setImgLoading(true);
+                      setImgRetryCount(prev => prev + 1);
                     }}
                     className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs transition-colors"
                     title="Retry loading preview"
