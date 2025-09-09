@@ -179,6 +179,65 @@ router.get('/past', authMiddleware, async (req, res) => {
   }
 });
 
+// Test endpoint for Gemini AI service - MUST be before /:id route
+router.get('/test-gemini', authMiddleware, async (req, res) => {
+  try {
+    console.log('[Test] Testing Gemini AI service...');
+    
+    // Import and test the service
+    const { summarizeMeeting, validateGeminiConfig, testGeminiConnection } = await import('../services/geminiSummaryService.js');
+    console.log('[Test] Successfully imported geminiSummaryService');
+    
+    // Test configuration
+    const isConfigValid = validateGeminiConfig();
+    console.log(`[Test] Gemini config validation: ${isConfigValid}`);
+    
+    if (!isConfigValid) {
+      return res.json({
+        success: false,
+        error: 'Gemini API key not configured',
+        config: isConfigValid
+      });
+    }
+    
+    // Test connection
+    console.log('[Test] Testing Gemini connection...');
+    const connectionTest = await testGeminiConnection();
+    console.log(`[Test] Connection test result: ${connectionTest}`);
+    
+    // Test with sample transcript
+    const sampleTranscript = [
+      { speaker: 'John', text: 'Hello everyone, welcome to our meeting today.' },
+      { speaker: 'Jane', text: 'Thanks John. I wanted to discuss our project progress.' },
+      { speaker: 'Bob', text: 'Great! I have some updates to share about the development.' }
+    ];
+    
+    console.log('[Test] Testing summarization with sample data...');
+    const summary = await summarizeMeeting(sampleTranscript, 'Test Meeting');
+    console.log(`[Test] Summary result: ${summary ? 'SUCCESS' : 'FAILED'}`);
+    
+    res.json({
+      success: true,
+      tests: {
+        import: true,
+        config: isConfigValid,
+        connection: connectionTest,
+        summarization: summary ? true : false
+      },
+      summary: summary || 'No summary generated',
+      sampleData: sampleTranscript
+    });
+    
+  } catch (error) {
+    console.error('[Test] Error testing Gemini:', error);
+    res.json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 router.patch('/:id/leave', leaveMeeting);
 router.patch('/:id/join', authMiddleware, joinMeeting);
 router.delete('/:id',   deleteMeeting);
@@ -329,6 +388,4 @@ router.post('/:id/regenerate-summary', authMiddleware, async (req, res) => {
     });
   }
 });
-
-// ← add this if it isn't there already:
 export default router;

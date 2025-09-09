@@ -166,24 +166,32 @@ MeetingSchema.methods.generateSummary = async function() {
       
       // Try to generate AI summary if Gemini is configured
       try {
+        console.log(`[Meeting] Attempting to import geminiSummaryService...`);
         const { summarizeMeeting, validateGeminiConfig } = await import('../services/geminiSummaryService.js');
+        console.log(`[Meeting] ✅ Successfully imported geminiSummaryService`);
         
-        if (validateGeminiConfig()) {
-          console.log(`[Meeting] Generating AI summary for meeting: ${this.title}`);
+        console.log(`[Meeting] Validating Gemini configuration...`);
+        const isConfigValid = validateGeminiConfig();
+        console.log(`[Meeting] Gemini config validation result: ${isConfigValid}`);
+        
+        if (isConfigValid) {
+          console.log(`[Meeting] Starting AI summary generation for meeting: ${this.title} (${transcript.entries.length} entries)`);
           const aiSummary = await summarizeMeeting(transcript.entries, this.title);
+          console.log(`[Meeting] AI summary result: ${aiSummary ? 'SUCCESS' : 'NULL/FAILED'}`);
           
-          if (aiSummary) {
+          if (aiSummary && aiSummary.trim().length > 0) {
             this.summary = aiSummary;
-            console.log(`[Meeting] ✅ AI summary generated for meeting ${this._id}`);
+            console.log(`[Meeting] ✅ AI summary generated successfully for meeting ${this._id} (${aiSummary.length} characters)`);
             return;
           } else {
-            console.log(`[Meeting] AI summary failed, falling back to transcript text`);
+            console.log(`[Meeting] ❌ AI summary was empty or null, falling back to transcript text`);
           }
         } else {
-          console.log(`[Meeting] Gemini not configured, using transcript text`);
+          console.log(`[Meeting] ❌ Gemini not properly configured, using transcript text fallback`);
         }
       } catch (aiError) {
-        console.error('[Meeting] Error with AI summarization, falling back to transcript:', aiError);
+        console.error('[Meeting] ❌ Error with AI summarization, falling back to transcript:', aiError);
+        console.error('[Meeting] Error stack:', aiError.stack);
       }
       
       // Fallback: Use formatted transcript as summary
