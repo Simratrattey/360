@@ -657,8 +657,8 @@ export default function MeetingsPage() {
                     <History className="w-16 h-16 mb-4 text-gray-300" />
                     <p className="text-lg font-medium text-gray-500">No past meetings found</p>
                     <p className="text-sm text-gray-400 mt-1">
-                      {searchQuery || startDate || endDate 
-                        ? "Try adjusting your search filters" 
+                      {searchQuery 
+                        ? "Try adjusting your search query" 
                         : "You haven't attended any meetings yet"}
                     </p>
                   </div>
