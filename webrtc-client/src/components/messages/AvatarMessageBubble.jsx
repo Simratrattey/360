@@ -13,6 +13,66 @@ const AvatarMessageBubble = ({ message }) => {
     return null;
   }
 
+  // Handle welcome message with special styling
+  if (message.isWelcome) {
+    return (
+      <div className="flex items-start space-x-3 mb-4">
+        <div className="flex-shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+        </div>
+        <div className="flex flex-col">
+          <div className="flex items-center space-x-2 mb-2">
+            <span className="text-sm font-bold text-blue-600">Avatar</span>
+            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full">
+              AI Assistant
+            </span>
+            <span className="text-xs text-gray-500">
+              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 max-w-lg border border-blue-200 shadow-sm">
+            <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {message.text}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle typing indicator
+  if (message.isTyping) {
+    return (
+      <div className="flex items-start space-x-3 mb-3">
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-white" />
+          </div>
+        </div>
+        <div className="flex flex-col">
+          <div className="flex items-center space-x-2 mb-1">
+            <span className="text-sm font-medium text-blue-600">Avatar</span>
+            <span className="text-xs text-gray-500">
+              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 max-w-md border border-blue-100">
+            <div className="flex items-center space-x-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+              </div>
+              <span className="text-sm text-blue-600 font-medium">Thinking...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const toggleClipExpansion = (index) => {
     const newExpanded = new Set(expandedClips);
     if (newExpanded.has(index)) {

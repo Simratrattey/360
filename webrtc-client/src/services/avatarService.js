@@ -29,45 +29,48 @@ class AvatarService {
       const userInfo = await this.getUserInfo(userId);
       const userName = userInfo?.fullName || userInfo?.username || 'User';
       
-      // Call existing bot service to get AI response
-      const botServiceResponse = await BotService.getBotReply(messageText);
+      // Call bot service exactly like in MeetingPage
+      console.log('▶️ Avatar: Asking bot service:', messageText);
+      const { success, data, error } = await BotService.getBotReply(messageText, null);
+      console.log('◀️ Avatar: BotService returned:', { success, data, error });
       
-      console.log('🤖 Avatar: Bot service response received:', botServiceResponse);
-      
-      // Extract the actual bot data from the service response
       let botResponse = null;
       
-      if (!botServiceResponse.success) {
-        console.warn('🤖 Avatar: Bot service returned error:', botServiceResponse.error);
-      } else if (botServiceResponse.data) {
-        // Handle the response format similar to MeetingPage
+      if (!success) {
+        console.warn('🤖 Avatar: Bot service returned error:', error);
+        throw new Error(error || 'Bot service error');
+      }
+      
+      if (data) {
         try {
-          // The data might have a 'reply' field that contains JSON
-          const rawData = botServiceResponse.data;
-          if (rawData.reply) {
-            // Parse the JSON reply to get the actual clips data
-            const parsedReply = JSON.parse(rawData.reply);
-            const entries = Array.isArray(parsedReply) && Array.isArray(parsedReply[0]) ? parsedReply[0] : [];
-            
-            // Convert entries to clips format
-            const clips = entries.map(entry => ({
-              title: entry.title || 'Untitled',
-              snippet: entry.snippet || 'No description available',
-              videodetails: entry.videodetails || {}
-            }));
-            
-            botResponse = { clips };
-          } else {
-            botResponse = rawData;
-          }
+          // Parse the response exactly like in MeetingPage
+          const outer = JSON.parse(data.reply);
+          const entries = Array.isArray(outer) && Array.isArray(outer[0]) ? outer[0] : [];
+          
+          // Convert entries to clips format exactly like MeetingPage
+          const clips = entries.map(entry => ({
+            title: entry.title || 'Untitled',
+            snippet: entry.snippet || 'No description available',
+            videodetails: entry.videodetails || {},
+            // Add the original entry for video URL construction
+            originalEntry: entry
+          }));
+          
+          botResponse = { clips };
         } catch (parseError) {
           console.warn('🤖 Avatar: Error parsing bot response:', parseError);
-          botResponse = botServiceResponse.data;
+          // Fallback to display raw reply
+          botResponse = { 
+            clips: [],
+            rawReply: data.reply 
+          };
         }
       }
       
-      // Format response in the required avatar format
+      // Format response in the required avatar format  
+      console.log('🤖 Avatar: Bot response data:', botResponse);
       const avatarResponseText = this.formatAvatarResponse(botResponse, userName, keywords);
+      console.log('🤖 Avatar: Formatted response text:', avatarResponseText);
       
       // Create avatar message object
       const avatarMessage = {
@@ -106,7 +109,7 @@ class AvatarService {
   }
   
   /**
-   * Format avatar response in the required format
+   * Format avatar response in the required format exactly like meeting reference
    * @param {Object} botData - Response from bot service
    * @param {string} userName - User's display name
    * @param {Array} keywords - Extracted keywords from query
@@ -127,6 +130,9 @@ class AvatarService {
           response += '\n';
         }
       });
+    } else if (botData && botData.rawReply) {
+      // If parsing failed, show the raw reply
+      response += `\n${botData.rawReply}`;
     } else {
       response += '\nI apologize, but I could not find relevant information for your query. Please try rephrasing your question or being more specific.';
     }
@@ -135,35 +141,25 @@ class AvatarService {
   }
   
   /**
-   * Construct video URL from clip data
-   * @param {Object} clip - Video clip data
+   * Construct video URL from clip data exactly like MeetingPage
+   * @param {Object} clip - Video clip data with originalEntry
    * @returns {string} Complete video URL with timestamp
    */
   static constructVideoURL(clip) {
     try {
-      if (!clip || !clip.title) {
+      // Use originalEntry if available (from new format), otherwise fallback to clip itself
+      const entry = clip.originalEntry || clip;
+      
+      if (!entry || !entry.title || !entry.videodetails) {
         return 'Video URL not available';
       }
       
-      const baseUrl = 'https://clavisds02.feeltiptop.com/360TeamCalls/downloads';
+      // Construct URL exactly like in MeetingPage
+      const videoUrl = `https://clavisds02.feeltiptop.com/360TeamCalls/downloads/` +
+        entry.title.slice(0,4) + '/' + entry.title.slice(5,7) + '/' + entry.title + '/' + entry.title + '.mp4' +
+        `#t=${entry.videodetails.snippetstarttimesecs},${entry.videodetails.snippetendtimesecs}`;
       
-      // Extract date from title (format: YYYY.MM.DD-... or similar)
-      const dateMatch = clip.title.match(/(\d{4})\.(\d{2})\.(\d{2})/);
-      if (!dateMatch) {
-        console.warn('🤖 Avatar: Could not extract date from clip title:', clip.title);
-        return 'Video URL format not supported';
-      }
-      
-      const [, year, month, day] = dateMatch;
-      const videoPath = `${year}/${month}/${clip.title}/${clip.title}.mp4`;
-      
-      // Add timestamp fragment if available
-      let url = `${baseUrl}/${videoPath}`;
-      if (clip.videodetails && clip.videodetails.snippetstarttimesecs && clip.videodetails.snippetendtimesecs) {
-        url += `#t=${clip.videodetails.snippetstarttimesecs},${clip.videodetails.snippetendtimesecs}`;
-      }
-      
-      return url;
+      return videoUrl;
     } catch (error) {
       console.error('🤖 Avatar: Error constructing video URL:', error);
       return 'Error generating video URL';

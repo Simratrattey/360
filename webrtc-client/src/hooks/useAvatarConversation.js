@@ -53,7 +53,7 @@ export const useAvatarConversation = () => {
           }
         ],
         lastMessage: {
-          text: 'Ask me anything about your projects and videos!',
+          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about your projects, meetings, and videos!',
           senderId: 'avatar_system_user',
           senderName: 'Avatar',
           timestamp: new Date().toISOString()

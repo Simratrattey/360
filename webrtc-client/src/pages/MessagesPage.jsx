@@ -293,6 +293,9 @@ export default function MessagesPage() {
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
+  // Avatar conversation messages storage (client-side)
+  const [avatarMessages, setAvatarMessages] = useState(new Map());
+  
   // Debouncing ref to prevent excessive fetchConversations calls
   const fetchDebounceRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
@@ -409,7 +412,7 @@ export default function MessagesPage() {
             isPermanent: true,
             alwaysOnTop: true,
             lastMessage: {
-              text: 'Ask me anything about your projects and videos!',
+              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about your projects, meetings, and videos!',
               senderId: 'avatar_system_user',
               senderName: 'Avatar',
               timestamp: new Date().toISOString()
@@ -1745,6 +1748,36 @@ export default function MessagesPage() {
     setMessages([]);
     setMessagesLoading(true);
     
+    // For avatar conversations, load saved messages or create welcome message
+    if (isAvatarConversation && isAvatarConversation(conv)) {
+      const savedMessages = avatarMessages.get(conv._id) || [];
+      
+      if (savedMessages.length > 0) {
+        // Load saved conversation history
+        setMessages(savedMessages);
+        setMessagesLoading(false);
+      } else {
+        // Create initial welcome message for new avatar conversations
+        const welcomeMessage = {
+          _id: `welcome_${Date.now()}`,
+          conversationId: conv._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about your projects, meetings, and videos!\n\nI can help you:\n✨ Find specific meeting transcripts\n🎥 Locate video segments\n📝 Answer questions about your content\n\nJust type your question and I\'ll search through your meetings to find relevant information!',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isWelcome: true,
+          status: 'sent'
+        };
+        
+        const initialMessages = [welcomeMessage];
+        setMessages(initialMessages);
+        setAvatarMessages(prev => new Map(prev.set(conv._id, initialMessages)));
+        setMessagesLoading(false);
+      }
+    }
+    
     // Mark as conversation switch for instant scrolling
     setIsConversationSwitch(true);
     setSelected(conv);
@@ -1857,18 +1890,18 @@ export default function MessagesPage() {
       return;
     }
 
-    // Special handling for avatar conversations
+    // Special handling for avatar conversations - act like a chatbot
     if (isAvatarConversation && isAvatarConversation(selected)) {
-      console.log('🤖 MessagesPage: Handling avatar conversation message');
+      console.log('🤖 MessagesPage: Handling avatar conversation message (chatbot mode)');
       setIsSending(true);
       
       try {
-        // Clear input immediately
+        // Clear input immediately for better UX
         const messageText = input.trim();
         setInput('');
         setReplyTo(null);
         
-        // Create user message and add it to the conversation
+        // Create user message and add it immediately to the chat
         const userId = user?._id || user?.id;
         const userMessage = {
           _id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1878,26 +1911,131 @@ export default function MessagesPage() {
           text: messageText,
           createdAt: new Date().toISOString(),
           timestamp: new Date().toISOString(),
-          isAvatarMessage: false
+          isAvatarMessage: false,
+          status: 'sent'
         };
         
-        // Add user message to messages
-        setMessages(prevMessages => [...prevMessages, userMessage]);
+        // Add user message immediately to the chat
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, userMessage];
+          // Save to avatar messages storage
+          setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+          return newMessages;
+        });
         
-        // Process avatar response
+        // Add typing indicator for avatar
+        const typingMessage = {
+          _id: `typing_${Date.now()}`,
+          conversationId: selected._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Thinking...',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isTyping: true,
+          status: 'typing'
+        };
+        
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, typingMessage];
+          // Save to avatar messages storage (including typing indicator temporarily)
+          setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+          return newMessages;
+        });
+        
+        // Process avatar response asynchronously
         if (processAvatarQuery) {
           console.log('🤖 MessagesPage: Processing avatar query:', messageText);
-          const avatarResponse = await processAvatarQuery(messageText);
-          console.log('🤖 MessagesPage: Got avatar response:', avatarResponse);
           
-          // Handle the avatar response
-          await handleAvatarResponse(avatarResponse);
+          try {
+            const avatarResponse = await processAvatarQuery(messageText);
+            console.log('🤖 MessagesPage: Got avatar response:', avatarResponse);
+            
+            // Remove typing indicator and add the actual avatar response
+            setMessages(prevMessages => {
+              const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+              
+              if (avatarResponse) {
+                const finalAvatarMessage = {
+                  ...avatarResponse,
+                  _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  conversationId: selected._id,
+                  timestamp: new Date().toISOString(),
+                  status: 'sent'
+                };
+                
+                const newMessages = [...withoutTyping, finalAvatarMessage];
+                // Save to avatar messages storage
+                setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+                return newMessages;
+              } else {
+                // Save without typing indicator
+                setAvatarMessages(prev => new Map(prev.set(selected._id, withoutTyping)));
+                return withoutTyping;
+              }
+            });
+              
+              // Update conversation's last message for sidebar
+              setAllConversations(prevSections => {
+                const updatedSections = prevSections.map(section => ({
+                  ...section,
+                  items: section.items.map(conv => {
+                    if (conv._id === selected._id) {
+                      return {
+                        ...conv,
+                        lastMessage: {
+                          text: finalAvatarMessage.text.length > 50 
+                            ? finalAvatarMessage.text.substring(0, 50) + '...'
+                            : finalAvatarMessage.text,
+                          senderId: finalAvatarMessage.senderId,
+                          senderName: 'Avatar',
+                          timestamp: finalAvatarMessage.timestamp
+                        },
+                        lastMessageAt: finalAvatarMessage.timestamp
+                      };
+                    }
+                    return conv;
+                  })
+                })).map(section => ({
+                  ...section,
+                  items: sortConversationsWithAvatarTop(section.items)
+                }));
+                return updatedSections;
+              });
+            }
+            
+          } catch (processingError) {
+            console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
+            
+            // Remove typing indicator and add error message
+            setMessages(prevMessages => {
+              const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+              
+              const errorMessage = {
+                _id: `avatar_error_${Date.now()}`,
+                conversationId: selected._id,
+                senderId: 'avatar_system_user',
+                senderName: 'Avatar',
+                text: 'Sorry, I encountered an error while processing your request. Please try again.',
+                createdAt: new Date().toISOString(),
+                timestamp: new Date().toISOString(),
+                isAvatarMessage: true,
+                status: 'error'
+              };
+              
+              const newMessages = [...withoutTyping, errorMessage];
+              // Save to avatar messages storage
+              setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+              return newMessages;
+            });
+          }
         }
         
       } catch (error) {
-        console.error('🤖 MessagesPage: Error handling avatar message:', error);
+        console.error('🤖 MessagesPage: Error in avatar chat handling:', error);
         setNotification({
-          message: 'Failed to process avatar message. Please try again.'
+          message: 'Failed to send message to avatar. Please try again.'
         });
         setTimeout(() => setNotification(null), 3000);
       } finally {
