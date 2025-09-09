@@ -30,6 +30,7 @@ import meetingRoutes from './src/routes/meetings.js';
 import sfuRoutes, { producers } from './src/routes/sfu.js';
 import notificationRoutes from './src/routes/notification.js';
 import transcriptRoutes from './src/routes/transcript.js';
+import dashboardRoutes from './src/routes/dashboard.js';
 import { createNotification } from './src/controllers/notificationController.js';
 
 import helmet from 'helmet';
@@ -1298,6 +1299,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/transcripts', transcriptRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Serve uploaded message files statically from /uploads/messages at /uploads/messages/*.
 app.use('/uploads/messages', (req, res, next) => {

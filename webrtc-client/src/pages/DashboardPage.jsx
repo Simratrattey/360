@@ -27,19 +27,6 @@ import { useNotifications } from '../context/NotificationContext';
 import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useSocket } from '../context/SocketContext';
 
-const stats = [
-  { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
-  { name: 'Active Contacts', value: '156', icon: Users, change: '+8%', changeType: 'positive' },
-  { name: 'Hours This Week', value: '18.5', icon: Clock, change: '+5%', changeType: 'positive' },
-  { name: 'Upcoming', value: '3', icon: Calendar, change: '0%', changeType: 'neutral' },
-];
-
-const recentMeetings = [
-  { id: 1, title: 'Team Standup', participants: 8, duration: '30m', date: '2 hours ago', status: 'completed' },
-  { id: 2, title: 'Client Presentation', participants: 12, duration: '1h 15m', date: 'Yesterday', status: 'completed' },
-  { id: 3, title: 'Project Review', participants: 5, duration: '45m', date: '2 days ago', status: 'completed' },
-  { id: 4, title: 'Weekly Sync', participants: 15, duration: '1h', date: '3 days ago', status: 'completed' },
-];
 
 export default function DashboardPage() {
   const { user } = useContext(AuthContext);
@@ -53,6 +40,11 @@ export default function DashboardPage() {
   // Using only global notifications to avoid duplicates
   const [scheduling, setScheduling] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  
+  // Dashboard data state
+  const [stats, setStats] = useState([]);
+  const [recentMeetings, setRecentMeetings] = useState([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
   
   // Join request system
   const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
@@ -70,9 +62,41 @@ export default function DashboardPage() {
       });
   };
 
+  const loadDashboardData = async () => {
+    try {
+      setDashboardLoading(true);
+      
+      // Load dashboard statistics
+      const statsResponse = await API.get('/dashboard/stats');
+      if (statsResponse.data.success) {
+        setStats(statsResponse.data.stats);
+      }
+      
+      // Load recent meetings
+      const meetingsResponse = await API.get('/dashboard/recent-meetings');
+      if (meetingsResponse.data.success) {
+        setRecentMeetings(meetingsResponse.data.meetings);
+      }
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      // Set fallback data on error
+      setStats([
+        { name: 'Total Meetings', value: '0', icon: 'Video', change: '0%', changeType: 'neutral' },
+        { name: 'Active Contacts', value: '0', icon: 'Users', change: '0%', changeType: 'neutral' },
+        { name: 'Hours This Week', value: '0', icon: 'Clock', change: '0%', changeType: 'neutral' },
+        { name: 'Upcoming', value: '0', icon: 'Calendar', change: '0%', changeType: 'neutral' },
+      ]);
+      setRecentMeetings([]);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Initial fetch
     loadRooms();
+    loadDashboardData();
     // Real-time updates via socket events
     if (sfuSocket) {
       const handleOpened = () => loadRooms();
@@ -447,29 +471,51 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {stats.map((stat, index) => (
-          <motion.div
-            key={stat.name}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.12, duration: 0.6 }}
-            className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
-          >
-            <div>
-              <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
-              <p className="text-3xl font-extrabold text-primary-800">{stat.value}</p>
-              <p className={`text-xs mt-1 ${
-                stat.changeType === 'positive' ? 'text-green-600' : 
-                stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
-              }`}>
-                {stat.change} from last month
-              </p>
+        {dashboardLoading ? (
+          // Loading skeleton
+          [1, 2, 3, 4].map((index) => (
+            <div key={index} className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 animate-pulse">
+              <div className="flex-1">
+                <div className="h-4 bg-secondary-300 rounded w-3/4 mb-2"></div>
+                <div className="h-8 bg-secondary-300 rounded w-1/2 mb-1"></div>
+                <div className="h-3 bg-secondary-300 rounded w-2/3"></div>
+              </div>
+              <div className="h-14 w-14 bg-secondary-300 rounded-xl"></div>
             </div>
-            <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
-              <stat.icon className="h-7 w-7 text-white" />
-            </div>
-          </motion.div>
-        ))}
+          ))
+        ) : (
+          stats.map((stat, index) => {
+            // Map icon names to actual icon components
+            const IconComponent = stat.icon === 'Video' ? Video :
+                                stat.icon === 'Users' ? Users :
+                                stat.icon === 'Clock' ? Clock :
+                                stat.icon === 'Calendar' ? Calendar : Video;
+            
+            return (
+              <motion.div
+                key={stat.name}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.12, duration: 0.6 }}
+                className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
+              >
+                <div>
+                  <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
+                  <p className="text-3xl font-extrabold text-primary-800">{stat.value}</p>
+                  <p className={`text-xs mt-1 ${
+                    stat.changeType === 'positive' ? 'text-green-600' : 
+                    stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
+                  }`}>
+                    {stat.change} from last month
+                  </p>
+                </div>
+                <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
+                  <IconComponent className="h-7 w-7 text-white" />
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -550,29 +596,56 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold text-primary-800">Recent Meetings</h2>
             <TrendingUp className="h-6 w-6 text-blue-400" />
           </div>
-          <div className="space-y-3">
-            {recentMeetings.map((meeting) => (
-              <div key={meeting.id} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
-                    <Video className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-primary-800">{meeting.title}</p>
-                    <p className="text-sm text-secondary-600">
-                      {meeting.participants} participants • {meeting.duration}
-                    </p>
+          {dashboardLoading ? (
+            // Loading skeleton
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="animate-pulse p-4 bg-white/60 rounded-xl border border-white/20">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-secondary-300 rounded-lg"></div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-secondary-300 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-secondary-300 rounded w-1/2"></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-3 bg-secondary-300 rounded w-16 mb-1"></div>
+                      <div className="h-4 bg-secondary-300 rounded w-12"></div>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-secondary-500">{meeting.date}</p>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    {meeting.status}
-                  </span>
+              ))}
+            </div>
+          ) : recentMeetings.length > 0 ? (
+            <div className="space-y-3">
+              {recentMeetings.map((meeting, index) => (
+                <div key={meeting.id || index} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
+                      <Video className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-primary-800">{meeting.title}</p>
+                      <p className="text-sm text-secondary-600">
+                        {meeting.participants} participants • {meeting.duration}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-secondary-500">{meeting.date}</p>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {meeting.status}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Video className="h-12 w-12 text-secondary-400 mx-auto mb-3" />
+              <p className="text-secondary-600">No recent meetings</p>
+              <p className="text-sm text-secondary-500">Start a meeting to see your history here</p>
+            </div>
+          )}
         </motion.div>
       </div>
 
