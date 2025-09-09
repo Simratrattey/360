@@ -483,6 +483,12 @@ export default function MessagesPage() {
       // FIXED: Smart prefetch that never overwrites real-time cached messages
       conversationsToPrefetch.forEach(conv => {
         if (!conv || !conv._id) return;
+        
+        // Skip prefetching for avatar conversations - they're client-side only
+        if (conv.conversationType === 'ai_avatar' || conv.settings?.isAvatarConversation) {
+          return;
+        }
+        
         // Only prefetch if NO cache exists at all (empty or undefined)
         const existingCache = messagesCache[conv._id];
         if (!existingCache || existingCache.length === 0) {
@@ -1064,6 +1070,12 @@ export default function MessagesPage() {
     }
     
     // Always fetch from server in background to ensure we have latest messages
+    // Skip API calls for avatar conversations - they're client-side only
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Skipping server fetch for avatar conversation');
+      return;
+    }
+    
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
         // SAFETY CHECK: Only process if this is still the selected conversation
@@ -2531,6 +2543,12 @@ export default function MessagesPage() {
   // Load more messages function for infinite scroll
   const handleLoadMoreMessages = async () => {
     if (!selected?._id || loadingMore || !hasMoreMessages) return;
+    
+    // Don't load more messages for avatar conversations - they're client-side only
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Skipping handleLoadMoreMessages for avatar conversation');
+      return;
+    }
     
     setLoadingMore(true);
     
