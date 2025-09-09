@@ -17,6 +17,7 @@ import { Server as SocketIO } from 'socket.io';
 import User    from './src/models/user.js';
 import Message from './src/models/message.js';
 import Conversation, { ReadReceipt } from './src/models/conversation.js';
+import Meeting from './src/models/meeting.js';
 
 import { generateReply } from './llm.js';
 
@@ -506,7 +507,7 @@ io.on('connection', async socket => {
   io.emit('user:online', { userId: socket.userId, user: onlineUsers.get(socket.userId) });
   
   // roomId can still come from client, optionally with meeting info
-  socket.on('joinRoom', (roomId, meetingInfo = null) => {
+  socket.on('joinRoom', async (roomId, meetingInfo = null) => {
     console.log(`[Signaling] socket ${socket.id} requesting joinRoom ${roomId}`);
     if (meetingInfo) {
       console.log(`[Signaling] 📋 Received meeting info:`, meetingInfo);
@@ -514,6 +515,17 @@ io.on('connection', async socket => {
     
     if (socket.currentRoom) {
       socket.leave(socket.currentRoom);
+      // Remove participant from previous meeting
+      try {
+        const prevMeeting = await Meeting.findOne({ roomId: socket.currentRoom, status: 'active' });
+        if (prevMeeting) {
+          await prevMeeting.removeParticipant(socket.userId);
+          console.log(`[Meeting] User ${socket.userId} left room ${socket.currentRoom}`);
+        }
+      } catch (error) {
+        console.error('[Meeting] Error removing participant from previous meeting:', error);
+      }
+      
       // Remove by socketId, not username
       if (rooms[socket.currentRoom]) {
         rooms[socket.currentRoom].participants = rooms[socket.currentRoom].participants.filter(
@@ -549,6 +561,30 @@ io.on('connection', async socket => {
         visibility: rooms[roomId].visibility,
         host: rooms[roomId].host
       });
+      
+      // Create meeting record in database
+      try {
+        const meeting = new Meeting({
+          title: rooms[roomId].name,
+          roomId: roomId,
+          organizer: socket.userId,
+          type: 'instant',
+          status: 'active',
+          visibility: rooms[roomId].visibility,
+          startTime: new Date(),
+          actualStartTime: new Date(),
+          metadata: {
+            avatarApiEnabled: rooms[roomId].avatarApiEnabled
+          }
+        });
+        
+        await meeting.save();
+        rooms[roomId].meetingId = meeting._id; // Store meeting ID in room
+        console.log(`[Meeting] ✅ Created meeting record: ${meeting._id}`);
+      } catch (error) {
+        console.error('[Meeting] Error creating meeting record:', error);
+      }
+      
       // Notify clients that a new room opened (dashboard can refresh)
       io.emit('roomOpened', {
         roomId,
@@ -557,6 +593,7 @@ io.on('connection', async socket => {
         createdAt: rooms[roomId].createdAt
       });
     }
+    
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
     // Only add if not already present
@@ -564,6 +601,17 @@ io.on('connection', async socket => {
       rooms[roomId].participants.push({ socketId: socket.id, userName, userId: socket.userId });
     }
     connectedSockets.push({ socketId: socket.id, userName, roomId });
+
+    // Add participant to meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: roomId, status: 'active' });
+      if (meeting) {
+        await meeting.addParticipant(socket.userId, userName);
+        console.log(`[Meeting] User ${userName} joined meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error adding participant to meeting:', error);
+    }
 
     io.to(roomId).emit('roomParticipants', rooms[roomId].participants);
     socket.emit('availableOffers', rooms[roomId].offers);
@@ -659,7 +707,7 @@ io.on('connection', async socket => {
     }
   });
 
-  socket.on('hangup', (peerId, ack) => {
+  socket.on('hangup', async (peerId, ack) => {
     console.log('[Signaling] hangup received from client:', peerId, 'typeof:', typeof peerId);
     const rid = socket.currentRoom;
     console.log('[Signaling] 🔔 hangup from', peerId, 'room', rid, 'socket.id:', socket.id, 'userName:', userName);
@@ -667,6 +715,18 @@ io.on('connection', async socket => {
       if (typeof ack === 'function') ack();
       return;
     }
+    
+    // Remove participant from meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+      if (meeting) {
+        await meeting.removeParticipant(socket.userId);
+        console.log(`[Meeting] User ${userName} left meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error removing participant from meeting:', error);
+    }
+    
     console.log('[Signaling] Emitting hangup to room', rid, 'with peerId:', peerId, 'participants:', rooms[rid]?.participants);
     socket.to(rid).emit('hangup', peerId);
     if (rooms[rid]) {
@@ -677,7 +737,19 @@ io.on('connection', async socket => {
       rooms[rid].offers = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       io.to(rid).emit('availableOffers', rooms[rid].offers);
       io.to(rid).emit('roomParticipants', rooms[rid].participants);
+      
+      // End meeting if no participants left
       if (rooms[rid].participants.length === 0) {
+        try {
+          const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+          if (meeting) {
+            await meeting.endMeeting();
+            console.log(`[Meeting] ✅ Meeting ${meeting._id} ended - no participants remaining`);
+          }
+        } catch (error) {
+          console.error('[Meeting] Error ending meeting:', error);
+        }
+        
         io.emit('roomClosed', rid);
         delete rooms[rid];
       }
@@ -690,13 +762,24 @@ io.on('connection', async socket => {
   });
   
   // Handle disconnections
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const rid = socket.currentRoom;
     if (!rid) return;
     // Remove user from online users
     onlineUsers.delete(socket.userId);
     io.emit('user:offline', { userId: socket.userId });
     console.log('[Signaling] 🔔 disconnect handler on server for', socket.id);
+    
+    // Remove participant from meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+      if (meeting) {
+        await meeting.removeParticipant(socket.userId);
+        console.log(`[Meeting] User ${socket.userId} disconnected from meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error removing participant from meeting on disconnect:', error);
+    }
     
     if (rid) {
       socket.to(rid).emit('hangup', socket.id);
@@ -713,8 +796,18 @@ io.on('connection', async socket => {
         io.to(rid).emit('roomParticipants', rooms[rid].participants);
         io.to(rid).emit('availableOffers', rooms[rid].offers);
         
-        // If room is empty, clean it up
+        // End meeting if no participants left
         if (rooms[rid].participants.length === 0) {
+          try {
+            const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+            if (meeting) {
+              await meeting.endMeeting();
+              console.log(`[Meeting] ✅ Meeting ${meeting._id} ended - last participant disconnected`);
+            }
+          } catch (error) {
+            console.error('[Meeting] Error ending meeting on disconnect:', error);
+          }
+          
           io.emit('roomClosed', rid);
           delete rooms[rid];
         }

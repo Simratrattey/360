@@ -1,9 +1,8 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import authMiddleware from '../middleware/auth.js';
-// You'll need to import your models - adjust paths as needed
-// import Meeting from '../models/meeting.js'; // If you have a meeting model
-// import User from '../models/user.js'; // Already imported in server.js
+import Meeting from '../models/meeting.js';
+import User from '../models/user.js';
 
 const router = express.Router();
 
@@ -22,13 +21,26 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // For now, we'll use placeholder logic since we don't have a meetings collection
-    // You can replace this with actual meeting queries when you have the meeting model
+    // Total Meetings - count all meetings where user was organizer or participant
+    const totalMeetings = await Meeting.countDocuments({
+      $or: [
+        { organizer: userId },
+        { 'participantSessions.userId': userId }
+      ],
+      status: 'ended' // Only count completed meetings
+    });
 
-    // Total Meetings (placeholder - you'll need to implement based on your meeting storage)
-    const totalMeetings = 0; // await Meeting.countDocuments({ participants: userId });
-    const lastMonthMeetings = 0; // await Meeting.countDocuments({ participants: userId, createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } });
-    const meetingChange = lastMonthMeetings > 0 ? (((totalMeetings - lastMonthMeetings) / lastMonthMeetings) * 100).toFixed(0) : 0;
+    const lastMonthMeetings = await Meeting.countDocuments({
+      $or: [
+        { organizer: userId },
+        { 'participantSessions.userId': userId }
+      ],
+      status: 'ended',
+      actualStartTime: { $gte: startOfLastMonth, $lte: endOfLastMonth }
+    });
+
+    const meetingChange = lastMonthMeetings > 0 ? (((totalMeetings - lastMonthMeetings) / lastMonthMeetings) * 100).toFixed(0) : 
+                         totalMeetings > 0 ? 100 : 0;
 
     // Active Contacts (users the current user has conversations with)
     const activeContacts = await mongoose.connection.db.collection('conversations').aggregate([
@@ -58,13 +70,76 @@ router.get('/stats', authMiddleware, async (req, res) => {
 
     const activeContactsCount = activeContacts[0]?.total || 0;
 
-    // Hours this week (placeholder - you'll need meeting duration data)
-    const hoursThisWeek = 0; // Calculate from meeting durations
-    const hoursLastWeek = 0; // Calculate from last week's meetings
-    const hoursChange = hoursLastWeek > 0 ? (((hoursThisWeek - hoursLastWeek) / hoursLastWeek) * 100).toFixed(0) : 0;
+    // Hours this week - sum actual meeting duration from participantSessions
+    const userMeetingsThisWeek = await Meeting.aggregate([
+      {
+        $match: {
+          actualStartTime: { $gte: startOfWeek, $lte: endOfWeek },
+          status: 'ended'
+        }
+      },
+      {
+        $unwind: '$participantSessions'
+      },
+      {
+        $match: {
+          'participantSessions.userId': new mongoose.Types.ObjectId(userId)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalMinutes: { $sum: '$participantSessions.durationMinutes' }
+        }
+      }
+    ]);
 
-    // Upcoming meetings (placeholder - you'll need scheduled meetings)
-    const upcomingMeetings = 0; // await Meeting.countDocuments({ participants: userId, scheduledFor: { $gte: new Date() } });
+    const minutesThisWeek = userMeetingsThisWeek[0]?.totalMinutes || 0;
+    const hoursThisWeek = (minutesThisWeek / 60).toFixed(1);
+
+    // Calculate last week for comparison
+    const lastWeekStart = new Date(startOfWeek);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(endOfWeek);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() - 7);
+
+    const userMeetingsLastWeek = await Meeting.aggregate([
+      {
+        $match: {
+          actualStartTime: { $gte: lastWeekStart, $lte: lastWeekEnd },
+          status: 'ended'
+        }
+      },
+      {
+        $unwind: '$participantSessions'
+      },
+      {
+        $match: {
+          'participantSessions.userId': new mongoose.Types.ObjectId(userId)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalMinutes: { $sum: '$participantSessions.durationMinutes' }
+        }
+      }
+    ]);
+
+    const minutesLastWeek = userMeetingsLastWeek[0]?.totalMinutes || 0;
+    const hoursLastWeek = minutesLastWeek / 60;
+    const hoursChange = hoursLastWeek > 0 ? (((hoursThisWeek - hoursLastWeek) / hoursLastWeek) * 100).toFixed(0) : 
+                       hoursThisWeek > 0 ? 100 : 0;
+
+    // Upcoming meetings - scheduled meetings in the future
+    const upcomingMeetings = await Meeting.countDocuments({
+      $or: [
+        { organizer: userId },
+        { participants: userId }
+      ],
+      status: 'scheduled',
+      startTime: { $gte: new Date() }
+    });
 
     const stats = [
       {
@@ -115,18 +190,58 @@ router.get('/recent-meetings', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Placeholder recent meetings - replace with actual meeting queries
-    // This would typically query your meetings collection
-    const recentMeetings = [
-      // await Meeting.find({ participants: userId })
-      //   .sort({ createdAt: -1 })
-      //   .limit(4)
-      //   .populate('participants', 'username fullName')
-    ];
+    // Get recent meetings where user was organizer or participant
+    const recentMeetings = await Meeting.find({
+      $or: [
+        { organizer: userId },
+        { 'participantSessions.userId': userId }
+      ],
+      status: 'ended' // Only show completed meetings
+    })
+    .sort({ actualStartTime: -1 })
+    .limit(4)
+    .populate('organizer', 'username fullName')
+    .lean();
 
-    // For now, return empty array since we don't have meeting data
-    // You can implement this once you have meeting records
-    const formattedMeetings = [];
+    const formattedMeetings = recentMeetings.map(meeting => {
+      // Get unique participants count
+      const uniqueParticipants = new Set(meeting.participantSessions?.map(session => session.userId.toString()) || []);
+      const participantCount = uniqueParticipants.size;
+      
+      // Format duration
+      const durationMinutes = meeting.actualDurationMinutes || 0;
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      const duration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+      
+      // Format date
+      const meetingDate = new Date(meeting.actualStartTime);
+      const now = new Date();
+      const diffHours = Math.floor((now - meetingDate) / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffHours / 24);
+      
+      let dateString;
+      if (diffHours < 1) {
+        dateString = 'Just now';
+      } else if (diffHours < 24) {
+        dateString = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      } else if (diffDays === 1) {
+        dateString = 'Yesterday';
+      } else if (diffDays < 7) {
+        dateString = `${diffDays} days ago`;
+      } else {
+        dateString = meetingDate.toLocaleDateString();
+      }
+
+      return {
+        id: meeting._id,
+        title: meeting.title,
+        participants: participantCount,
+        duration: duration,
+        date: dateString,
+        status: 'completed'
+      };
+    });
 
     res.json({
       success: true,
