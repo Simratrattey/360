@@ -351,6 +351,7 @@ export default function MessagesPage() {
         .sort(sortByLastMessage);
       
       // Add avatar conversation at the top - ALWAYS add it for testing
+      const userId = user?._id || user?.id;
       console.log('🤖 MessagesPage: Avatar conversation check:', { 
         avatarConversation: !!avatarConversation, 
         user: !!user,
@@ -361,7 +362,6 @@ export default function MessagesPage() {
       });
       
       // Force create avatar conversation if user exists (for testing)
-      const userId = user?._id || user?.id;
       if (userId) {
         const testAvatarId = `avatar_conversation_${userId}`;
         const alreadyExists = allConversationsUnified.some(conv => conv._id === testAvatarId);
