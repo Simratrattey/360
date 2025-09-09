@@ -51,8 +51,6 @@ export default function MeetingsPage() {
   const [pastMeetings, setPastMeetings] = useState([]);
   const [pastMeetingsLoading, setPastMeetingsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({});
   
@@ -140,8 +138,6 @@ export default function MeetingsPage() {
       });
       
       if (searchQuery) params.append('search', searchQuery);
-      if (startDate) params.append('startDate', startDate);
-      if (endDate) params.append('endDate', endDate);
       
       const response = await API.get(`/meetings/past?${params}`);
       
@@ -165,8 +161,6 @@ export default function MeetingsPage() {
   
   const clearFilters = () => {
     setSearchQuery('');
-    setStartDate('');
-    setEndDate('');
     setCurrentPage(1);
     loadPastMeetings(1);
   };
@@ -600,8 +594,8 @@ export default function MeetingsPage() {
                 Search Past Meetings
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 items-end">
-                <div className="md:col-span-2 xl:col-span-2 min-w-0">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+                <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Search by name
                   </label>
@@ -615,49 +609,21 @@ export default function MeetingsPage() {
                   />
                 </div>
                 
-                <div className="md:col-span-1 xl:col-span-1 min-w-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div className="md:col-span-1 xl:col-span-1 min-w-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div className="md:col-span-2 xl:col-span-3 flex flex-col justify-end">
-                  <div className="flex items-center gap-2 md:justify-end">
-                    <button
-                      onClick={handleSearch}
-                      className="btn-primary flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-2 text-xs sm:text-sm rounded-lg flex items-center justify-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[90px] md:min-w-[110px] whitespace-nowrap"
-                    >
-                      <Search className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Search</span>
-                      <span className="sm:hidden">🔍</span>
-                    </button>
-                    <button
-                      onClick={clearFilters}
-                      className="btn-outline flex-1 sm:flex-none px-2 sm:px-3 md:px-4 py-2 text-xs sm:text-sm rounded-lg flex items-center justify-center gap-1 sm:gap-2 min-w-[70px] sm:min-w-[90px] md:min-w-[110px] whitespace-nowrap"
-                    >
-                      <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span className="hidden sm:inline">Clear</span>
-                      <span className="sm:hidden">✕</span>
-                    </button>
-                  </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={handleSearch}
+                    className="btn-primary px-4 py-2 text-sm rounded-lg flex items-center gap-2 min-w-[110px] whitespace-nowrap"
+                  >
+                    <Search className="h-4 w-4" />
+                    Search
+                  </button>
+                  <button
+                    onClick={clearFilters}
+                    className="btn-outline px-4 py-2 text-sm rounded-lg flex items-center gap-2 min-w-[100px] whitespace-nowrap"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Clear
+                  </button>
                 </div>
               </div>
             </motion.div>
