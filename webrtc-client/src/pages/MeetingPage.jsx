@@ -487,7 +487,7 @@ export default function MeetingPage() {
         stopAudioAnalyzer(id);
       }
     });
-  }, [remoteStreams, subtitlesEnabled, multilingualEnabled, participantMap]);
+  }, [remoteStreams, participantMap]); // Removed subtitlesEnabled dependency so transcript recording always works
 
   // parse incoming avatar output
   useEffect(() => {
@@ -1120,6 +1120,12 @@ To convert to MP4:
   // Process individual participant audio for continuous transcript recording
   const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
+      // Check if client already exists for this participant
+      if (assemblyClientsRef.current && assemblyClientsRef.current.has(peerId)) {
+        console.log(`⚠️ AssemblyAI client already exists for ${participantName} (${peerId}) - skipping`);
+        return;
+      }
+
       console.log(`🎯 Creating AssemblyAI client for ${participantName} (${peerId})`);
       
       // Create separate AssemblyAI client for this participant
@@ -1190,7 +1196,7 @@ To convert to MP4:
       processor.connect(audioCtx.destination);
 
       processor.onaudioprocess = (e) => {
-        if (!subtitlesEnabledRef.current) return;
+        // Always process audio for transcript recording (independent of subtitle display)
         const input = e.inputBuffer.getChannelData(0);
         // Float32 [-1,1] → Int16 PCM
         const int16 = new Int16Array(input.length);
@@ -1806,8 +1812,9 @@ To convert to MP4:
     }
   };
 
-  // Process remote audio blob - now uses the multilingual pipeline
+  // Process remote audio blob - now uses the multilingual pipeline (LEGACY - only for fallback)
   const processRemoteAudioBlob = async (audioBlob, peerId, participantName) => {
+    // Legacy system - only used as fallback, transcript recording now handled by AssemblyAI
     if (subtitlesEnabled || multilingualEnabled) {
       await processMultilingualAudio(audioBlob, peerId, participantName);
     }
@@ -2577,6 +2584,36 @@ To convert to MP4:
                   <p className="text-xs text-gray-400 mt-1 px-3">
                     Transcripts are always recorded during meetings. This setting only controls subtitle display.
                   </p>
+                  {/* Debug button for testing transcript recording */}
+                  <button
+                    onClick={() => {
+                      console.log('🔧 DEBUG: Manual transcript recording test');
+                      console.log(`📊 Current state - Subtitles: ${subtitlesEnabled}, Remote streams: ${remoteStreams.size}, Permanent history: ${permanentSubtitleHistory.length}`);
+                      console.log(`📊 AssemblyAI clients:`, assemblyClientsRef.current ? assemblyClientsRef.current.size : 0);
+                      startTranscriptRecording();
+                      setShowSettings(false);
+                    }}
+                    className="w-full text-left px-3 py-2 mt-2 rounded text-sm bg-yellow-600 hover:bg-yellow-500 transition-colors"
+                  >
+                    🔧 Debug: Start Recording
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('🔧 DEBUG: Current system state');
+                      console.log(`📊 Subtitles enabled: ${subtitlesEnabled} (ref: ${subtitlesEnabledRef.current})`);
+                      console.log(`📊 Remote streams: ${remoteStreams.size}`);
+                      console.log(`📊 Participant map:`, participantMap);
+                      console.log(`📊 Permanent history length: ${permanentSubtitleHistory.length}`);
+                      console.log(`📊 AssemblyAI clients: ${assemblyClientsRef.current ? assemblyClientsRef.current.size : 0}`);
+                      if (assemblyClientsRef.current) {
+                        console.log(`📊 Active client IDs:`, Array.from(assemblyClientsRef.current.keys()));
+                      }
+                      setShowSettings(false);
+                    }}
+                    className="w-full text-left px-3 py-2 mt-1 rounded text-sm bg-purple-600 hover:bg-purple-500 transition-colors"
+                  >
+                    🔍 Debug: Show State
+                  </button>
                   {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
