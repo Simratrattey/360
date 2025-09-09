@@ -11,6 +11,7 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import AssemblyRealtimeClient from '../api/assemblyClient';
+import transcriptAPI from '../api/transcriptApi';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
 
@@ -51,6 +52,7 @@ export default function MeetingPage() {
   const [subtitleHistory, setSubtitleHistory] = useState([]);
   const [permanentSubtitleHistory, setPermanentSubtitleHistory] = useState([]); // Full meeting transcript
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+  const [meetingJoinedAt, setMeetingJoinedAt] = useState(null);
   const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
   const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
   
@@ -377,6 +379,7 @@ export default function MeetingPage() {
       joinMeeting(roomId)
         .then(() => {
           console.log('✅ [MeetingPage] Join meeting completed successfully');
+          setMeetingJoinedAt(Date.now()); // Record when user joined
           setIsJoining(false);
           // Set meeting start time when successfully joining
           if (!meetingStartTime) {
@@ -403,10 +406,22 @@ export default function MeetingPage() {
     }
   }, [localStream]);
 
+  // Load existing transcript history when joining the room
   useEffect(() => {
-    // TODO: Define chatRef and messages or remove this effect if not needed
-    // if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, []);
+    if (roomId && user && meetingJoinedAt) {
+      console.log('📋 Loading transcript history for room:', roomId);
+      transcriptAPI.loadTranscriptHistory(roomId).then((history) => {
+        // Only load transcripts that were created before the user joined
+        const preJoinHistory = history.filter(entry => entry.createdAt < meetingJoinedAt);
+        if (preJoinHistory.length > 0) {
+          console.log(`📋 Loaded ${preJoinHistory.length} pre-join transcript entries (${history.length} total available)`);
+          setPermanentSubtitleHistory(preJoinHistory);
+        } else if (history.length > 0) {
+          console.log(`📋 No pre-join transcripts (${history.length} total exist, but all after join time)`);
+        }
+      });
+    }
+  }, [roomId, user, meetingJoinedAt]);
 
   // Ensure local video always gets the stream and start audio analysis
   useEffect(() => {
@@ -1210,6 +1225,18 @@ To convert to MP4:
           setPermanentSubtitleHistory(prev => {
             const updated = [...prev, subtitleEntry];
             console.log(`📝 Recorded: [${participantName}] ${text} (${updated.length} total)`);
+            
+            // Always save to server for late joiners (they will load history and then generate their own)
+            console.log('💾 Saving transcript to server for late joiners');
+            transcriptAPI.saveTranscriptEntry(roomId, {
+              id: subtitleEntry.id,
+              text: subtitleEntry.text,
+              speaker: subtitleEntry.speaker,
+              speakerId: peerId === 'local' ? user?.id : peerId,
+              timestamp: subtitleEntry.timestamp,
+              createdAt: subtitleEntry.createdAt
+            });
+            
             return updated;
           });
 
