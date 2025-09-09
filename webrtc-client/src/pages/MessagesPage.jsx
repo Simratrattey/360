@@ -2003,7 +2003,6 @@ export default function MessagesPage() {
                 }));
                 return updatedSections;
               });
-            }
             
           } catch (processingError) {
             console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
