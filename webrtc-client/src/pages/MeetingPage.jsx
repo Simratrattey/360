@@ -2480,15 +2480,10 @@ To convert to MP4:
         {/* Transcript History Button */}
         <button 
           onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} 
-          className={`relative p-3 rounded-full text-white ${isHistoryPanelOpen ? 'bg-blue-600' : 'bg-gray-600'} hover:bg-blue-700`}
+          className={`p-3 rounded-full text-white ${isHistoryPanelOpen ? 'bg-blue-600' : 'bg-gray-600'} hover:bg-blue-700`}
           title={isHistoryPanelOpen ? "Close transcript history" : "View transcript history"}
         >
           <FileText size={20}/>
-          {permanentSubtitleHistory.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center">
-              {permanentSubtitleHistory.length}
-            </span>
-          )}
         </button>
         
         <button 
