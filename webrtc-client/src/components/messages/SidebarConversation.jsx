@@ -211,7 +211,7 @@ export default function SidebarConversation({
             
             <div className="flex items-center justify-between">
               <p className="text-xs text-blue-600 font-medium truncate">
-                Ask me anything about your projects and videos!
+                Ask me anything about TipTop!
               </p>
             </div>
           </div>

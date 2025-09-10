@@ -454,7 +454,7 @@ export default function MessagesPage() {
             isPermanent: true,
             alwaysOnTop: true,
             lastMessage: {
-              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about your projects, meetings, and videos!',
+              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!',
               senderId: 'avatar_system_user',
               senderName: 'Avatar',
               timestamp: new Date().toISOString()
@@ -1849,7 +1849,7 @@ export default function MessagesPage() {
           conversationId: conv._id,
           senderId: 'avatar_system_user',
           senderName: 'Avatar',
-          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about your projects, meetings, and videos!\n\nI can help you:\n✨ Find specific meeting transcripts\n🎥 Locate video segments\n📝 Answer questions about your content\n\nJust type your question and I\'ll search through your meetings to find relevant information!',
+          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!\n\nI can help you:\n✨ Find specific meeting transcripts\n🎥 Locate video segments\n📝 Answer questions about your content\n\nJust type your question and I\'ll search through all historical meetings to find relevant information!',
           createdAt: new Date().toISOString(),
           timestamp: new Date().toISOString(),
           isAvatarMessage: true,
