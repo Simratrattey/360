@@ -144,6 +144,18 @@ function MessageBubble({
     // Only show status for own messages
     if (!isOwn) return null;
     
+    // Don't show status indicators for avatar conversation messages
+    if (msg.isAvatarConversationMessage || 
+        conversationType === 'ai_avatar' || 
+        msg.conversationId?.startsWith('avatar_conversation_')) {
+      console.log('🤖 MessageBubble: Hiding status indicator for avatar conversation message:', {
+        isAvatarConversationMessage: msg.isAvatarConversationMessage,
+        conversationType: conversationType,
+        conversationId: msg.conversationId
+      });
+      return null;
+    }
+    
     // Get status info from the message status service with error handling
     const tempId = msg.tempId || messageId;
     let statusInfo;
@@ -805,8 +817,10 @@ function MessageBubble({
                 </div>
               )}
               
-              {/* Sending indicator - only for own messages */}
-              {isOwn && (() => {
+              {/* Sending indicator - only for own messages (but not for avatar conversations) */}
+              {isOwn && !msg.isAvatarConversationMessage && 
+               conversationType !== 'ai_avatar' && 
+               !msg.conversationId?.startsWith('avatar_conversation_') && (() => {
                 const tempId = msg.tempId || messageId;
                 let isSending = false;
                 

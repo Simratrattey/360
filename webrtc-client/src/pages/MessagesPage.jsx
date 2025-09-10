@@ -3297,7 +3297,7 @@ export default function MessagesPage() {
                 msg.conversation === selected._id
               )}
               currentUserId={user?.id}
-              conversationType={selected.type}
+              conversationType={selected.conversationType || selected.type}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReply={handleReply}
