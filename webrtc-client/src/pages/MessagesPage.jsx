@@ -1967,7 +1967,7 @@ export default function MessagesPage() {
           if (success && data) {
             console.log('🤖 MessagesPage: Got bot reply:', data);
             
-            // Parse bot response (same pattern as MeetingPage)
+            // Parse bot response and format for AvatarMessageBubble display
             let botText = '';
             let clips = [];
             
@@ -1978,15 +1978,40 @@ export default function MessagesPage() {
                 const entries = Array.isArray(outer) && Array.isArray(outer[0]) ? outer[0] : [];
                 
                 if (entries.length > 0) {
-                  clips = entries.map(entry => ({
-                    title: entry.title || 'Untitled',
-                    snippet: entry.snippet || 'No description available',
-                    videodetails: entry.videodetails || {},
-                    originalEntry: entry
-                  }));
+                  clips = entries.map(entry => {
+                    // Construct video URL same way as MeetingPage
+                    let videoUrl = 'Video URL not available';
+                    if (entry.title && entry.videodetails?.snippetstarttimesecs !== undefined && entry.videodetails?.snippetendtimesecs !== undefined) {
+                      try {
+                        videoUrl = `https://clavisds02.feeltiptop.com/360TeamCalls/downloads/` +
+                          entry.title.slice(0,4) + '/' + entry.title.slice(5,7) + '/' + entry.title + '/' + entry.title + '.mp4' +
+                          `#t=${entry.videodetails.snippetstarttimesecs},${entry.videodetails.snippetendtimesecs}`;
+                      } catch (urlError) {
+                        console.log('🤖 MessagesPage: Error constructing video URL:', urlError);
+                        videoUrl = 'Error generating video URL';
+                      }
+                    }
+                    
+                    return {
+                      title: entry.title || 'Untitled',
+                      snippet: entry.snippet || 'No description available',
+                      videodetails: entry.videodetails || {},
+                      videoUrl: videoUrl,
+                      originalEntry: entry
+                    };
+                  });
                   
-                  // Use first clip's snippet as response text
-                  botText = clips[0]?.snippet || data.reply;
+                  // Format response text for AvatarMessageBubble parsing
+                  let responseText = `I found ${clips.length} relevant video${clips.length > 1 ? 's' : ''} for your query:\n\n`;
+                  
+                  clips.forEach((clip, index) => {
+                    responseText += `Title: ${clip.title}\n`;
+                    responseText += `Segment Text: ${clip.snippet}\n`;
+                    responseText += `Video Link: ${clip.videoUrl}\n`;
+                    if (index < clips.length - 1) responseText += '\n';
+                  });
+                  
+                  botText = responseText;
                 } else {
                   // Fallback to raw reply
                   botText = data.reply;
