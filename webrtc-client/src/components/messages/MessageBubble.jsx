@@ -426,17 +426,22 @@ function MessageBubble({
       if (isImage) {
         // Try different URL construction approaches
         const getImageSrc = () => {
-          let src = previewUrl || fileUrl;
+          const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+          let src;
           
-          // If we've had retries, try alternative approaches
-          if (imgRetryCount === 1) {
-            // Try without auth token
+          
+          if (imgRetryCount === 0) {
+            // First attempt: Use the constructed file URL
+            src = constructFileUrl(msg.file, true);
+          } else if (imgRetryCount === 1) {
+            // Second attempt: Try without auth token
             src = constructFileUrl(msg.file, false);
           } else if (imgRetryCount === 2) {
-            // Try direct file URL construction
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+            // Third attempt: Direct construction from base URL + filename
             const filename = msg.file.url || msg.file.name;
-            src = `${baseUrl}/uploads/messages/${filename}`;
+            // Extract just the filename if it's a full URL
+            const cleanFilename = filename.split('/').pop().split('?')[0];
+            src = `${baseUrl}/uploads/messages/${cleanFilename}`;
           }
           
           return src;

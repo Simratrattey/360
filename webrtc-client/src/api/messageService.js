@@ -50,12 +50,18 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     return null;
   }
   
-  const url = fileObj.url;
+  let url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  // If it's already a complete URL, check if it needs auth token
+  // If it's already a complete URL, just add auth token if needed
   if (url.startsWith('http') || url.startsWith('blob:')) {
-    if (includeAuth && url.startsWith('http') && !url.includes('token=')) {
+    // Don't modify blob URLs
+    if (url.startsWith('blob:')) {
+      return url;
+    }
+    
+    // For HTTP URLs, add auth token if needed
+    if (includeAuth && !url.includes('token=')) {
       const token = localStorage.getItem('token');
       if (token) {
         const separator = url.includes('?') ? '&' : '?';
@@ -65,16 +71,25 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     return url;
   }
   
+  // Handle relative URLs
   let finalUrl;
+  
   // If it starts with /, it's an absolute path from the base URL
   if (url.startsWith('/')) {
     finalUrl = `${baseUrl}${url}`;
   } else {
-    // If it's just a filename, construct full URL using API endpoint
-    finalUrl = `${baseUrl}/api/files/${url}`;
+    // If it's just a filename, construct full URL
+    // Check if it looks like a message file (has timestamp prefix)
+    if (url.match(/^\d+-\d+-/)) {
+      // This looks like a message file, use the uploads/messages path
+      finalUrl = `${baseUrl}/uploads/messages/${url}`;
+    } else {
+      // Use API endpoint for other files
+      finalUrl = `${baseUrl}/api/files/${url}`;
+    }
   }
   
-  // Add authentication token using Authorization header approach
+  // Add authentication token
   if (includeAuth) {
     const token = localStorage.getItem('token');
     if (token) {
