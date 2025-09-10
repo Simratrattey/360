@@ -91,10 +91,6 @@ const MeetingSchema = new Schema({
     ref: 'User',
     default: null
   },
-  subtitlesEnabled: {
-    type: Boolean,
-    default: true
-  },
   // Meeting summary and transcript
   summary: {
     type: String,

@@ -64,7 +64,6 @@ export default function MeetingPage() {
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
   const subtitlesEnabledRef = useRef(false);
-  const [meetingSubtitlesEnabled, setMeetingSubtitlesEnabled] = useState(true); // Persistent setting for the meeting
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [subtitleHistory, setSubtitleHistory] = useState([]);
   const [permanentSubtitleHistory, setPermanentSubtitleHistory] = useState([]); // Full meeting transcript
@@ -158,19 +157,6 @@ export default function MeetingPage() {
         const meetingInfo = JSON.parse(meetingInfoStr);
         console.log(`[MeetingPage] Found meeting info for room ${roomId}:`, meetingInfo);
         
-        // Initialize subtitle settings based on meeting configuration
-        if (meetingInfo.subtitlesEnabled !== undefined) {
-          const shouldEnableSubtitles = meetingInfo.subtitlesEnabled;
-          console.log(`[MeetingPage] Setting subtitles to ${shouldEnableSubtitles ? 'enabled' : 'disabled'} based on meeting config`);
-          
-          setSubtitlesEnabled(shouldEnableSubtitles);
-          setMeetingSubtitlesEnabled(shouldEnableSubtitles); // Persist throughout meeting
-          subtitlesEnabledRef.current = shouldEnableSubtitles;
-          
-          if (!shouldEnableSubtitles) {
-            console.log(`[MeetingPage] ⚠️ Subtitles disabled for this meeting - no transcription will occur`);
-          }
-        }
       } catch (error) {
         console.warn('[MeetingPage] Failed to parse meeting info:', error);
       }
@@ -513,9 +499,9 @@ export default function MeetingPage() {
         startAudioAnalyzer(stream, id, false);
       }
 
-      // Start transcript recording for this remote participant (only if 2+ participants total and subtitles enabled)
+      // Start transcript recording for this remote participant (only if 2+ participants total)
       const participantName = participantMap[id];
-      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2 && meetingSubtitlesEnabled) {
+      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
         if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
           console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
           startParticipantTranscriptRecording(stream, id, participantName);
@@ -557,7 +543,7 @@ export default function MeetingPage() {
     });
 
     // Start local transcript recording if conditions are met (outside the loop to avoid duplicates)
-    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0 && meetingSubtitlesEnabled) {
+    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
       if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
         console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
         startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
@@ -588,7 +574,7 @@ export default function MeetingPage() {
         }
       });
     }
-  }, [remoteStreams, participantMap, meetingSubtitlesEnabled]); // Added meetingSubtitlesEnabled dependency to respect subtitle setting
+  }, [remoteStreams, participantMap]); // Start transcript recording when participants are available
 
   // parse incoming avatar output
   useEffect(() => {
@@ -1227,12 +1213,6 @@ To convert to MP4:
   // Process individual participant audio for continuous transcript recording
   const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
-      // Check if subtitles are enabled for this meeting
-      if (!meetingSubtitlesEnabled) {
-        console.log(`[Transcript] 🚫 Skipping transcript recording for ${participantName} - subtitles disabled for this meeting`);
-        return;
-      }
-      
       // Initialize the clients ref if it doesn't exist
       if (!assemblyClientsRef.current) {
         assemblyClientsRef.current = new Map();
@@ -2768,36 +2748,17 @@ To convert to MP4:
                   </button>
                   <button
                     onClick={() => {
-                      // Check if subtitles are disabled for this meeting
-                      if (!meetingSubtitlesEnabled) {
-                        return; // Don't allow toggling if disabled for meeting
-                      }
-                      
                       toggleSubtitles();
                       setShowSettings(false);
                     }}
                     className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      (() => {
-                        // Check if subtitles are disabled for this meeting
-                        if (!meetingSubtitlesEnabled) {
-                          return 'bg-gray-500 cursor-not-allowed opacity-50';
-                        }
-                        
-                        return subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600';
-                      })()
+                      subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                   >
-                    💬 Live Subtitles {!meetingSubtitlesEnabled ? '(Disabled)' : subtitlesEnabled ? '(Show)' : '(Hidden)'}
+                    💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
                   <p className="text-xs text-gray-400 mt-1 px-3">
-                    {(() => {
-                      // Check if subtitles are disabled for this meeting
-                      if (!meetingSubtitlesEnabled) {
-                        return "⚠️ Transcription disabled for this meeting - no transcript or AI summary will be generated.";
-                      }
-                      
-                      return "Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.";
-                    })()}
+                    Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.
                   </p>
                   {/* Temporarily commented out - will re-enable later
                   <button

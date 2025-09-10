@@ -551,7 +551,6 @@ io.on('connection', async socket => {
         // Enhanced meeting info
         name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
         visibility: storedMeetingInfo?.visibility || 'public',
-        subtitlesEnabled: storedMeetingInfo?.subtitlesEnabled !== undefined ? storedMeetingInfo.subtitlesEnabled : true,
         createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
         // Join request tracking
         pendingJoinRequests: new Map() // userId -> request info
@@ -572,7 +571,6 @@ io.on('connection', async socket => {
           type: 'instant',
           status: 'active',
           visibility: rooms[roomId].visibility,
-          subtitlesEnabled: rooms[roomId].subtitlesEnabled,
           startTime: new Date(),
           actualStartTime: new Date(),
           metadata: {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Video, Eye, Lock, Users, MessageSquare } from 'lucide-react';
+import { X, Video, Eye, Lock, Users } from 'lucide-react';
 import { generateRoomId, openMeetingWindow } from '../utils/meetingWindow';
 
 const VISIBILITY_OPTIONS = [
@@ -29,7 +29,6 @@ const VISIBILITY_OPTIONS = [
 export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }) {
   const [meetingName, setMeetingName] = useState('');
   const [visibility, setVisibility] = useState('public');
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -45,7 +44,6 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
         roomId,
         name: meetingName.trim(),
         visibility,
-        subtitlesEnabled,
         createdAt: new Date().toISOString()
       };
       
@@ -159,38 +157,6 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
             </div>
           </div>
 
-          {/* Subtitle Options */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Meeting Features
-            </label>
-            <div className="space-y-3">
-              <label className="flex items-start space-x-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:bg-gray-50 border-gray-200">
-                <input
-                  type="checkbox"
-                  checked={subtitlesEnabled}
-                  onChange={(e) => setSubtitlesEnabled(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <div className="p-2 rounded-lg text-blue-600 bg-blue-50">
-                      <MessageSquare className="h-4 w-4" />
-                    </div>
-                    <span className="font-medium text-gray-900">Enable Subtitles & AI Summary</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Real-time transcription and post-meeting AI summary. Disable to reduce API costs.
-                  </p>
-                  {!subtitlesEnabled && (
-                    <p className="text-xs text-orange-600 mt-1 font-medium">
-                      ⚠️ No transcript or AI summary will be available for this meeting
-                    </p>
-                  )}
-                </div>
-              </label>
-            </div>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex space-x-3 pt-4">
