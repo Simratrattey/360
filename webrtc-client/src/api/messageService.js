@@ -39,7 +39,7 @@ export const getFileUrl = (filename) => {
 };
 
 // Helper function to construct proper file URL from file object
-export const constructFileUrl = (fileObj) => {
+export const constructFileUrl = (fileObj, includeAuth = true) => {
   if (!fileObj) {
     console.warn('[File URL] No file object provided');
     return null;
@@ -50,7 +50,7 @@ export const constructFileUrl = (fileObj) => {
     return null;
   }
   
-  let url = fileObj.url;
+  const url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
   // Remove /api suffix if present, since file serving is directly from base URL
@@ -61,13 +61,25 @@ export const constructFileUrl = (fileObj) => {
     return url;
   }
   
+  let finalUrl;
   // If it starts with /, it's an absolute path from the file base URL
   if (url.startsWith('/')) {
-    return `${fileBaseUrl}${url}`;
+    finalUrl = `${fileBaseUrl}${url}`;
+  } else {
+    // If it's just a filename, construct full URL
+    finalUrl = `${fileBaseUrl}/uploads/messages/${url}`;
   }
   
-  // If it's just a filename, construct full URL
-  return `${fileBaseUrl}/uploads/messages/${url}`;
+  // Add authentication token if needed and available
+  if (includeAuth) {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl += `${separator}token=${encodeURIComponent(token)}`;
+    }
+  }
+  
+  return finalUrl;
 };
 
 // File type utilities

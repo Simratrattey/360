@@ -274,14 +274,14 @@ export default function ChatInput({
   };
 
   const handleFileSelect = (file) => {
-    const validation = validateFile(file);
-    if (!validation.valid) {
-      setFileError(validation.error);
+    try {
+      validateFile(file);
+      setFileError(null);
+      onFileChange({ target: { files: [file] } });
+    } catch (error) {
+      setFileError(error.message);
       setTimeout(() => setFileError(null), 5000);
-      return;
     }
-    setFileError(null);
-    onFileChange({ target: { files: [file] } });
   };
 
   return (

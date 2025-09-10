@@ -313,14 +313,15 @@ function MessageBubble({
   // Helper function to detect URLs in text
   const detectUrls = (text) => {
     if (!text) return [];
-    const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/g;
+    const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
     return text.match(urlRegex) || [];
   };
 
   const urls = detectUrls(msg.text);
 
   // Helper: safely highlight mentions in text with XSS protection
-  const renderTextWithMentions = useMemo(() => (text) => {
+  const renderTextWithMentions = useMemo(() => {
+    const renderText = (text) => {
     if (!text) return null;
     
     // First sanitize the input text to prevent XSS
@@ -383,6 +384,8 @@ function MessageBubble({
       }
       return part;
     });
+    };
+    return renderText;
   }, [searchFilters, currentUserId, getUserObj, highlightSearchTerms]);
 
   const renderFilePreview = () => {
@@ -419,72 +422,111 @@ function MessageBubble({
 
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
-      // Enhanced image preview with better styling and loading states
+      // Enhanced WhatsApp/Slack-style image preview with progressive loading
       if (isImage) {
+        const imageSrc = `${previewUrl || fileUrl}${imgRetryCount > 0 ? `?retry=${imgRetryCount}` : ''}`;
+        
         return (
           <div className="relative group">
-            {/* Image container with loading state */}
-            <div className="relative overflow-hidden rounded-lg bg-gray-100">
-              {/* Always try to show the image first */}
-              <img
-                src={`${previewUrl || fileUrl}${imgRetryCount > 0 ? `?retry=${imgRetryCount}` : ''}`}
-                alt={msg.file.name}
-                onError={(e) => {
-                  setImgError(true);
-                  setImgLoading(false);
-                }}
-                onLoad={() => {
-                  setImgError(false);
-                  setImgLoading(false);
-                }}
-                onLoadStart={() => {
-                  setImgLoading(true);
-                  setImgError(false);
-                }}
-                className={`max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer ${
-                  imgLoading ? 'opacity-0' : 'opacity-100'
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Open image in full screen or modal
-                  window.open(previewUrl || fileUrl, '_blank');
-                }}
-                title="Click to view full size"
-                style={{ display: imgError ? 'none' : 'block' }}
-              />
-              
-              {/* Loading placeholder - show while loading */}
+            {/* Image container with better loading states */}
+            <div className="relative overflow-hidden rounded-lg bg-gray-100 min-h-[120px] max-w-sm">
+              {/* Background blur for progressive loading effect */}
               {imgLoading && !imgError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
                 </div>
               )}
+              
+              {/* Main image */}
+              {!imgError && (
+                <img
+                  src={imageSrc}
+                  alt={msg.file.name}
+                  onError={(e) => {
+                    console.error('Image failed to load:', imageSrc, e);
+                    setImgError(true);
+                    setImgLoading(false);
+                    
+                    // Retry with different approach after delay
+                    if (imgRetryCount < 2) {
+                      setTimeout(() => {
+                        setImgRetryCount(prev => prev + 1);
+                        setImgError(false);
+                        setImgLoading(true);
+                      }, 1000);
+                    }
+                  }}
+                  onLoad={() => {
+                    setImgError(false);
+                    setImgLoading(false);
+                  }}
+                  onLoadStart={() => {
+                    setImgLoading(true);
+                    setImgError(false);
+                  }}
+                  className={`w-full h-auto max-h-80 object-cover transition-all duration-500 cursor-pointer hover:brightness-110 ${
+                    imgLoading ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Create image modal/lightbox instead of opening in new tab
+                    window.open(imageSrc, '_blank');
+                  }}
+                  title="Click to view full size"
+                  loading="lazy"
+                />
+              )}
+              
+              {/* Download button overlay */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(imageSrc, msg.file.name);
+                  }}
+                  className="p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+                  title="Download image"
+                >
+                  <Download className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             
-            {/* Error fallback */}
+            {/* Enhanced error fallback */}
             {imgError && (
-              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-3xl">{fileIcon}</span>
+              <div className="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-pink-50 border border-red-100 rounded-lg">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <span className="text-2xl">🖼️</span>
+                  </div>
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-                  <p className="text-xs text-gray-500">{fileSize}</p>
-                  <p className="text-xs text-gray-400">Image preview unavailable</p>
+                  <p className="text-xs text-gray-500">{fileSize} • {msg.file.type}</p>
+                  <p className="text-xs text-red-600">
+                    {imgRetryCount >= 2 ? 'Image cannot be loaded' : 'Loading failed, retrying...'}
+                  </p>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex flex-col space-y-1">
+                  {imgRetryCount < 2 && (
+                    <button
+                      onClick={() => {
+                        setImgError(false);
+                        setImgLoading(true);
+                        setImgRetryCount(prev => prev + 1);
+                      }}
+                      className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+                      title="Try loading again"
+                    >
+                      Retry
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      setImgError(false);
-                      setImgLoading(true);
-                      setImgRetryCount(prev => prev + 1);
-                    }}
-                    className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs transition-colors"
-                    title="Retry loading preview"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    onClick={() => handleDownload(fileUrl, msg.file.name)}
-                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
+                    onClick={() => handleDownload(imageSrc, msg.file.name)}
+                    className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
+                    title="Download file"
                   >
                     Download
                   </button>
