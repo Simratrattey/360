@@ -511,9 +511,9 @@ export default function MeetingPage() {
         startAudioAnalyzer(stream, id, false);
       }
 
-      // Start transcript recording for this remote participant (only if 2+ participants total)
+      // Start transcript recording for this remote participant (only if 2+ participants total and subtitles enabled)
       const participantName = participantMap[id];
-      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
+      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2 && subtitlesEnabledRef.current) {
         if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
           console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
           startParticipantTranscriptRecording(stream, id, participantName);
@@ -555,7 +555,7 @@ export default function MeetingPage() {
     });
 
     // Start local transcript recording if conditions are met (outside the loop to avoid duplicates)
-    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
+    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0 && subtitlesEnabledRef.current) {
       if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
         console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
         startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
@@ -586,7 +586,7 @@ export default function MeetingPage() {
         }
       });
     }
-  }, [remoteStreams, participantMap]); // Removed subtitlesEnabled dependency so transcript recording always works
+  }, [remoteStreams, participantMap, subtitlesEnabledRef.current]); // Added subtitlesEnabled dependency back to respect subtitle setting
 
   // parse incoming avatar output
   useEffect(() => {

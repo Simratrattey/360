@@ -5,6 +5,7 @@ const { RRule } = RRulePkg;
 import User from '../models/user.js';
 import { createNotification } from './notificationController.js';
 import { randomUUID } from 'crypto';
+import { dashboardCache } from '../routes/dashboard.js';
 
 export const createMeeting = async (req, res, next) => {
   try {
@@ -86,6 +87,11 @@ export const createMeeting = async (req, res, next) => {
       // Don't fail the meeting creation if notifications fail
     }
 
+    // Invalidate dashboard cache for the organizer
+    const organizerId = req.user.id;
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
     res.status(201).json(meeting);
   } catch (err) {
     console.error('Error creating meeting:', err);

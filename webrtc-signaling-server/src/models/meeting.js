@@ -1,5 +1,6 @@
 // src/models/meeting.js
 import mongoose from 'mongoose';
+import { dashboardCache } from '../routes/dashboard.js';
 const { Schema } = mongoose;
 
 const RecurrenceSchema = new Schema({
@@ -152,6 +153,18 @@ MeetingSchema.methods.endMeeting = async function() {
     
     // Generate summary from transcript if available
     await this.generateSummary();
+    
+    // Invalidate dashboard cache for organizer and all participants
+    const organizerId = this.organizer.toString();
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    // Also invalidate cache for all participants
+    this.participantSessions.forEach(session => {
+      const participantId = session.userId.toString();
+      dashboardCache.delete(`dashboard-stats-${participantId}`);
+      dashboardCache.delete(`recent-meetings-${participantId}`);
+    });
   }
   return this.save();
 };

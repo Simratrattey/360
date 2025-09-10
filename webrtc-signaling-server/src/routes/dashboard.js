@@ -10,6 +10,9 @@ const router = express.Router();
 const dashboardCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Export cache for invalidation from other modules
+export { dashboardCache };
+
 // Get dashboard statistics for the authenticated user (optimized)
 router.get('/stats', authMiddleware, async (req, res) => {
   try {
