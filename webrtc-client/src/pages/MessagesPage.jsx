@@ -301,7 +301,7 @@ export default function MessagesPage() {
   const fetchDebounceRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
 
-  // Helper function to sort conversations with avatar always at top
+  // Enhanced helper function to sort conversations with hierarchy: Avatar → Pinned → Regular
   const sortConversationsWithAvatarTop = (conversations) => {
     return conversations.sort((a, b) => {
       // Check if either conversation is an avatar conversation (multiple ways to detect)
@@ -312,14 +312,22 @@ export default function MessagesPage() {
                        b.settings?.isAvatarConversation || 
                        b._id?.startsWith('avatar_conversation_');
       
-      // Avatar conversations always go to the top
+      // Avatar conversations always go to the top (highest priority)
       if (aIsAvatar && !bIsAvatar) return -1;
       if (!aIsAvatar && bIsAvatar) return 1;
       
       // If both are avatar conversations, sort by creation (but this is unlikely)
       if (aIsAvatar && bIsAvatar) return 0;
       
-      // Normal sorting by last message date for non-avatar conversations
+      // For non-avatar conversations, handle pinned status (second priority)
+      const aIsPinned = a.isPinned === true;
+      const bIsPinned = b.isPinned === true;
+      
+      // Pinned conversations come before unpinned ones
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+      
+      // Within same group (both pinned or both unpinned), sort by last message date
       const dateA = new Date(a.lastMessageAt || a.createdAt);
       const dateB = new Date(b.lastMessageAt || b.createdAt);
       return dateB - dateA;
@@ -387,8 +395,14 @@ export default function MessagesPage() {
       const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
       const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
       
-      // Combine all conversations into a single unified list, sorted by most recent with avatar at top
-      let allConversationsUnified = sortConversationsWithAvatarTop([...dmConversations, ...groupConversations, ...communityConversations]);
+      // Combine all conversations into a single unified list, restore pinned state, then sort
+      let allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations].map(conv => ({
+        ...conv,
+        isPinned: pinnedConversations.includes(conv._id)
+      }));
+      
+      // Sort with hierarchy: Avatar → Pinned → Regular
+      allConversationsUnified = sortConversationsWithAvatarTop(allConversationsUnified);
       
       // Add avatar conversation at the top - ALWAYS add it for testing
       const userId = user?._id || user?.id;
@@ -521,7 +535,7 @@ export default function MessagesPage() {
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
-  }, [messagesCache, avatarConversation]);
+  }, [messagesCache, avatarConversation, pinnedConversations]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -617,6 +631,16 @@ export default function MessagesPage() {
   useEffect(() => {
     allConversationsRef.current = allConversations;
   }, [allConversations]);
+  
+  // Persist pinned conversations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinnedConversations', JSON.stringify(pinnedConversations));
+    } catch (error) {
+      console.error('Error saving pinned conversations to localStorage:', error);
+    }
+  }, [pinnedConversations]);
+  
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -630,6 +654,18 @@ export default function MessagesPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [messageOffset, setMessageOffset] = useState(0);
+  
+  // Pinned conversations state with localStorage persistence
+  const [pinnedConversations, setPinnedConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pinnedConversations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading pinned conversations from localStorage:', error);
+      return [];
+    }
+  });
+  
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('draftMessages');
@@ -1884,6 +1920,10 @@ export default function MessagesPage() {
   // Send a new message. This version implements an "optimistic" update so the message
   // Enhanced handleSend with optimistic UI and loading states
   const handleSend = async () => {
+    console.log('🤖 MessagesPage: handleSend called, input:', input.trim());
+    console.log('🤖 MessagesPage: selected conversation:', selected?._id, selected?.name);
+    console.log('🤖 MessagesPage: isAvatarConversation check:', isAvatarConversation && isAvatarConversation(selected));
+    
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
       return;
@@ -1922,6 +1962,11 @@ export default function MessagesPage() {
           timestamp: new Date().toISOString(),
           isAvatarMessage: false,
           status: 'sent',
+          // Explicitly set sending-related properties to false
+          sending: false,
+          pending: false,
+          // Don't set tempId to avoid message status system tracking
+          tempId: null,
           // Mark as avatar conversation user message to bypass normal processing
           isAvatarConversationMessage: true
         };
@@ -2117,6 +2162,7 @@ export default function MessagesPage() {
     }
 
     console.log('🤖 MessagesPage: Starting normal message sending process');
+    console.log('🤖 MessagesPage: This should NOT happen for avatar conversations!');
     setIsSending(true);
     setUploadProgress(0);
 
@@ -2317,6 +2363,15 @@ export default function MessagesPage() {
   };
 
   const handlePin = (convId) => {
+    // Don't allow pinning avatar conversations
+    const targetConv = allConversations[0]?.items?.find(c => c._id === convId);
+    if (targetConv && (targetConv.conversationType === 'ai_avatar' || 
+                       targetConv.settings?.isAvatarConversation ||
+                       targetConv._id?.startsWith('avatar_conversation_'))) {
+      console.log('🤖 MessagesPage: Cannot pin avatar conversation - already at top');
+      return;
+    }
+    
     setAllConversations(prev => {
       const newSections = [...prev];
       const sectionIndex = 0; // Unified structure
@@ -2326,21 +2381,27 @@ export default function MessagesPage() {
         const convIndex = items.findIndex(c => c._id === convId);
         
         if (convIndex !== -1) {
+          const currentlyPinned = items[convIndex].isPinned;
+          const newPinnedState = !currentlyPinned;
+          
           items[convIndex] = {
             ...items[convIndex],
-            isPinned: !items[convIndex].isPinned
+            isPinned: newPinnedState
           };
           
-          // Sort so pinned conversations appear at the top
-          const sortedItems = items.sort((a, b) => {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            
-            // Within pinned/unpinned groups, sort by last message time
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
+          // Update the pinned conversations list for persistence
+          setPinnedConversations(prevPinned => {
+            if (newPinnedState) {
+              // Add to pinned list if not already there
+              return prevPinned.includes(convId) ? prevPinned : [...prevPinned, convId];
+            } else {
+              // Remove from pinned list
+              return prevPinned.filter(id => id !== convId);
+            }
           });
+          
+          // Sort with proper hierarchy: Avatar → Pinned → Regular
+          const sortedItems = sortConversationsWithAvatarTop(items);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
