@@ -440,5 +440,6 @@ export const isAvatarMessage = (message) => {
 export const isAvatarConversation = (conversation) => {
   return conversation?.conversationType === 'ai_avatar' || 
          conversation?.settings?.isAvatarConversation === true ||
-         conversation?.name === 'Avatar';
+         conversation?.name === 'Avatar' ||
+         conversation?._id?.startsWith('avatar_conversation_');
 }; 

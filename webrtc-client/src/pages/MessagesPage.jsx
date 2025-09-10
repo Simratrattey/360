@@ -304,9 +304,13 @@ export default function MessagesPage() {
   // Helper function to sort conversations with avatar always at top
   const sortConversationsWithAvatarTop = (conversations) => {
     return conversations.sort((a, b) => {
-      // Check if either conversation is an avatar conversation
-      const aIsAvatar = a.conversationType === 'ai_avatar' || a.settings?.isAvatarConversation;
-      const bIsAvatar = b.conversationType === 'ai_avatar' || b.settings?.isAvatarConversation;
+      // Check if either conversation is an avatar conversation (multiple ways to detect)
+      const aIsAvatar = a.conversationType === 'ai_avatar' || 
+                       a.settings?.isAvatarConversation || 
+                       a._id?.startsWith('avatar_conversation_');
+      const bIsAvatar = b.conversationType === 'ai_avatar' || 
+                       b.settings?.isAvatarConversation || 
+                       b._id?.startsWith('avatar_conversation_');
       
       // Avatar conversations always go to the top
       if (aIsAvatar && !bIsAvatar) return -1;
@@ -677,12 +681,8 @@ export default function MessagesPage() {
             _lastUpdated: Date.now()
           };
 
-          // Re-sort all items by most recent activity after updating
-          const allItemsUpdated = [updatedConv, ...newItems].sort((a, b) => {
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
-          });
+          // Re-sort all items by most recent activity after updating (keeping avatar at top)
+          const allItemsUpdated = sortConversationsWithAvatarTop([updatedConv, ...newItems]);
 
           newSections[sectionIndex] = {
             ...section,
@@ -738,12 +738,8 @@ export default function MessagesPage() {
       };
       
       
-      // Add to top and re-sort by most recent activity (same logic as moveConversationToTop)
-      const allItemsUpdated = [conversationToAdd, ...section.items].sort((a, b) => {
-        const dateA = new Date(a.lastMessageAt || a.createdAt);
-        const dateB = new Date(b.lastMessageAt || b.createdAt);
-        return dateB - dateA;
-      });
+      // Add to top and re-sort by most recent activity (keeping avatar at top)
+      const allItemsUpdated = sortConversationsWithAvatarTop([conversationToAdd, ...section.items]);
       
       newSections[sectionIndex] = {
         ...section,
@@ -1925,8 +1921,12 @@ export default function MessagesPage() {
           createdAt: new Date().toISOString(),
           timestamp: new Date().toISOString(),
           isAvatarMessage: false,
-          status: 'sent'
+          status: 'sent',
+          // Mark as avatar conversation user message to bypass normal processing
+          isAvatarConversationMessage: true
         };
+        
+        console.log('🤖 MessagesPage: Created user message for avatar conversation:', userMessage);
         
         // Add user message immediately to the chat
         setMessages(prevMessages => {
@@ -2112,9 +2112,11 @@ export default function MessagesPage() {
         setIsSending(false);
       }
       
+      console.log('🤖 MessagesPage: Exiting early after avatar conversation handling');
       return; // Exit early, don't continue with normal message sending
     }
 
+    console.log('🤖 MessagesPage: Starting normal message sending process');
     setIsSending(true);
     setUploadProgress(0);
 
@@ -2689,8 +2691,8 @@ export default function MessagesPage() {
             _forceRender: Math.random()
           };
           
-          // Add to the top of the unified list (most recent first)
-          const updatedItems = [newConversationWithTimestamp, ...cleanedItems];
+          // Add to the top of the unified list (keeping avatar conversation at top)
+          const updatedItems = sortConversationsWithAvatarTop([newConversationWithTimestamp, ...cleanedItems]);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
@@ -2809,13 +2811,8 @@ export default function MessagesPage() {
           );
           
           if (existingIndex === -1) {
-            // Add to top and re-sort by most recent activity
-            const updatedItems = [newConversation, ...newSections[sectionIndex].items]
-              .sort((a, b) => {
-                const dateA = new Date(a.lastMessageAt || a.createdAt);
-                const dateB = new Date(b.lastMessageAt || b.createdAt);
-                return dateB - dateA;
-              });
+            // Add to top and re-sort by most recent activity (keeping avatar at top)
+            const updatedItems = sortConversationsWithAvatarTop([newConversation, ...newSections[sectionIndex].items]);
             
             newSections[sectionIndex] = {
               ...newSections[sectionIndex],
