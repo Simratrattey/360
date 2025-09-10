@@ -126,13 +126,6 @@ export default function MessagesPage() {
   const { clearNotificationsForConversation } = useNotifications();
   const { avatarConversation, isAvatarConversation, processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
   
-  // Debug avatar conversation state
-  useEffect(() => {
-    console.log('🤖 MessagesPage: Avatar conversation state changed:', {
-      avatarConversation: avatarConversation ? { id: avatarConversation._id, name: avatarConversation.name } : null,
-      user: user ? { id: user._id, name: user.fullName || user.username } : null
-    });
-  }, [avatarConversation, user]);
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
@@ -670,7 +663,6 @@ export default function MessagesPage() {
       // Convert Map to object for JSON serialization
       const avatarMessagesObj = Object.fromEntries(avatarMessages);
       localStorage.setItem('avatarMessages', JSON.stringify(avatarMessagesObj));
-      console.log('🤖 MessagesPage: Persisted avatar messages to localStorage:', avatarMessagesObj);
     } catch (error) {
       console.error('Error saving avatar messages to localStorage:', error);
     }

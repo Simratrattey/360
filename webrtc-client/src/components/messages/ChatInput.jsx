@@ -86,7 +86,6 @@ export default function ChatInput({
     // For avatar conversations, just send the regular message
     // MessagesPage will handle the avatar response processing automatically
     if (checkIsAvatarConversation && checkIsAvatarConversation(conversation) && input.trim()) {
-      console.log('🤖 ChatInput: Sending message to avatar conversation');
       onSend();
     } else {
       // Regular message sending for non-avatar conversations

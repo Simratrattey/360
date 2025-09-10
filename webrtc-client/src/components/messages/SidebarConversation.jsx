@@ -165,14 +165,6 @@ export default function SidebarConversation({
 
   // Special rendering for avatar conversations
   const isAvatar = isAvatarConversation(conv);
-  console.log('🤖 SidebarConversation: Rendering conversation:', {
-    id: conv._id,
-    name: conv.name,
-    type: conv.type,
-    conversationType: conv.conversationType,
-    isAvatar: isAvatar,
-    settings: conv.settings
-  });
   
   if (isAvatar) {
     return (

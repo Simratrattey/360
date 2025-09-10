@@ -153,11 +153,6 @@ function MessageBubble({
     if (msg.isAvatarConversationMessage || 
         conversationType === 'ai_avatar' || 
         msg.conversationId?.startsWith('avatar_conversation_')) {
-      console.log('🤖 MessageBubble: Hiding status indicator for avatar conversation message:', {
-        isAvatarConversationMessage: msg.isAvatarConversationMessage,
-        conversationType: conversationType,
-        conversationId: msg.conversationId
-      });
       return null;
     }
     
