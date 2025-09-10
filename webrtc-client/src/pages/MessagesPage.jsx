@@ -3254,8 +3254,12 @@ export default function MessagesPage() {
             <div className="border-b border-gray-100 px-3 md:px-6 py-2 md:py-4 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex items-center justify-between">
                 <div 
-                  className="flex items-center space-x-2 md:space-x-4 cursor-pointer hover:bg-white/50 p-1 md:p-3 rounded-xl transition-all duration-200"
-                  onClick={() => setShowDetailsModal(true)}
+                  className={`flex items-center space-x-2 md:space-x-4 p-1 md:p-3 rounded-xl transition-all duration-200 ${
+                    isAvatarConversation && isAvatarConversation(selected) 
+                      ? '' 
+                      : 'cursor-pointer hover:bg-white/50'
+                  }`}
+                  onClick={() => !(isAvatarConversation && isAvatarConversation(selected)) && setShowDetailsModal(true)}
                 >
                   <div className="relative">
                     {selected.avatar ? (
@@ -3290,7 +3294,7 @@ export default function MessagesPage() {
                   >
                     <Search className="h-4 w-4 md:h-5 md:w-5" />
                   </button>
-                  {selected && (
+                  {selected && !(isAvatarConversation && isAvatarConversation(selected)) && (
                     <button 
                       onClick={() => setShowSettingsModal(true)} 
                       className="p-2 rounded-xl hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700" 
