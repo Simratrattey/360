@@ -53,6 +53,8 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
   let url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
+  console.log('[constructFileUrl] Input:', { url, baseUrl, fileObj });
+  
   // If it's already a complete URL, check if we need to fix the domain
   if (url.startsWith('http') || url.startsWith('blob:')) {
     // Don't modify blob URLs
@@ -64,17 +66,27 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     const wrongDomains = [
       'webrtc-signaling-server.onrender.com',
       'three60-za2d.onrender.com',
-      'localhost:8181'
+      'localhost:8181',
+      '.onrender.com' // Catch any render.com subdomain
     ];
     
     const needsDomainFix = wrongDomains.some(domain => url.includes(domain));
     
-    if (needsDomainFix && !url.startsWith(baseUrl)) {
-      // Extract the path after the domain
-      const urlObj = new URL(url);
-      const pathAndQuery = urlObj.pathname + urlObj.search;
-      // Reconstruct with correct base URL
-      url = `${baseUrl}${pathAndQuery}`;
+    // Also check if URL doesn't start with our base URL (more aggressive correction)
+    const isWrongDomain = !url.startsWith(baseUrl) && !url.startsWith('blob:');
+    
+    if ((needsDomainFix || isWrongDomain) && !url.startsWith(baseUrl)) {
+      try {
+        // Extract the path after the domain
+        const urlObj = new URL(url);
+        const pathAndQuery = urlObj.pathname + urlObj.search;
+        // Reconstruct with correct base URL
+        const oldUrl = url;
+        url = `${baseUrl}${pathAndQuery}`;
+        console.log('[constructFileUrl] Domain corrected:', { oldUrl, newUrl: url, reason: needsDomainFix ? 'wrong_domain' : 'not_base_url' });
+      } catch (error) {
+        console.warn('[constructFileUrl] Failed to parse URL for domain correction:', url, error);
+      }
     }
     
     // For HTTP URLs, add auth token if needed
@@ -85,6 +97,7 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
         return `${url}${separator}token=${encodeURIComponent(token)}`;
       }
     }
+    console.log('[constructFileUrl] Final URL:', url);
     return url;
   }
   
@@ -115,6 +128,7 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     }
   }
   
+  console.log('[constructFileUrl] Final URL (relative):', finalUrl);
   return finalUrl;
 };
 

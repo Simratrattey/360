@@ -451,6 +451,7 @@ function MessageBubble({
             src = directUrl;
           }
           
+          console.log('[getImageSrc] Generated URL:', src);
           return src;
         };
         
