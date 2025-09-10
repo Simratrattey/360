@@ -377,8 +377,8 @@ export default function ChatInput({
 
       {/* Input area */}
       <div className="flex items-end space-x-2 sm:space-x-3 relative">
-        {/* Enhanced attachment menu */}
-        <div className="relative" ref={attachmentMenuRef}>
+        {/* Enhanced attachment menu - TEMPORARILY COMMENTED OUT */}
+        {/* <div className="relative" ref={attachmentMenuRef}>
           <button
             onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
             disabled={isSending}
@@ -393,7 +393,7 @@ export default function ChatInput({
           </button>
           
           {/* Attachment menu */}
-          {showAttachmentMenu && (
+          {/* {showAttachmentMenu && (
             <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-2 min-w-[180px] z-50">
               <button
                 onClick={() => handleAttachmentSelect('image')}
@@ -427,8 +427,8 @@ export default function ChatInput({
                 <span>Any File</span>
               </button>
             </div>
-          )}
-        </div>
+          )} */}
+        {/* </div> */}
 
         {/* Text input */}
         <div className="flex-1 relative">
