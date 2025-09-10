@@ -16,7 +16,9 @@ import {
   Plus,
   Search,
   User,
-  Video
+  Video,
+  Eye,
+  Lock
 } from 'lucide-react';
 import API from '../api/client.js';
 import { scheduleMeeting } from '../services/meetingService';
@@ -36,6 +38,30 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
+const VISIBILITY_OPTIONS = [
+  {
+    id: 'public',
+    label: 'Public Meeting',
+    description: 'Visible in active rooms, anyone can join',
+    icon: Eye,
+    color: 'text-green-600 bg-green-50'
+  },
+  {
+    id: 'approval',
+    label: 'Approval Required',
+    description: 'Visible in active rooms, host approval needed',
+    icon: Users,
+    color: 'text-blue-600 bg-blue-50'
+  },
+  {
+    id: 'private',
+    label: 'Private Meeting',
+    description: 'Hidden from active rooms, invite only',
+    icon: Lock,
+    color: 'text-purple-600 bg-purple-50'
+  }
+];
+
 export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled }) {
   const [formData, setFormData] = useState({
     title: '',
@@ -43,7 +69,8 @@ export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled
     startTime: new Date(),
     durationMinutes: 60,
     location: '',
-    recurrence: 'none'
+    recurrence: 'none',
+    visibility: 'public'
   });
   
   const [contacts, setContacts] = useState([]);
@@ -111,7 +138,8 @@ export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled
       startTime: new Date(),
       durationMinutes: 60,
       location: '',
-      recurrence: 'none'
+      recurrence: 'none',
+      visibility: 'public'
     });
     setSelectedParticipants([]);
     setSearchQuery('');
@@ -164,7 +192,8 @@ export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled
           frequency: formData.recurrence, 
           interval: 1 
         },
-        participants: selectedParticipants.map(p => p._id)
+        participants: selectedParticipants.map(p => p._id),
+        visibility: formData.visibility
       };
 
       await scheduleMeeting(meetingData);
@@ -307,6 +336,50 @@ export default function ScheduleMeetingModal({ open, onClose, onMeetingScheduled
                         placeholder="Meeting room, Zoom link, or address"
                         className="mt-1"
                       />
+                    </div>
+
+                    {/* Visibility Options */}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700 mb-3 block">
+                        Meeting Visibility
+                      </Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        {VISIBILITY_OPTIONS.map((option) => {
+                          const IconComponent = option.icon;
+                          return (
+                            <div
+                              key={option.id}
+                              onClick={() => handleInputChange('visibility', option.id)}
+                              className={`
+                                relative flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all
+                                ${formData.visibility === option.id 
+                                  ? 'border-blue-500 bg-blue-50' 
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                }
+                              `}
+                            >
+                              <div className={`flex-shrink-0 p-2 rounded-lg ${option.color}`}>
+                                <IconComponent className="h-5 w-5" />
+                              </div>
+                              <div className="ml-3 flex-1">
+                                <div className="flex items-center">
+                                  <label className="text-sm font-medium text-gray-900 cursor-pointer">
+                                    {option.label}
+                                  </label>
+                                  {formData.visibility === option.id && (
+                                    <div className="ml-auto">
+                                      <CheckCircle2 className="h-5 w-5 text-blue-500" />
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {option.description}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </CardContent>

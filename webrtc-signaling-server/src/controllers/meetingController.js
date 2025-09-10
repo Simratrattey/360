@@ -16,7 +16,8 @@ export const createMeeting = async (req, res, next) => {
       participants,
       startTime,
       durationMinutes,
-      recurrence
+      recurrence,
+      visibility
     } = req.body;
 
     // Validation
@@ -48,6 +49,7 @@ export const createMeeting = async (req, res, next) => {
       durationMinutes,
       recurrence,
       roomId,
+      visibility: visibility || 'public',
     });
 
     // Populate organizer and participants for response

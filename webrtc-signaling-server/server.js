@@ -538,20 +538,48 @@ io.on('connection', async socket => {
     socket.currentRoom = roomId;
 
     if (!rooms[roomId]) {
-      // Use provided meeting info or try to get from cache or use defaults
-      const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
+      // First check if there's a scheduled meeting with this roomId
+      let existingMeeting = null;
+      try {
+        existingMeeting = await Meeting.findOne({ roomId: roomId, status: 'scheduled' });
+      } catch (error) {
+        console.error('[Signaling] Error looking for scheduled meeting:', error);
+      }
+
+      let roomInfo;
+      if (existingMeeting) {
+        // Start the scheduled meeting
+        console.log(`[Signaling] 🎯 Found scheduled meeting "${existingMeeting.title}" for room ${roomId}`);
+        await existingMeeting.startMeeting();
+        
+        roomInfo = {
+          name: existingMeeting.title,
+          visibility: existingMeeting.visibility,
+          createdAt: existingMeeting.createdAt.toISOString(),
+          host: existingMeeting.organizer.toString() // Scheduled meeting organizer becomes host
+        };
+      } else {
+        // Use provided meeting info or try to get from cache or use defaults for instant meeting
+        const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
+        roomInfo = {
+          name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
+          visibility: storedMeetingInfo?.visibility || 'public',
+          createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+          host: socket.userId // First person to join becomes host for instant meetings
+        };
+      }
       
       rooms[roomId] = { 
         offers: [], 
         participants: [], 
-        host: socket.userId, // First person to join becomes host
+        host: roomInfo.host,
         avatarApiEnabled: true, // Default to enabled
         isRecording: false, // Track recording status
         recordedBy: null, // Who started the recording
         // Enhanced meeting info
-        name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
-        visibility: storedMeetingInfo?.visibility || 'public',
-        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+        name: roomInfo.name,
+        visibility: roomInfo.visibility,
+        createdAt: roomInfo.createdAt,
         // Join request tracking
         pendingJoinRequests: new Map() // userId -> request info
       };
@@ -559,30 +587,33 @@ io.on('connection', async socket => {
       console.log(`[Signaling] ✅ Created room ${roomId} with info:`, {
         name: rooms[roomId].name,
         visibility: rooms[roomId].visibility,
-        host: rooms[roomId].host
+        host: rooms[roomId].host,
+        type: existingMeeting ? 'scheduled' : 'instant'
       });
       
-      // Create meeting record in database
-      try {
-        const meeting = new Meeting({
-          title: rooms[roomId].name,
-          roomId: roomId,
-          organizer: socket.userId,
-          type: 'instant',
-          status: 'active',
-          visibility: rooms[roomId].visibility,
-          startTime: new Date(),
-          actualStartTime: new Date(),
-          metadata: {
-            avatarApiEnabled: rooms[roomId].avatarApiEnabled
-          }
-        });
+      // Create meeting record in database only if it's not a scheduled meeting
+      if (!existingMeeting) {
+        try {
+          const meeting = new Meeting({
+            title: rooms[roomId].name,
+            roomId: roomId,
+            organizer: socket.userId,
+            type: 'instant',
+            status: 'active',
+            visibility: rooms[roomId].visibility,
+            startTime: new Date(),
+            actualStartTime: new Date(),
+            metadata: {
+              avatarApiEnabled: rooms[roomId].avatarApiEnabled
+            }
+          });
         
-        await meeting.save();
-        rooms[roomId].meetingId = meeting._id; // Store meeting ID in room
-        console.log(`[Meeting] ✅ Created meeting record: ${meeting._id}`);
-      } catch (error) {
-        console.error('[Meeting] Error creating meeting record:', error);
+          await meeting.save();
+          rooms[roomId].meetingId = meeting._id; // Store meeting ID in room
+          console.log(`[Meeting] ✅ Created meeting record: ${meeting._id}`);
+        } catch (error) {
+          console.error('[Meeting] Error creating meeting record:', error);
+        }
       }
       
       // Notify clients that a new room opened (dashboard can refresh)
