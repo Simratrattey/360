@@ -294,8 +294,20 @@ export default function MessagesPage() {
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
-  // Avatar conversation messages storage (client-side)
-  const [avatarMessages, setAvatarMessages] = useState(new Map());
+  // Avatar conversation messages storage (client-side with localStorage persistence)
+  const [avatarMessages, setAvatarMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('avatarMessages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Convert object back to Map
+        return new Map(Object.entries(parsed));
+      }
+    } catch (error) {
+      console.error('Error loading avatar messages from localStorage:', error);
+    }
+    return new Map();
+  });
   
   // Debouncing ref to prevent excessive fetchConversations calls
   const fetchDebounceRef = useRef(null);
@@ -651,6 +663,18 @@ export default function MessagesPage() {
       console.error('Error saving pinned conversations to localStorage:', error);
     }
   }, [pinnedConversations]);
+  
+  // Persist avatar messages to localStorage
+  useEffect(() => {
+    try {
+      // Convert Map to object for JSON serialization
+      const avatarMessagesObj = Object.fromEntries(avatarMessages);
+      localStorage.setItem('avatarMessages', JSON.stringify(avatarMessagesObj));
+      console.log('🤖 MessagesPage: Persisted avatar messages to localStorage:', avatarMessagesObj);
+    } catch (error) {
+      console.error('Error saving avatar messages to localStorage:', error);
+    }
+  }, [avatarMessages]);
   
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
@@ -1796,9 +1820,16 @@ export default function MessagesPage() {
     // For avatar conversations, load saved messages or create welcome message
     if (isAvatarConversation && isAvatarConversation(conv)) {
       const savedMessages = avatarMessages.get(conv._id) || [];
+      console.log('🤖 MessagesPage: Loading avatar conversation:', {
+        conversationId: conv._id,
+        savedMessagesCount: savedMessages.length,
+        avatarMessagesMapSize: avatarMessages.size,
+        allKeys: Array.from(avatarMessages.keys())
+      });
       
       if (savedMessages.length > 0) {
         // Load saved conversation history
+        console.log('🤖 MessagesPage: Loading saved avatar conversation:', conv._id, savedMessages.length, 'messages');
         setMessages(savedMessages);
         setMessagesLoading(false);
       } else {
