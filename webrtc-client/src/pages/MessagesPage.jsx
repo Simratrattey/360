@@ -1849,7 +1849,11 @@ export default function MessagesPage() {
         
         const initialMessages = [welcomeMessage];
         setMessages(initialMessages);
-        setAvatarMessages(prev => new Map(prev.set(conv._id, initialMessages)));
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          newMap.set(conv._id, initialMessages);
+          return newMap;
+        });
         setMessagesLoading(false);
       }
     }
@@ -2008,7 +2012,11 @@ export default function MessagesPage() {
         setMessages(prevMessages => {
           const newMessages = [...prevMessages, userMessage];
           // Save to avatar messages storage
-          setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
           return newMessages;
         });
         
@@ -2029,7 +2037,11 @@ export default function MessagesPage() {
         setMessages(prevMessages => {
           const newMessages = [...prevMessages, typingMessage];
           // Save to avatar messages storage (including typing indicator temporarily)
-          setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
           return newMessages;
         });
         
@@ -2119,7 +2131,11 @@ export default function MessagesPage() {
               };
               
               const newMessages = [...withoutTyping, avatarMessage];
-              setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+              setAvatarMessages(prev => {
+                const newMap = new Map(prev);
+                newMap.set(selected._id, newMessages);
+                return newMap;
+              });
               return newMessages;
             });
             
@@ -2173,7 +2189,11 @@ export default function MessagesPage() {
             };
             
             const newMessages = [...withoutTyping, errorMessage];
-            setAvatarMessages(prev => new Map(prev.set(selected._id, newMessages)));
+            setAvatarMessages(prev => {
+              const newMap = new Map(prev);
+              newMap.set(selected._id, newMessages);
+              return newMap;
+            });
             return newMessages;
           });
         }
