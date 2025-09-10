@@ -56,7 +56,6 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
       // Reset form and close modal
       setMeetingName('');
       setVisibility('public');
-      setSubtitlesEnabled(true);
       onClose();
       
       // Notify parent to reload active rooms
@@ -74,7 +73,6 @@ export default function CreateMeetingModal({ isOpen, onClose, onMeetingCreated }
   const handleClose = () => {
     setMeetingName('');
     setVisibility('public');
-    setSubtitlesEnabled(true);
     onClose();
   };
 
