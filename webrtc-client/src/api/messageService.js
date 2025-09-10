@@ -53,11 +53,28 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
   let url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  // If it's already a complete URL, just add auth token if needed
+  // If it's already a complete URL, check if we need to fix the domain
   if (url.startsWith('http') || url.startsWith('blob:')) {
     // Don't modify blob URLs
     if (url.startsWith('blob:')) {
       return url;
+    }
+    
+    // Check if the URL is pointing to the wrong server and fix it
+    const wrongDomains = [
+      'webrtc-signaling-server.onrender.com',
+      'three60-za2d.onrender.com',
+      'localhost:8181'
+    ];
+    
+    const needsDomainFix = wrongDomains.some(domain => url.includes(domain));
+    
+    if (needsDomainFix && !url.startsWith(baseUrl)) {
+      // Extract the path after the domain
+      const urlObj = new URL(url);
+      const pathAndQuery = urlObj.pathname + urlObj.search;
+      // Reconstruct with correct base URL
+      url = `${baseUrl}${pathAndQuery}`;
     }
     
     // For HTTP URLs, add auth token if needed
@@ -189,8 +206,26 @@ export const formatFileSize = (bytes) => {
 // Enhanced file download function with better error handling
 export const downloadFile = async (url, filename, mimeType) => {
   try {
-    // Add auth token to URL if not present
+    // Fix domain if needed and add auth token
     let downloadUrl = url;
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+    
+    // Fix wrong server domains
+    const wrongDomains = [
+      'webrtc-signaling-server.onrender.com',
+      'three60-za2d.onrender.com',
+      'localhost:8181'
+    ];
+    
+    const needsDomainFix = wrongDomains.some(domain => downloadUrl.includes(domain));
+    
+    if (needsDomainFix && !downloadUrl.startsWith(baseUrl)) {
+      const urlObj = new URL(downloadUrl);
+      const pathAndQuery = urlObj.pathname + urlObj.search;
+      downloadUrl = `${baseUrl}${pathAndQuery}`;
+    }
+    
+    // Add auth token to URL if not present
     if (downloadUrl && !downloadUrl.includes('token=')) {
       const token = localStorage.getItem('token');
       if (token) {

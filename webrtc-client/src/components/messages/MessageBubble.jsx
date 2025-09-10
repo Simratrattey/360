@@ -441,7 +441,14 @@ function MessageBubble({
             const filename = msg.file.url || msg.file.name;
             // Extract just the filename if it's a full URL
             const cleanFilename = filename.split('/').pop().split('?')[0];
-            src = `${baseUrl}/uploads/messages/${cleanFilename}`;
+            
+            // Add auth token for this attempt too
+            const token = localStorage.getItem('token');
+            let directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+            if (token) {
+              directUrl += `?token=${encodeURIComponent(token)}`;
+            }
+            src = directUrl;
           }
           
           return src;
