@@ -18,14 +18,16 @@ export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`)
 export const reactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/react`, { emoji });
 export const unreactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/unreact`, { emoji });
 export const searchMessages = (conversationId, params = {}) => API.get(`/messages/conversation/${conversationId}/search`, { params });
-export const uploadMessageFile = (file) => {
+export const uploadMessageFile = (file, onProgress = null) => {
   const formData = new FormData();
   formData.append('file', file);
   return API.post('/messages/upload', formData, { 
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-      // Upload progress tracking
+      if (onProgress) {
+        onProgress(percentCompleted);
+      }
     }
   });
 };

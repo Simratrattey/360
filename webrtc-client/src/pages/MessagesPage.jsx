@@ -2255,9 +2255,10 @@ export default function MessagesPage() {
       // Handle file upload with progress tracking
       if (uploadFile) {
         try {
-          const res = await messageAPI.uploadMessageFile(uploadFile);
+          const res = await messageAPI.uploadMessageFile(uploadFile, (progress) => {
+            setUploadProgress(progress);
+          });
           fileMeta = res.data;
-          setUploadProgress(100);
         } catch (uploadError) {
           console.error('File upload failed:', uploadError);
           setNotification({
