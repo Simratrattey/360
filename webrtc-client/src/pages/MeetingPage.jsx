@@ -3127,7 +3127,7 @@ To convert to MP4:
                       Share this link
                     </h3>
                     <p className="text-sm text-blue-700">
-                      Anyone with this link can join the meeting. Share it via email, message, or any communication platform.
+                      Anyone with this link can join the meeting.
                     </p>
                   </div>
                 </div>

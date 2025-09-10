@@ -54,12 +54,25 @@ router.get('/stats', authMiddleware, async (req, res) => {
       },
       {
         $facet: {
-          // Total completed meetings
+          // Total completed meetings (excluding single-participant meetings)
           totalMeetings: [
             { $match: { status: 'ended' } },
+            {
+              $addFields: {
+                participantCount: {
+                  $size: {
+                    $setUnion: [
+                      { $map: { input: '$participantSessions.userId', as: 'userId', in: '$$userId' } },
+                      []
+                    ]
+                  }
+                }
+              }
+            },
+            { $match: { participantCount: { $gt: 1 } } },
             { $count: 'count' }
           ],
-          // Last month's meetings for comparison
+          // Last month's meetings for comparison (excluding single-participant meetings)
           lastMonthMeetings: [
             { 
               $match: { 
@@ -67,6 +80,19 @@ router.get('/stats', authMiddleware, async (req, res) => {
                 actualStartTime: { $gte: lastMonthStart, $lte: lastMonthEnd }
               }
             },
+            {
+              $addFields: {
+                participantCount: {
+                  $size: {
+                    $setUnion: [
+                      { $map: { input: '$participantSessions.userId', as: 'userId', in: '$$userId' } },
+                      []
+                    ]
+                  }
+                }
+              }
+            },
+            { $match: { participantCount: { $gt: 1 } } },
             { $count: 'count' }
           ],
           // Upcoming meetings
@@ -323,9 +349,10 @@ router.get('/recent-meetings', authMiddleware, async (req, res) => {
     .populate('organizer', 'username fullName')
     .lean();
 
-    const formattedMeetings = recentMeetings.map(meeting => {
-      // Get unique participants count efficiently
-      const participantCount = new Set(meeting.participantSessions?.map(session => session.userId.toString()) || []).size;
+    const formattedMeetings = recentMeetings
+      .map(meeting => {
+        // Get unique participants count efficiently
+        const participantCount = new Set(meeting.participantSessions?.map(session => session.userId.toString()) || []).size;
       
       // Format duration
       const durationMinutes = meeting.actualDurationMinutes || 0;
@@ -359,7 +386,8 @@ router.get('/recent-meetings', authMiddleware, async (req, res) => {
         date: dateString,
         status: 'completed'
       };
-    });
+    })
+    .filter(meeting => meeting.participants > 1); // Exclude single-participant meetings
 
     // Cache the results
     dashboardCache.set(cacheKey, {

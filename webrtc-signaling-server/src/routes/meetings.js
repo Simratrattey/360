@@ -70,9 +70,26 @@ router.get('/past', authMiddleware, async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Get total count for pagination
-    const totalCount = await Meeting.countDocuments(query);
-    console.log(`[Meetings] Found ${totalCount} total meetings`);
+    // Get total count for pagination (excluding single-participant meetings)
+    const countResult = await Meeting.aggregate([
+      { $match: query },
+      {
+        $addFields: {
+          participantCount: {
+            $size: {
+              $setUnion: [
+                { $map: { input: '$participantSessions.userId', as: 'userId', in: '$$userId' } },
+                []
+              ]
+            }
+          }
+        }
+      },
+      { $match: { participantCount: { $gt: 1 } } },
+      { $count: 'total' }
+    ]);
+    const totalCount = countResult[0]?.total || 0;
+    console.log(`[Meetings] Found ${totalCount} multi-participant meetings`);
     
     // Fetch meetings
     const meetings = await Meeting.find(query)
@@ -156,7 +173,8 @@ router.get('/past', authMiddleware, async (req, res) => {
           maxParticipants: 1
         };
       }
-    });
+    })
+    .filter(meeting => meeting.participantCount > 1); // Exclude single-participant meetings
     
     res.json({
       success: true,
