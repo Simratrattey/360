@@ -48,6 +48,9 @@ import * as conversationAPI from '../api/conversationService';
 import * as messageAPI from '../api/messageService';
 import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
+import { useAvatarConversation } from '../hooks/useAvatarConversation';
+import AvatarService from '../services/avatarService';
+import BotService from '../api/botService';
 import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useMediaQuery } from 'react-responsive';
@@ -121,6 +124,8 @@ export default function MessagesPage() {
   const chatSocket = useChatSocket();
   const { updateCurrentConversation, updateMessagesPageStatus, clearCurrentConversation } = useCurrentConversation();
   const { clearNotificationsForConversation } = useNotifications();
+  const { avatarConversation, isAvatarConversation, processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
+  
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
@@ -282,9 +287,68 @@ export default function MessagesPage() {
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
   
+  // Avatar conversation messages storage (client-side with localStorage persistence)
+  const [avatarMessages, setAvatarMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('avatarMessages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Convert object back to Map
+        return new Map(Object.entries(parsed));
+      }
+    } catch (error) {
+      console.error('Error loading avatar messages from localStorage:', error);
+    }
+    return new Map();
+  });
+  
   // Debouncing ref to prevent excessive fetchConversations calls
   const fetchDebounceRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
+
+  // Pinned conversations state with localStorage persistence (moved here to fix hoisting issue)
+  const [pinnedConversations, setPinnedConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pinnedConversations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading pinned conversations from localStorage:', error);
+      return [];
+    }
+  });
+
+  // Enhanced helper function to sort conversations with hierarchy: Avatar → Pinned → Regular
+  const sortConversationsWithAvatarTop = (conversations) => {
+    return conversations.sort((a, b) => {
+      // Check if either conversation is an avatar conversation (multiple ways to detect)
+      const aIsAvatar = a.conversationType === 'ai_avatar' || 
+                       a.settings?.isAvatarConversation || 
+                       a._id?.startsWith('avatar_conversation_');
+      const bIsAvatar = b.conversationType === 'ai_avatar' || 
+                       b.settings?.isAvatarConversation || 
+                       b._id?.startsWith('avatar_conversation_');
+      
+      // Avatar conversations always go to the top (highest priority)
+      if (aIsAvatar && !bIsAvatar) return -1;
+      if (!aIsAvatar && bIsAvatar) return 1;
+      
+      // If both are avatar conversations, sort by creation (but this is unlikely)
+      if (aIsAvatar && bIsAvatar) return 0;
+      
+      // For non-avatar conversations, handle pinned status (second priority)
+      const aIsPinned = a.isPinned === true;
+      const bIsPinned = b.isPinned === true;
+      
+      // Pinned conversations come before unpinned ones
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+      
+      // Within same group (both pinned or both unpinned), sort by last message date
+      const dateA = new Date(a.lastMessageAt || a.createdAt);
+      const dateB = new Date(b.lastMessageAt || b.createdAt);
+      return dateB - dateA;
+    });
+  };
 
   // Define fetchConversations function early to avoid hoisting issues  
   const fetchConversations = useCallback(async (forceRefresh = false) => {
@@ -300,8 +364,20 @@ export default function MessagesPage() {
       const res = await conversationAPI.getConversations();
       const conversations = res.data.conversations || res.data || [];
       
-      // Sort conversations by lastMessageAt within each type
+      // Sort conversations by lastMessageAt within each type, but keep avatar conversations at top
       const sortByLastMessage = (a, b) => {
+        // Check if either conversation is an avatar conversation
+        const aIsAvatar = a.conversationType === 'ai_avatar' || a.settings?.isAvatarConversation;
+        const bIsAvatar = b.conversationType === 'ai_avatar' || b.settings?.isAvatarConversation;
+        
+        // Avatar conversations always go to the top
+        if (aIsAvatar && !bIsAvatar) return -1;
+        if (!aIsAvatar && bIsAvatar) return 1;
+        
+        // If both are avatar conversations, sort by creation (but this is unlikely)
+        if (aIsAvatar && bIsAvatar) return 0;
+        
+        // Normal sorting by last message date for non-avatar conversations
         const dateA = new Date(a.lastMessageAt || a.createdAt);
         const dateB = new Date(b.lastMessageAt || b.createdAt);
         return dateB - dateA;
@@ -335,9 +411,77 @@ export default function MessagesPage() {
       const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
       const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
       
-      // Combine all conversations into a single unified list, sorted by most recent
-      const allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
-        .sort(sortByLastMessage);
+      // Combine all conversations into a single unified list, restore pinned state, then sort
+      let allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations].map(conv => ({
+        ...conv,
+        isPinned: pinnedConversations.includes(conv._id)
+      }));
+      
+      // Sort with hierarchy: Avatar → Pinned → Regular
+      allConversationsUnified = sortConversationsWithAvatarTop(allConversationsUnified);
+      
+      // Add avatar conversation at the top - ALWAYS add it for testing
+      const userId = user?._id || user?.id;
+      console.log('🤖 MessagesPage: Avatar conversation check:', { 
+        avatarConversation: !!avatarConversation, 
+        user: !!user,
+        userId_id: user?._id,
+        userId_alt: user?.id,
+        finalUserId: userId,
+        conversationsCount: allConversationsUnified.length 
+      });
+      
+      // Force create avatar conversation if user exists (for testing)
+      if (userId) {
+        const testAvatarId = `avatar_conversation_${userId}`;
+        const alreadyExists = allConversationsUnified.some(conv => conv._id === testAvatarId);
+        
+        console.log('🤖 MessagesPage: Force adding avatar conversation, already exists:', alreadyExists);
+        
+        if (!alreadyExists) {
+          const forceAvatarConv = {
+            _id: testAvatarId,
+            name: 'Avatar',
+            type: 'dm',
+            conversationType: 'ai_avatar',
+            isPermanent: true,
+            alwaysOnTop: true,
+            lastMessage: {
+              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!',
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              timestamp: new Date().toISOString()
+            },
+            lastMessageAt: new Date().toISOString(),
+            unread: 0,
+            members: [
+              {
+                _id: userId,
+                fullName: user.fullName || user.username,
+                username: user.username,
+                email: user.email
+              },
+              {
+                _id: 'avatar_system_user',
+                fullName: 'Avatar',
+                username: 'avatar',
+                userType: 'ai_avatar',
+                isSystem: true
+              }
+            ],
+            settings: {
+              isAvatarConversation: true,
+              aiEnabled: true
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Always place avatar conversation at the very top
+          allConversationsUnified = [forceAvatarConv, ...allConversationsUnified];
+          console.log('🤖 MessagesPage: FORCE added avatar conversation, new count:', allConversationsUnified.length);
+        }
+      }
       
       // Use a single section for all conversations
       const unifiedSection = [
@@ -374,6 +518,12 @@ export default function MessagesPage() {
       // FIXED: Smart prefetch that never overwrites real-time cached messages
       conversationsToPrefetch.forEach(conv => {
         if (!conv || !conv._id) return;
+        
+        // Skip prefetching for avatar conversations - they're client-side only
+        if (conv.conversationType === 'ai_avatar' || conv.settings?.isAvatarConversation) {
+          return;
+        }
+        
         // Only prefetch if NO cache exists at all (empty or undefined)
         const existingCache = messagesCache[conv._id];
         if (!existingCache || existingCache.length === 0) {
@@ -401,7 +551,7 @@ export default function MessagesPage() {
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
-  }, [messagesCache]);
+  }, [messagesCache, avatarConversation, pinnedConversations]);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -497,6 +647,27 @@ export default function MessagesPage() {
   useEffect(() => {
     allConversationsRef.current = allConversations;
   }, [allConversations]);
+  
+  // Persist pinned conversations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinnedConversations', JSON.stringify(pinnedConversations));
+    } catch (error) {
+      console.error('Error saving pinned conversations to localStorage:', error);
+    }
+  }, [pinnedConversations]);
+  
+  // Persist avatar messages to localStorage
+  useEffect(() => {
+    try {
+      // Convert Map to object for JSON serialization
+      const avatarMessagesObj = Object.fromEntries(avatarMessages);
+      localStorage.setItem('avatarMessages', JSON.stringify(avatarMessagesObj));
+    } catch (error) {
+      console.error('Error saving avatar messages to localStorage:', error);
+    }
+  }, [avatarMessages]);
+  
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -510,6 +681,7 @@ export default function MessagesPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [messageOffset, setMessageOffset] = useState(0);
+  
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('draftMessages');
@@ -561,12 +733,8 @@ export default function MessagesPage() {
             _lastUpdated: Date.now()
           };
 
-          // Re-sort all items by most recent activity after updating
-          const allItemsUpdated = [updatedConv, ...newItems].sort((a, b) => {
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
-          });
+          // Re-sort all items by most recent activity after updating (keeping avatar at top)
+          const allItemsUpdated = sortConversationsWithAvatarTop([updatedConv, ...newItems]);
 
           newSections[sectionIndex] = {
             ...section,
@@ -622,12 +790,8 @@ export default function MessagesPage() {
       };
       
       
-      // Add to top and re-sort by most recent activity (same logic as moveConversationToTop)
-      const allItemsUpdated = [conversationToAdd, ...section.items].sort((a, b) => {
-        const dateA = new Date(a.lastMessageAt || a.createdAt);
-        const dateB = new Date(b.lastMessageAt || b.createdAt);
-        return dateB - dateA;
-      });
+      // Add to top and re-sort by most recent activity (keeping avatar at top)
+      const allItemsUpdated = sortConversationsWithAvatarTop([conversationToAdd, ...section.items]);
       
       newSections[sectionIndex] = {
         ...section,
@@ -903,6 +1067,20 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
+    // CRITICAL: Check for avatar conversations FIRST before doing any message clearing/loading
+    // Avatar conversations use their own storage system and should skip the regular message loading flow
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: useEffect detected avatar conversation, skipping regular message loading flow');
+      setMessageOffset(0);
+      setHasMoreMessages(false); // Avatar conversations don't use pagination
+      setLoadingMore(false);
+      // Reset conversation switch flag immediately
+      setTimeout(() => {
+        setIsConversationSwitch(false);
+      }, 50);
+      return; // Exit early - avatar messages are handled by handleSelect function
+    }
+    
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
     // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
@@ -955,6 +1133,8 @@ export default function MessagesPage() {
     }
     
     // Always fetch from server in background to ensure we have latest messages
+    // Note: Avatar conversations are already handled at the beginning of this useEffect
+    
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
         // SAFETY CHECK: Only process if this is still the selected conversation
@@ -1272,9 +1452,39 @@ export default function MessagesPage() {
         }
       }
     });
-    // Delete message
+    // Delete message - Enhanced with cache consistency and duplicate handling
     chatSocket.on('chat:delete', ({ messageId }) => {
-      setMessages(prev => prev.filter(m => m._id !== messageId));
+      console.log('🗑️ Received delete notification for message:', messageId);
+      
+      // Update current messages (with duplicate check)
+      setMessages(prev => {
+        const hasMessage = prev.some(m => m._id === messageId);
+        if (!hasMessage) {
+          console.log('🗑️ Message already deleted from current messages');
+          return prev;
+        }
+        return prev.filter(m => m._id !== messageId);
+      });
+      
+      // Also update messages cache for consistency
+      setMessagesCache(prevCache => {
+        const updatedCache = { ...prevCache };
+        Object.keys(updatedCache).forEach(convId => {
+          const hasMessage = updatedCache[convId].some(m => m._id === messageId);
+          if (hasMessage) {
+            updatedCache[convId] = updatedCache[convId].filter(m => m._id !== messageId);
+            console.log('🗑️ Removed message from cache for conversation:', convId);
+          }
+        });
+        return updatedCache;
+      });
+      
+      // Update the ref for consistency
+      Object.keys(messagesCacheRef.current).forEach(convId => {
+        if (messagesCacheRef.current[convId]?.some(m => m._id === messageId)) {
+          messagesCacheRef.current[convId] = messagesCacheRef.current[convId].filter(m => m._id !== messageId);
+        }
+      });
     });
     // React to message
     chatSocket.on('chat:react', ({ messageId, emoji, userId }) => {
@@ -1589,7 +1799,7 @@ export default function MessagesPage() {
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
-          const displayName = getConversationDisplayName(conv, user?.id);
+          const displayName = getConversationDisplayName(conv, user?._id || user?.id);
           
           const memberNames = Array.isArray(conv.members)
             ? conv.members.map(m => {
@@ -1618,7 +1828,7 @@ export default function MessagesPage() {
         items: filteredItems,
       };
     });
-  }, [allConversations, search, user?.id, forceUpdate]);
+  }, [allConversations, search, user?._id, user?.id, forceUpdate]);
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {
@@ -1638,6 +1848,47 @@ export default function MessagesPage() {
     // CRITICAL: Clear messages immediately and show loading when user clicks
     setMessages([]);
     setMessagesLoading(true);
+    
+    // For avatar conversations, load saved messages or create welcome message
+    if (isAvatarConversation && isAvatarConversation(conv)) {
+      const savedMessages = avatarMessages.get(conv._id) || [];
+      console.log('🤖 MessagesPage: Loading avatar conversation:', {
+        conversationId: conv._id,
+        savedMessagesCount: savedMessages.length,
+        avatarMessagesMapSize: avatarMessages.size,
+        allKeys: Array.from(avatarMessages.keys())
+      });
+      
+      if (savedMessages.length > 0) {
+        // Load saved conversation history
+        console.log('🤖 MessagesPage: Loading saved avatar conversation:', conv._id, savedMessages.length, 'messages');
+        setMessages(savedMessages);
+        setMessagesLoading(false);
+      } else {
+        // Create initial welcome message for new avatar conversations
+        const welcomeMessage = {
+          _id: `welcome_${Date.now()}`,
+          conversationId: conv._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!\n\nI can help you:\n✨ Find specific meeting transcripts\n🎥 Locate video segments\n📝 Answer questions about your content\n\nJust type your question and I\'ll search through all historical meetings to find relevant information!',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isWelcome: true,
+          status: 'sent'
+        };
+        
+        const initialMessages = [welcomeMessage];
+        setMessages(initialMessages);
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          newMap.set(conv._id, initialMessages);
+          return newMap;
+        });
+        setMessagesLoading(false);
+      }
+    }
     
     // Mark as conversation switch for instant scrolling
     setIsConversationSwitch(true);
@@ -1736,6 +1987,10 @@ export default function MessagesPage() {
   // Send a new message. This version implements an "optimistic" update so the message
   // Enhanced handleSend with optimistic UI and loading states
   const handleSend = async () => {
+    console.log('🤖 MessagesPage: handleSend called, input:', input.trim());
+    console.log('🤖 MessagesPage: selected conversation:', selected?._id, selected?.name);
+    console.log('🤖 MessagesPage: isAvatarConversation check:', isAvatarConversation && isAvatarConversation(selected));
+    
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
       return;
@@ -1751,6 +2006,246 @@ export default function MessagesPage() {
       return;
     }
 
+    // Special handling for avatar conversations - act like a chatbot
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Handling avatar conversation message (chatbot mode)');
+      setIsSending(true);
+      
+      try {
+        // Clear input immediately for better UX
+        const messageText = input.trim();
+        setInput('');
+        setReplyTo(null);
+        
+        // Create user message and add it immediately to the chat
+        const userId = user?._id || user?.id;
+        const userMessage = {
+          _id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          conversationId: selected._id,
+          senderId: userId,
+          senderName: user?.fullName || user?.username || 'You',
+          text: messageText,
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: false,
+          status: 'sent',
+          // Explicitly set sending-related properties to false
+          sending: false,
+          pending: false,
+          // Don't set tempId to avoid message status system tracking
+          tempId: null,
+          // Mark as avatar conversation user message to bypass normal processing
+          isAvatarConversationMessage: true
+        };
+        
+        console.log('🤖 MessagesPage: Created user message for avatar conversation:', userMessage);
+        
+        // Add user message immediately to the chat
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, userMessage];
+          // Save to avatar messages storage
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
+          return newMessages;
+        });
+        
+        // Add typing indicator for avatar
+        const typingMessage = {
+          _id: `typing_${Date.now()}`,
+          conversationId: selected._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Thinking...',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isTyping: true,
+          status: 'typing'
+        };
+        
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, typingMessage];
+          // Save to avatar messages storage (including typing indicator temporarily)
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
+          return newMessages;
+        });
+        
+        // Process avatar response asynchronously using direct API calls (like MeetingPage)
+        console.log('🤖 MessagesPage: Processing avatar query:', messageText);
+        
+        try {
+          // Direct API call to bot service (no conversation management needed)
+          const { success, data, error } = await BotService.getBotReply(messageText);
+          
+          if (success && data) {
+            console.log('🤖 MessagesPage: Got bot reply:', data);
+            
+            // Parse bot response and format for AvatarMessageBubble display
+            let botText = '';
+            let clips = [];
+            
+            try {
+              if (data.reply) {
+                // Try to parse structured response
+                const outer = JSON.parse(data.reply);
+                const entries = Array.isArray(outer) && Array.isArray(outer[0]) ? outer[0] : [];
+                
+                if (entries.length > 0) {
+                  clips = entries.map(entry => {
+                    // Construct video URL same way as MeetingPage
+                    let videoUrl = 'Video URL not available';
+                    if (entry.title && entry.videodetails?.snippetstarttimesecs !== undefined && entry.videodetails?.snippetendtimesecs !== undefined) {
+                      try {
+                        videoUrl = `https://clavisds02.feeltiptop.com/360TeamCalls/downloads/` +
+                          entry.title.slice(0,4) + '/' + entry.title.slice(5,7) + '/' + entry.title + '/' + entry.title + '.mp4' +
+                          `#t=${entry.videodetails.snippetstarttimesecs},${entry.videodetails.snippetendtimesecs}`;
+                      } catch (urlError) {
+                        console.log('🤖 MessagesPage: Error constructing video URL:', urlError);
+                        videoUrl = 'Error generating video URL';
+                      }
+                    }
+                    
+                    return {
+                      title: entry.title || 'Untitled',
+                      snippet: entry.snippet || 'No description available',
+                      videodetails: entry.videodetails || {},
+                      videoUrl: videoUrl,
+                      originalEntry: entry
+                    };
+                  });
+                  
+                  // Format response text for AvatarMessageBubble parsing
+                  let responseText = `I found ${clips.length} relevant video${clips.length > 1 ? 's' : ''} for your query:\n\n`;
+                  
+                  clips.forEach((clip, index) => {
+                    responseText += `Title: ${clip.title}\n`;
+                    responseText += `Segment Text: ${clip.snippet}\n`;
+                    responseText += `Video Link: ${clip.videoUrl}\n`;
+                    if (index < clips.length - 1) responseText += '\n';
+                  });
+                  
+                  botText = responseText;
+                } else {
+                  // Fallback to raw reply
+                  botText = data.reply;
+                }
+              } else {
+                botText = 'I received your message but couldn\'t generate a response.';
+              }
+            } catch (parseError) {
+              // If JSON parsing fails, use raw response
+              botText = data.reply || 'I received your message but couldn\'t generate a response.';
+              console.log('🤖 MessagesPage: Using raw response due to parse error:', parseError);
+            }
+            
+            // Remove typing indicator and add bot response
+            setMessages(prevMessages => {
+              const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+              
+              const avatarMessage = {
+                _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                conversationId: selected._id,
+                senderId: 'avatar_system_user',
+                senderName: 'Avatar',
+                text: botText,
+                clips: clips, // Include parsed clips for potential future use
+                createdAt: new Date().toISOString(),
+                timestamp: new Date().toISOString(),
+                isAvatarMessage: true,
+                status: 'sent'
+              };
+              
+              const newMessages = [...withoutTyping, avatarMessage];
+              setAvatarMessages(prev => {
+                const newMap = new Map(prev);
+                newMap.set(selected._id, newMessages);
+                return newMap;
+              });
+              return newMessages;
+            });
+            
+            // Update conversation's last message for sidebar
+            setAllConversations(prevSections => {
+              const updatedSections = prevSections.map(section => ({
+                ...section,
+                items: section.items.map(conv => {
+                  if (conv._id === selected._id) {
+                    return {
+                      ...conv,
+                      lastMessage: {
+                        text: botText.length > 50 ? botText.substring(0, 50) + '...' : botText,
+                        senderId: 'avatar_system_user',
+                        senderName: 'Avatar',
+                        timestamp: new Date().toISOString()
+                      },
+                      lastMessageAt: new Date().toISOString()
+                    };
+                  }
+                  return conv;
+                })
+              })).map(section => ({
+                ...section,
+                items: sortConversationsWithAvatarTop(section.items)
+              }));
+              return updatedSections;
+            });
+            
+          } else {
+            throw new Error(error || 'Bot service returned no data');
+          }
+          
+        } catch (processingError) {
+          console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
+          
+          // Remove typing indicator and add error message
+          setMessages(prevMessages => {
+            const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+            
+            const errorMessage = {
+              _id: `avatar_error_${Date.now()}`,
+              conversationId: selected._id,
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              text: 'Sorry, I encountered an error while processing your request. Please try again.',
+              createdAt: new Date().toISOString(),
+              timestamp: new Date().toISOString(),
+              isAvatarMessage: true,
+              status: 'error'
+            };
+            
+            const newMessages = [...withoutTyping, errorMessage];
+            setAvatarMessages(prev => {
+              const newMap = new Map(prev);
+              newMap.set(selected._id, newMessages);
+              return newMap;
+            });
+            return newMessages;
+          });
+        }
+        
+      } catch (error) {
+        console.error('🤖 MessagesPage: Error in avatar chat handling:', error);
+        setNotification({
+          message: 'Failed to send message to avatar. Please try again.'
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } finally {
+        setIsSending(false);
+      }
+      
+      console.log('🤖 MessagesPage: Exiting early after avatar conversation handling');
+      return; // Exit early, don't continue with normal message sending
+    }
+
+    console.log('🤖 MessagesPage: Starting normal message sending process');
+    console.log('🤖 MessagesPage: This should NOT happen for avatar conversations!');
     setIsSending(true);
     setUploadProgress(0);
 
@@ -1760,9 +2255,10 @@ export default function MessagesPage() {
       // Handle file upload with progress tracking
       if (uploadFile) {
         try {
-          const res = await messageAPI.uploadMessageFile(uploadFile);
+          const res = await messageAPI.uploadMessageFile(uploadFile, (progress) => {
+            setUploadProgress(progress);
+          });
           fileMeta = res.data;
-          setUploadProgress(100);
         } catch (uploadError) {
           console.error('File upload failed:', uploadError);
           setNotification({
@@ -1890,8 +2386,159 @@ export default function MessagesPage() {
     setEditInput('');
   };
 
+  const handleAvatarResponse = async (avatarResponse) => {
+    try {
+      console.log('🤖 MessagesPage: Handling avatar response:', avatarResponse);
+      
+      if (avatarResponse && selected) {
+        // Add the avatar response message to the current conversation
+        const avatarMessage = {
+          ...avatarResponse,
+          tempId: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          conversationId: selected._id,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Add avatar message to messages state
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, avatarMessage];
+          console.log('🤖 MessagesPage: Updated messages with avatar response');
+          return newMessages;
+        });
+        
+        // Update conversation's last message
+        setAllConversations(prevSections => {
+          const updatedSections = prevSections.map(section => ({
+            ...section,
+            items: section.items.map(conv => {
+              if (conv._id === selected._id) {
+                return {
+                  ...conv,
+                  lastMessage: {
+                    text: avatarMessage.text.substring(0, 100) + '...',
+                    senderId: avatarMessage.senderId,
+                    senderName: 'Avatar',
+                    timestamp: avatarMessage.timestamp
+                  },
+                  lastMessageAt: avatarMessage.timestamp
+                };
+              }
+              return conv;
+            })
+          })).map(section => ({
+            ...section,
+            items: sortConversationsWithAvatarTop(section.items)
+          }));
+          return updatedSections;
+        });
+      }
+    } catch (error) {
+      console.error('🤖 MessagesPage: Error handling avatar response:', error);
+    }
+  };
+
   const handleDelete = async (msgId) => {
-    chatSocket.deleteMessage({ messageId: msgId });
+    console.log('🗑️ Deleting message:', msgId);
+    
+    // Find the message to delete for potential rollback
+    const messageToDelete = messages.find(m => m._id === msgId);
+    if (!messageToDelete) {
+      console.error('Message to delete not found:', msgId);
+      return;
+    }
+    
+    // Check if this is an avatar conversation
+    const isAvatarConv = isAvatarConversation && isAvatarConversation(selected);
+    
+    try {
+      // Optimistically remove message from UI immediately
+      setMessages(prev => {
+        const filtered = prev.filter(m => m._id !== msgId);
+        console.log('🗑️ Optimistically removed message from UI');
+        return filtered;
+      });
+      
+      // Handle avatar conversation messages differently
+      if (isAvatarConv) {
+        console.log('🤖 Deleting from avatar conversation - updating avatarMessages storage');
+        // Update avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const filteredMessages = conversationMessages.filter(m => m._id !== msgId);
+          newMap.set(selected._id, filteredMessages);
+          console.log('🤖 Updated avatarMessages storage');
+          return newMap;
+        });
+      } else {
+        // Regular conversation - update messages cache
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = updatedCache[selected._id].filter(m => m._id !== msgId);
+            console.log('🗑️ Updated messages cache');
+          }
+          return updatedCache;
+        });
+        
+        // Update the ref for consistency
+        messagesCacheRef.current = {
+          ...messagesCacheRef.current,
+          [selected?._id]: messagesCacheRef.current[selected?._id]?.filter(m => m._id !== msgId) || []
+        };
+        
+        // Try to delete via socket for regular conversations
+        if (chatSocket?.connected) {
+          chatSocket.deleteMessage({ messageId: msgId });
+          console.log('🗑️ Sent delete request via socket');
+        } else {
+          console.warn('🗑️ Socket not connected, attempting REST API fallback');
+          // Fallback to REST API
+          await messageAPI.deleteMessage(msgId);
+          console.log('🗑️ Successfully deleted via REST API');
+        }
+      }
+      
+    } catch (error) {
+      console.error('🗑️ Failed to delete message:', error);
+      
+      // Rollback: restore the message in UI
+      setMessages(prev => {
+        // Insert message back in correct position (sorted by createdAt)
+        const restored = [...prev, messageToDelete];
+        return restored.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      });
+      
+      // Rollback based on conversation type
+      if (isAvatarConv) {
+        // Rollback: restore in avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const restored = [...conversationMessages, messageToDelete]
+            .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          newMap.set(selected._id, restored);
+          return newMap;
+        });
+      } else {
+        // Rollback: restore in cache for regular conversations
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = [...updatedCache[selected._id], messageToDelete]
+              .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          }
+          return updatedCache;
+        });
+      }
+      
+      // Show error notification
+      setNotification({
+        message: 'Failed to delete message. Please try again.',
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   const handleStar = (convId) => {
@@ -1900,6 +2547,15 @@ export default function MessagesPage() {
   };
 
   const handlePin = (convId) => {
+    // Don't allow pinning avatar conversations
+    const targetConv = allConversations[0]?.items?.find(c => c._id === convId);
+    if (targetConv && (targetConv.conversationType === 'ai_avatar' || 
+                       targetConv.settings?.isAvatarConversation ||
+                       targetConv._id?.startsWith('avatar_conversation_'))) {
+      console.log('🤖 MessagesPage: Cannot pin avatar conversation - already at top');
+      return;
+    }
+    
     setAllConversations(prev => {
       const newSections = [...prev];
       const sectionIndex = 0; // Unified structure
@@ -1909,21 +2565,27 @@ export default function MessagesPage() {
         const convIndex = items.findIndex(c => c._id === convId);
         
         if (convIndex !== -1) {
+          const currentlyPinned = items[convIndex].isPinned;
+          const newPinnedState = !currentlyPinned;
+          
           items[convIndex] = {
             ...items[convIndex],
-            isPinned: !items[convIndex].isPinned
+            isPinned: newPinnedState
           };
           
-          // Sort so pinned conversations appear at the top
-          const sortedItems = items.sort((a, b) => {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            
-            // Within pinned/unpinned groups, sort by last message time
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
+          // Update the pinned conversations list for persistence
+          setPinnedConversations(prevPinned => {
+            if (newPinnedState) {
+              // Add to pinned list if not already there
+              return prevPinned.includes(convId) ? prevPinned : [...prevPinned, convId];
+            } else {
+              // Remove from pinned list
+              return prevPinned.filter(id => id !== convId);
+            }
           });
+          
+          // Sort with proper hierarchy: Avatar → Pinned → Regular
+          const sortedItems = sortConversationsWithAvatarTop(items);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
@@ -2178,6 +2840,12 @@ export default function MessagesPage() {
   const handleLoadMoreMessages = async () => {
     if (!selected?._id || loadingMore || !hasMoreMessages) return;
     
+    // Don't load more messages for avatar conversations - they're client-side only
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Skipping handleLoadMoreMessages for avatar conversation');
+      return;
+    }
+    
     setLoadingMore(true);
     
     try {
@@ -2268,8 +2936,8 @@ export default function MessagesPage() {
             _forceRender: Math.random()
           };
           
-          // Add to the top of the unified list (most recent first)
-          const updatedItems = [newConversationWithTimestamp, ...cleanedItems];
+          // Add to the top of the unified list (keeping avatar conversation at top)
+          const updatedItems = sortConversationsWithAvatarTop([newConversationWithTimestamp, ...cleanedItems]);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
@@ -2388,13 +3056,8 @@ export default function MessagesPage() {
           );
           
           if (existingIndex === -1) {
-            // Add to top and re-sort by most recent activity
-            const updatedItems = [newConversation, ...newSections[sectionIndex].items]
-              .sort((a, b) => {
-                const dateA = new Date(a.lastMessageAt || a.createdAt);
-                const dateB = new Date(b.lastMessageAt || b.createdAt);
-                return dateB - dateA;
-              });
+            // Add to top and re-sort by most recent activity (keeping avatar at top)
+            const updatedItems = sortConversationsWithAvatarTop([newConversation, ...newSections[sectionIndex].items]);
             
             newSections[sectionIndex] = {
               ...newSections[sectionIndex],
@@ -2673,7 +3336,7 @@ export default function MessagesPage() {
                   onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
                   starred={starred.includes(conv._id)}
                   getInitials={getInitials}
-                  currentUserId={user?.id}
+                  currentUserId={user?._id || user?.id}
                   typing={typing[conv._id] || {}}
                   draftMessage={draftMessages[conv._id]}
                   canDelete={
@@ -2714,15 +3377,19 @@ export default function MessagesPage() {
             <div className="border-b border-gray-100 px-3 md:px-6 py-2 md:py-4 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex items-center justify-between">
                 <div 
-                  className="flex items-center space-x-2 md:space-x-4 cursor-pointer hover:bg-white/50 p-1 md:p-3 rounded-xl transition-all duration-200"
-                  onClick={() => setShowDetailsModal(true)}
+                  className={`flex items-center space-x-2 md:space-x-4 p-1 md:p-3 rounded-xl transition-all duration-200 ${
+                    isAvatarConversation && isAvatarConversation(selected) 
+                      ? '' 
+                      : 'cursor-pointer hover:bg-white/50'
+                  }`}
+                  onClick={() => !(isAvatarConversation && isAvatarConversation(selected)) && setShowDetailsModal(true)}
                 >
                   <div className="relative">
                     {selected.avatar ? (
                       <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-8 w-8 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
                     ) : (
                       <div className="h-8 w-8 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg">
-                        {getInitials(getConversationDisplayName(selected, user?.id))}
+                        {getInitials(getConversationDisplayName(selected, user?._id || user?.id))}
                       </div>
                     )}
                     {selected.status && (
@@ -2730,7 +3397,7 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?.id)}</h2>
+                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?._id || user?.id)}</h2>
                     {selected && (selected.type === 'group' || selected.type === 'community') && (
                       <p className="text-xs text-gray-600">
                         {selected.members?.length || 0} members
@@ -2750,7 +3417,7 @@ export default function MessagesPage() {
                   >
                     <Search className="h-4 w-4 md:h-5 md:w-5" />
                   </button>
-                  {selected && (
+                  {selected && !(isAvatarConversation && isAvatarConversation(selected)) && (
                     <button 
                       onClick={() => setShowSettingsModal(true)} 
                       className="p-2 rounded-xl hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700" 
@@ -2818,7 +3485,7 @@ export default function MessagesPage() {
                 msg.conversation === selected._id
               )}
               currentUserId={user?.id}
-              conversationType={selected.type}
+              conversationType={selected.conversationType || selected.type}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReply={handleReply}
@@ -2865,6 +3532,9 @@ export default function MessagesPage() {
               members={selected?.members || []}
               isSending={isSending}
               uploadProgress={uploadProgress}
+              conversation={selected}
+              onAvatarQuery={handleAvatarResponse}
+              isAvatarInitialized={isInitialized}
             />
           )}
 

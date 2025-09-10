@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Star, MessageCircle, Users, Hash, Pin, VolumeX, Edit3, Check, CheckCheck } from 'lucide-react';
+import { Star, MessageCircle, Users, Hash, Pin, VolumeX, Edit3, Check, CheckCheck, Bot, Sparkles } from 'lucide-react';
 import { useChatSocket } from '../../context/ChatSocketContext';
+import { isAvatarConversation } from '../../api/messageService';
 
 function getConversationDisplayName(conversation, currentUserId) {
   try {
@@ -161,6 +162,55 @@ export default function SidebarConversation({
     
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
+
+  // Special rendering for avatar conversations
+  const isAvatar = isAvatarConversation(conv);
+  
+  if (isAvatar) {
+    return (
+      <div
+        className={`group relative mx-1 md:mx-2 mb-1 p-2 md:p-3 rounded-xl cursor-pointer transition-all duration-300 border-2 ${
+          isActive 
+            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300 shadow-lg transform scale-[1.02]' 
+            : 'bg-gradient-to-r from-blue-100/30 to-purple-100/30 border-blue-200 hover:border-blue-300 hover:shadow-md'
+        } sticky top-0 z-10`}
+        onClick={onSelect}
+      >
+        <div className="flex items-center space-x-2">
+          {/* Avatar Icon */}
+          <div className="relative flex-shrink-0">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg ring-2 ring-blue-100">
+              <Bot className="h-5 w-5 text-white" />
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm">
+              <Sparkles className="w-2 h-2 text-white m-0.5" />
+            </div>
+          </div>
+
+          {/* Conversation Details */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center space-x-1">
+                <span>Avatar</span>
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 rounded-full">
+                  AI
+                </span>
+              </h3>
+              <div className="flex items-center space-x-1 text-xs text-gray-500">
+                <span>Always available</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-blue-600 font-medium truncate">
+                Ask me anything about TipTop!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

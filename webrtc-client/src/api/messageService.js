@@ -18,23 +18,28 @@ export const deleteMessage = (messageId) => API.delete(`/messages/${messageId}`)
 export const reactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/react`, { emoji });
 export const unreactMessage = (messageId, emoji) => API.post(`/messages/${messageId}/unreact`, { emoji });
 export const searchMessages = (conversationId, params = {}) => API.get(`/messages/conversation/${conversationId}/search`, { params });
-export const uploadMessageFile = (file) => {
+export const uploadMessageFile = (file, onProgress = null) => {
   const formData = new FormData();
   formData.append('file', file);
   return API.post('/messages/upload', formData, { 
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (progressEvent) => {
       const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-      // Upload progress tracking
+      if (onProgress) {
+        onProgress(percentCompleted);
+      }
     }
   });
 };
 export const getFileUrl = (filename) => {
-  return `${import.meta.env.VITE_API_URL}/uploads/messages/${filename}`;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+  // Remove /api suffix if present, since file serving is directly from base URL
+  const fileBaseUrl = baseUrl.replace(/\/api$/, '');
+  return `${fileBaseUrl}/uploads/messages/${filename}`;
 };
 
 // Helper function to construct proper file URL from file object
-export const constructFileUrl = (fileObj) => {
+export const constructFileUrl = (fileObj, includeAuth = true) => {
   if (!fileObj) {
     console.warn('[File URL] No file object provided');
     return null;
@@ -46,25 +51,85 @@ export const constructFileUrl = (fileObj) => {
   }
   
   let url = fileObj.url;
-  const baseUrl = import.meta.env.VITE_API_URL;
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  if (!baseUrl) {
-    console.error('[File URL] VITE_API_URL not defined! Make sure .env file exists with VITE_API_URL=http://localhost:8181/api');
-    return null;
-  }
+  console.log('[constructFileUrl] Input:', { url, baseUrl, fileObj });
   
-  // If it's already a complete URL, return as-is
+  // If it's already a complete URL, check if we need to fix the domain
   if (url.startsWith('http') || url.startsWith('blob:')) {
+    // Don't modify blob URLs
+    if (url.startsWith('blob:')) {
+      return url;
+    }
+    
+    // Check if the URL is pointing to the wrong server and fix it
+    const wrongDomains = [
+      'webrtc-signaling-server.onrender.com',
+      'three60-za2d.onrender.com',
+      'localhost:8181',
+      '.onrender.com' // Catch any render.com subdomain
+    ];
+    
+    const needsDomainFix = wrongDomains.some(domain => url.includes(domain));
+    
+    // Also check if URL doesn't start with our base URL (more aggressive correction)
+    const isWrongDomain = !url.startsWith(baseUrl) && !url.startsWith('blob:');
+    
+    if ((needsDomainFix || isWrongDomain) && !url.startsWith(baseUrl)) {
+      try {
+        // Extract the path after the domain
+        const urlObj = new URL(url);
+        const pathAndQuery = urlObj.pathname + urlObj.search;
+        // Reconstruct with correct base URL
+        const oldUrl = url;
+        url = `${baseUrl}${pathAndQuery}`;
+        console.log('[constructFileUrl] Domain corrected:', { oldUrl, newUrl: url, reason: needsDomainFix ? 'wrong_domain' : 'not_base_url' });
+      } catch (error) {
+        console.warn('[constructFileUrl] Failed to parse URL for domain correction:', url, error);
+      }
+    }
+    
+    // For HTTP URLs, add auth token if needed
+    if (includeAuth && !url.includes('token=')) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${encodeURIComponent(token)}`;
+      }
+    }
+    console.log('[constructFileUrl] Final URL:', url);
     return url;
   }
   
-  // If it starts with /, it's an absolute path
+  // Handle relative URLs
+  let finalUrl;
+  
+  // If it starts with /, it's an absolute path from the base URL
   if (url.startsWith('/')) {
-    return `${baseUrl}${url}`;
+    finalUrl = `${baseUrl}${url}`;
+  } else {
+    // If it's just a filename, construct full URL
+    // Check if it looks like a message file (has timestamp prefix)
+    if (url.match(/^\d+-\d+-/)) {
+      // This looks like a message file, use the uploads/messages path
+      finalUrl = `${baseUrl}/uploads/messages/${url}`;
+    } else {
+      // Use API endpoint for other files
+      finalUrl = `${baseUrl}/api/files/${url}`;
+    }
   }
   
-  // If it's just a filename, construct full URL
-  return `${baseUrl}/uploads/messages/${url}`;
+  // Add authentication token
+  if (includeAuth) {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const separator = finalUrl.includes('?') ? '&' : '?';
+      finalUrl += `${separator}token=${encodeURIComponent(token)}`;
+    }
+  }
+  
+  console.log('[constructFileUrl] Final URL (relative):', finalUrl);
+  return finalUrl;
 };
 
 // File type utilities
@@ -155,10 +220,38 @@ export const formatFileSize = (bytes) => {
 // Enhanced file download function with better error handling
 export const downloadFile = async (url, filename, mimeType) => {
   try {
+    // Fix domain if needed and add auth token
+    let downloadUrl = url;
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+    
+    // Fix wrong server domains
+    const wrongDomains = [
+      'webrtc-signaling-server.onrender.com',
+      'three60-za2d.onrender.com',
+      'localhost:8181'
+    ];
+    
+    const needsDomainFix = wrongDomains.some(domain => downloadUrl.includes(domain));
+    
+    if (needsDomainFix && !downloadUrl.startsWith(baseUrl)) {
+      const urlObj = new URL(downloadUrl);
+      const pathAndQuery = urlObj.pathname + urlObj.search;
+      downloadUrl = `${baseUrl}${pathAndQuery}`;
+    }
+    
+    // Add auth token to URL if not present
+    if (downloadUrl && !downloadUrl.includes('token=')) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const separator = downloadUrl.includes('?') ? '&' : '?';
+        downloadUrl += `${separator}token=${encodeURIComponent(token)}`;
+      }
+    }
+
     // For same-origin files, use direct download
-    if (url.startsWith(window.location.origin) || url.startsWith('/')) {
+    if (downloadUrl.startsWith(window.location.origin) || downloadUrl.startsWith('/')) {
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = filename;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -170,10 +263,11 @@ export const downloadFile = async (url, filename, mimeType) => {
 
     // For cross-origin files, try multiple approaches
     try {
-      // First attempt: Fetch with CORS
-      const response = await fetch(url, {
+      // First attempt: Fetch with auth token in URL
+      const response = await fetch(downloadUrl, {
         method: 'GET',
         mode: 'cors',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/octet-stream',
         },
@@ -199,36 +293,28 @@ export const downloadFile = async (url, filename, mimeType) => {
       // Clean up blob URL
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (fetchError) {
-      console.warn('CORS fetch failed, trying download endpoint:', fetchError);
+      console.warn('Initial fetch failed, trying alternative approaches:', fetchError);
       
-      // Second attempt: Try the download endpoint with auth
+      // Second attempt: Try with Authorization header
       try {
-        // Extract filename from URL
-        const urlParts = url.split('/');
-        const originalFilename = urlParts[urlParts.length - 1];
-        
-        // Use the file endpoint
-        const downloadUrl = `${import.meta.env.VITE_API_URL}/api/files/${originalFilename}`;
-        
-        // Get auth token from localStorage
         const token = localStorage.getItem('token');
         const headers = {
           'Content-Type': 'application/octet-stream',
         };
         
-        // Add auth header if token exists
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const response = await fetch(downloadUrl, {
+        const response = await fetch(url, {
           method: 'GET',
           mode: 'cors',
+          credentials: 'include',
           headers,
         });
 
         if (!response.ok) {
-          throw new Error(`File endpoint failed with status: ${response.status}`);
+          throw new Error(`Auth header fetch failed with status: ${response.status}`);
         }
 
         const blob = await response.blob();
@@ -246,74 +332,59 @@ export const downloadFile = async (url, filename, mimeType) => {
         
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return;
-      } catch (downloadEndpointError) {
-        console.warn('File endpoint also failed:', downloadEndpointError);
+      } catch (authFetchError) {
+        console.warn('Auth fetch also failed:', authFetchError);
       }
       
-      // Third attempt: Try direct URL with different approach (for 426 errors)
+      // Third attempt: Try the API file endpoint
       try {
-        // For 426 Upgrade Required errors, try opening in new tab directly
-        if (fetchError.message.includes('426') || fetchError.message.includes('Upgrade Required')) {
-          // Detected 426 error, opening in new tab
-          window.open(url, '_blank');
-          return;
+        const urlParts = url.split('/');
+        const originalFilename = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
+        
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+        const apiUrl = `${baseUrl}/api/files/${originalFilename}`;
+        
+        const token = localStorage.getItem('token');
+        const headers = {
+          'Content-Type': 'application/octet-stream',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const response = await fetch(url, {
+        const response = await fetch(apiUrl, {
           method: 'GET',
-          mode: 'no-cors',
+          mode: 'cors',
+          credentials: 'include',
+          headers,
         });
-        
-        if (response.type === 'opaque') {
-          // For opaque responses, we can't access the content directly
-          // So we'll fall back to opening in a new tab
-          throw new Error('Opaque response, cannot download directly');
+
+        if (!response.ok) {
+          throw new Error(`API endpoint failed with status: ${response.status}`);
         }
-      } catch (noCorsError) {
-        console.warn('No-cors fetch also failed:', noCorsError);
+
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return;
+      } catch (apiError) {
+        console.warn('API endpoint also failed:', apiError);
       }
       
-      // Fourth attempt: Try XMLHttpRequest
-      try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.responseType = 'blob';
-        xhr.withCredentials = false;
-        
-        xhr.onload = function() {
-          if (xhr.status === 200) {
-            const blob = xhr.response;
-            const blobUrl = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = filename;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-          } else {
-            throw new Error(`XHR failed with status: ${xhr.status}`);
-          }
-        };
-        
-        xhr.onerror = function() {
-          throw new Error('XHR request failed');
-        };
-        
-        xhr.send();
-        return; // Exit early if XHR succeeds
-      } catch (xhrError) {
-        console.warn('XHR also failed:', xhrError);
-      }
-      
-      // Final fallback: Open in new tab
-              // All download methods failed, opening in new tab as fallback
-      window.open(url, '_blank');
+      // Final fallback: Open in new tab with auth token
+      window.open(downloadUrl, '_blank');
     }
   } catch (error) {
     console.error('Download failed:', error);
@@ -382,4 +453,61 @@ export const validateFile = (file, maxSize = 50 * 1024 * 1024) => {
   }
 
   return true;
+};
+
+// Avatar-specific message functions
+export const sendAvatarQuery = async (conversationId, text, userId) => {
+  try {
+    console.log('📤 Sending avatar query:', { conversationId, text, userId });
+    
+    const response = await API.post(`/messages/conversation/${conversationId}/avatar-query`, {
+      text,
+      userId,
+      type: 'avatar_query'
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Failed to send avatar query:', error);
+    throw error;
+  }
+};
+
+export const createAvatarMessage = (avatarResponseData) => {
+  return {
+    _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    tempId: `avatar_temp_${Date.now()}`,
+    conversationId: avatarResponseData.conversationId,
+    senderId: 'avatar_system_user',
+    sender: {
+      _id: 'avatar_system_user',
+      fullName: 'Avatar',
+      username: 'avatar',
+      userType: 'ai_avatar',
+      isSystem: true,
+      avatar: '/assets/avatar-profile.png'
+    },
+    text: avatarResponseData.text,
+    type: 'avatar',
+    isSystemMessage: false,
+    isAvatarMessage: true,
+    avatarData: avatarResponseData.avatarData,
+    timestamp: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    status: 'sent'
+  };
+};
+
+export const isAvatarMessage = (message) => {
+  return message?.isAvatarMessage === true || 
+         message?.sender?.userType === 'ai_avatar' ||
+         message?.type === 'avatar' ||
+         message?.senderId === 'avatar_system_user';
+};
+
+export const isAvatarConversation = (conversation) => {
+  return conversation?.conversationType === 'ai_avatar' || 
+         conversation?.settings?.isAvatarConversation === true ||
+         conversation?.name === 'Avatar' ||
+         conversation?._id?.startsWith('avatar_conversation_');
 }; 
