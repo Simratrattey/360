@@ -52,6 +52,11 @@ function MessageBubble({
   // File type checks - moved up to prevent hoisting issues
   const isImage = msg.file && msg.file.type && msg.file.type.startsWith('image/');
   const isVideo = msg.file && msg.file.type && msg.file.type.startsWith('video/');
+  
+  // Avatar conversation detection
+  const isAvatarConversation = msg.isAvatarConversationMessage || 
+                               conversationType === 'ai_avatar' || 
+                               msg.conversationId?.startsWith('avatar_conversation_');
   const isAudio = msg.file && msg.file.type && msg.file.type.startsWith('audio/');
   const isDocument = msg.file && msg.file.type && (msg.file.type.startsWith('application/pdf') || msg.file.type.includes('document') || msg.file.type.includes('spreadsheet') || msg.file.type.includes('presentation'));
   
@@ -931,17 +936,19 @@ function MessageBubble({
                       }}
                       ref={dropdownRef}
                     >
-                      {/* Reply option - available for all messages */}
-                      <button 
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
-                        onClick={() => {
-                          onReply(msg);
-                          setShowDropdown(false);
-                        }}
-                      >
-                        <Reply className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Reply</span>
-                      </button>
+                      {/* Reply option - available for all messages except avatar conversations */}
+                      {!isAvatarConversation && (
+                        <button 
+                          className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
+                          onClick={() => {
+                            onReply(msg);
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <Reply className="h-4 w-4 text-gray-500" />
+                          <span className="font-medium">Reply</span>
+                        </button>
+                      )}
                       
                       {/* Copy text option - only if message has text */}
                       {msg.text && (
@@ -1007,8 +1014,8 @@ function MessageBubble({
                       
                       <div className="border-t border-gray-100 my-1"></div>
                       
-                      {/* Edit option - only for own messages without files */}
-                      {isOwn && !msg.file && (
+                      {/* Edit option - only for own messages without files, not in avatar conversations */}
+                      {isOwn && !msg.file && !isAvatarConversation && (
                         <button 
                           className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
                           onClick={() => {
@@ -1021,8 +1028,8 @@ function MessageBubble({
                         </button>
                       )}
                       
-                      {/* Delete option - only for own messages */}
-                      {isOwn && (
+                      {/* Delete option - only for own messages, not in avatar conversations */}
+                      {isOwn && !isAvatarConversation && (
                         <button 
                           className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-all duration-150"
                           onClick={() => {
