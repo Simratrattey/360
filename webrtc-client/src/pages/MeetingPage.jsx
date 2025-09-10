@@ -141,6 +141,35 @@ export default function MeetingPage() {
   const [hostTransferNotification, setHostTransferNotification] = useState(null);
   
   // Debug participant map changes
+  // Initialize meeting settings based on meeting configuration
+  useEffect(() => {
+    // Check if this meeting has subtitles enabled
+    const meetingInfoKey = `meeting-${roomId}`;
+    const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+    
+    if (meetingInfoStr) {
+      try {
+        const meetingInfo = JSON.parse(meetingInfoStr);
+        console.log(`[MeetingPage] Found meeting info for room ${roomId}:`, meetingInfo);
+        
+        // Initialize subtitle settings based on meeting configuration
+        if (meetingInfo.subtitlesEnabled !== undefined) {
+          const shouldEnableSubtitles = meetingInfo.subtitlesEnabled;
+          console.log(`[MeetingPage] Setting subtitles to ${shouldEnableSubtitles ? 'enabled' : 'disabled'} based on meeting config`);
+          
+          setSubtitlesEnabled(shouldEnableSubtitles);
+          subtitlesEnabledRef.current = shouldEnableSubtitles;
+          
+          if (!shouldEnableSubtitles) {
+            console.log(`[MeetingPage] ⚠️ Subtitles disabled for this meeting - no transcription will occur`);
+          }
+        }
+      } catch (error) {
+        console.warn('[MeetingPage] Failed to parse meeting info:', error);
+      }
+    }
+  }, [roomId]);
+
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
   }, [participantMap]);
@@ -1191,6 +1220,22 @@ To convert to MP4:
   // Process individual participant audio for continuous transcript recording
   const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
     try {
+      // Check if subtitles are enabled for this meeting
+      const meetingInfoKey = `meeting-${roomId}`;
+      const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+      
+      if (meetingInfoStr) {
+        try {
+          const meetingInfo = JSON.parse(meetingInfoStr);
+          if (meetingInfo.subtitlesEnabled === false) {
+            console.log(`[Transcript] 🚫 Skipping transcript recording for ${participantName} - subtitles disabled for this meeting`);
+            return;
+          }
+        } catch (error) {
+          console.warn('[Transcript] Failed to parse meeting info, proceeding with transcription:', error);
+        }
+      }
+      
       // Initialize the clients ref if it doesn't exist
       if (!assemblyClientsRef.current) {
         assemblyClientsRef.current = new Map();
@@ -2690,17 +2735,66 @@ To convert to MP4:
                   </button>
                   <button
                     onClick={() => {
+                      // Check if subtitles are disabled for this meeting
+                      const meetingInfoKey = `meeting-${roomId}`;
+                      const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+                      
+                      if (meetingInfoStr) {
+                        try {
+                          const meetingInfo = JSON.parse(meetingInfoStr);
+                          if (meetingInfo.subtitlesEnabled === false) {
+                            return; // Don't allow toggling if disabled for meeting
+                          }
+                        } catch (error) {
+                          // Continue with toggle
+                        }
+                      }
+                      
                       toggleSubtitles();
                       setShowSettings(false);
                     }}
                     className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+                      (() => {
+                        // Check if subtitles are disabled for this meeting
+                        const meetingInfoKey = `meeting-${roomId}`;
+                        const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+                        
+                        if (meetingInfoStr) {
+                          try {
+                            const meetingInfo = JSON.parse(meetingInfoStr);
+                            if (meetingInfo.subtitlesEnabled === false) {
+                              return 'bg-gray-500 cursor-not-allowed opacity-50';
+                            }
+                          } catch (error) {
+                            // Continue with normal styling
+                          }
+                        }
+                        
+                        return subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600';
+                      })()
                     }`}
                   >
                     💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
                   <p className="text-xs text-gray-400 mt-1 px-3">
-                    Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.
+                    {(() => {
+                      // Check if subtitles are disabled for this meeting
+                      const meetingInfoKey = `meeting-${roomId}`;
+                      const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+                      
+                      if (meetingInfoStr) {
+                        try {
+                          const meetingInfo = JSON.parse(meetingInfoStr);
+                          if (meetingInfo.subtitlesEnabled === false) {
+                            return "⚠️ Transcription disabled for this meeting - no transcript or AI summary will be generated.";
+                          }
+                        } catch (error) {
+                          // Continue with default message
+                        }
+                      }
+                      
+                      return "Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.";
+                    })()}
                   </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
