@@ -424,7 +424,25 @@ function MessageBubble({
     if (canPreviewFile) {
       // Enhanced WhatsApp/Slack-style image preview with progressive loading
       if (isImage) {
-        const imageSrc = `${previewUrl || fileUrl}${imgRetryCount > 0 ? `?retry=${imgRetryCount}` : ''}`;
+        // Try different URL construction approaches
+        const getImageSrc = () => {
+          let src = previewUrl || fileUrl;
+          
+          // If we've had retries, try alternative approaches
+          if (imgRetryCount === 1) {
+            // Try without auth token
+            src = constructFileUrl(msg.file, false);
+          } else if (imgRetryCount === 2) {
+            // Try direct file URL construction
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+            const filename = msg.file.url || msg.file.name;
+            src = `${baseUrl}/uploads/messages/${filename}`;
+          }
+          
+          return src;
+        };
+        
+        const imageSrc = getImageSrc();
         
         return (
           <div className="relative group">
@@ -484,7 +502,7 @@ function MessageBubble({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDownload(imageSrc, msg.file.name);
+                    handleDownload(getImageSrc(), msg.file.name);
                   }}
                   className="p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
                   title="Download image"
@@ -524,7 +542,7 @@ function MessageBubble({
                     </button>
                   )}
                   <button
-                    onClick={() => handleDownload(imageSrc, msg.file.name)}
+                    onClick={() => handleDownload(getImageSrc(), msg.file.name)}
                     className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
                     title="Download file"
                   >
@@ -539,7 +557,7 @@ function MessageBubble({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDownload(fileUrl, msg.file.name);
+                  handleDownload(getImageSrc(), msg.file.name);
                 }}
                 className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
                 title="Download image"
@@ -623,9 +641,58 @@ function MessageBubble({
           </div>
         );
       }
-      // PDF and text preview via iframe
+      // Enhanced PDF preview - first page only
+      if (msg.file.type === 'application/pdf') {
+        const pdfPreviewUrl = `${previewUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+        
+        return (
+          <div className="flex flex-col space-y-2">
+            <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden group">
+              {/* PDF Preview iframe - first page only */}
+              <iframe
+                src={pdfPreviewUrl}
+                title={`${msg.file.name} - Page 1`}
+                className="w-full h-full"
+                style={{ border: 'none' }}
+                onError={() => {
+                  // Fallback to basic preview if iframe fails
+                  console.warn('PDF iframe failed to load, showing file info only');
+                }}
+              />
+              
+              {/* Overlay for first page indicator */}
+              <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md">
+                Page 1 Preview
+              </div>
+              
+              {/* Download button overlay */}
+              <button
+                onClick={() => handleDownload(fileUrl, msg.file.name)}
+                className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                title="Download PDF"
+              >
+                <Download size={16} />
+              </button>
+              
+              {/* Click overlay to open full PDF */}
+              <div 
+                className="absolute inset-0 cursor-pointer bg-transparent hover:bg-blue-500 hover:bg-opacity-10 transition-colors duration-200"
+                onClick={() => window.open(fileUrl, '_blank')}
+                title="Click to view full PDF"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span className="text-red-500">{fileIcon}</span>
+              <span className="truncate flex-1 font-medium">{msg.file.name}</span>
+              <span className="text-xs bg-gray-100 px-2 py-1 rounded">{fileSize}</span>
+            </div>
+          </div>
+        );
+      }
+      
+      // Text and other document preview via iframe
       if (
-        msg.file.type === 'application/pdf' ||
         msg.file.type.startsWith('text/') ||
         msg.file.type === 'application/json' ||
         msg.file.type === 'application/xml'

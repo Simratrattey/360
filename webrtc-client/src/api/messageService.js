@@ -53,24 +53,28 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
   const url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  // Remove /api suffix if present, since file serving is directly from base URL
-  const fileBaseUrl = baseUrl.replace(/\/api$/, '');
-  
-  // If it's already a complete URL, return as-is
+  // If it's already a complete URL, check if it needs auth token
   if (url.startsWith('http') || url.startsWith('blob:')) {
+    if (includeAuth && url.startsWith('http') && !url.includes('token=')) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${encodeURIComponent(token)}`;
+      }
+    }
     return url;
   }
   
   let finalUrl;
-  // If it starts with /, it's an absolute path from the file base URL
+  // If it starts with /, it's an absolute path from the base URL
   if (url.startsWith('/')) {
-    finalUrl = `${fileBaseUrl}${url}`;
+    finalUrl = `${baseUrl}${url}`;
   } else {
-    // If it's just a filename, construct full URL
-    finalUrl = `${fileBaseUrl}/uploads/messages/${url}`;
+    // If it's just a filename, construct full URL using API endpoint
+    finalUrl = `${baseUrl}/api/files/${url}`;
   }
   
-  // Add authentication token if needed and available
+  // Add authentication token using Authorization header approach
   if (includeAuth) {
     const token = localStorage.getItem('token');
     if (token) {
@@ -170,10 +174,20 @@ export const formatFileSize = (bytes) => {
 // Enhanced file download function with better error handling
 export const downloadFile = async (url, filename, mimeType) => {
   try {
+    // Add auth token to URL if not present
+    let downloadUrl = url;
+    if (downloadUrl && !downloadUrl.includes('token=')) {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const separator = downloadUrl.includes('?') ? '&' : '?';
+        downloadUrl += `${separator}token=${encodeURIComponent(token)}`;
+      }
+    }
+
     // For same-origin files, use direct download
-    if (url.startsWith(window.location.origin) || url.startsWith('/')) {
+    if (downloadUrl.startsWith(window.location.origin) || downloadUrl.startsWith('/')) {
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = filename;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -185,10 +199,11 @@ export const downloadFile = async (url, filename, mimeType) => {
 
     // For cross-origin files, try multiple approaches
     try {
-      // First attempt: Fetch with CORS
-      const response = await fetch(url, {
+      // First attempt: Fetch with auth token in URL
+      const response = await fetch(downloadUrl, {
         method: 'GET',
         mode: 'cors',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/octet-stream',
         },
@@ -214,38 +229,28 @@ export const downloadFile = async (url, filename, mimeType) => {
       // Clean up blob URL
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (fetchError) {
-      console.warn('CORS fetch failed, trying download endpoint:', fetchError);
+      console.warn('Initial fetch failed, trying alternative approaches:', fetchError);
       
-      // Second attempt: Try the download endpoint with auth
+      // Second attempt: Try with Authorization header
       try {
-        // Extract filename from URL
-        const urlParts = url.split('/');
-        const originalFilename = urlParts[urlParts.length - 1];
-        
-        // Use the file endpoint
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-        const apiBaseUrl = baseUrl.includes('/api') ? baseUrl : `${baseUrl}/api`;
-        const downloadUrl = `${apiBaseUrl}/files/${originalFilename}`;
-        
-        // Get auth token from localStorage
         const token = localStorage.getItem('token');
         const headers = {
           'Content-Type': 'application/octet-stream',
         };
         
-        // Add auth header if token exists
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const response = await fetch(downloadUrl, {
+        const response = await fetch(url, {
           method: 'GET',
           mode: 'cors',
+          credentials: 'include',
           headers,
         });
 
         if (!response.ok) {
-          throw new Error(`File endpoint failed with status: ${response.status}`);
+          throw new Error(`Auth header fetch failed with status: ${response.status}`);
         }
 
         const blob = await response.blob();
@@ -263,74 +268,59 @@ export const downloadFile = async (url, filename, mimeType) => {
         
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return;
-      } catch (downloadEndpointError) {
-        console.warn('File endpoint also failed:', downloadEndpointError);
+      } catch (authFetchError) {
+        console.warn('Auth fetch also failed:', authFetchError);
       }
       
-      // Third attempt: Try direct URL with different approach (for 426 errors)
+      // Third attempt: Try the API file endpoint
       try {
-        // For 426 Upgrade Required errors, try opening in new tab directly
-        if (fetchError.message.includes('426') || fetchError.message.includes('Upgrade Required')) {
-          // Detected 426 error, opening in new tab
-          window.open(url, '_blank');
-          return;
+        const urlParts = url.split('/');
+        const originalFilename = urlParts[urlParts.length - 1].split('?')[0]; // Remove query params
+        
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+        const apiUrl = `${baseUrl}/api/files/${originalFilename}`;
+        
+        const token = localStorage.getItem('token');
+        const headers = {
+          'Content-Type': 'application/octet-stream',
+        };
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const response = await fetch(url, {
+        const response = await fetch(apiUrl, {
           method: 'GET',
-          mode: 'no-cors',
+          mode: 'cors',
+          credentials: 'include',
+          headers,
         });
-        
-        if (response.type === 'opaque') {
-          // For opaque responses, we can't access the content directly
-          // So we'll fall back to opening in a new tab
-          throw new Error('Opaque response, cannot download directly');
+
+        if (!response.ok) {
+          throw new Error(`API endpoint failed with status: ${response.status}`);
         }
-      } catch (noCorsError) {
-        console.warn('No-cors fetch also failed:', noCorsError);
+
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+        return;
+      } catch (apiError) {
+        console.warn('API endpoint also failed:', apiError);
       }
       
-      // Fourth attempt: Try XMLHttpRequest
-      try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.responseType = 'blob';
-        xhr.withCredentials = false;
-        
-        xhr.onload = function() {
-          if (xhr.status === 200) {
-            const blob = xhr.response;
-            const blobUrl = URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = filename;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-          } else {
-            throw new Error(`XHR failed with status: ${xhr.status}`);
-          }
-        };
-        
-        xhr.onerror = function() {
-          throw new Error('XHR request failed');
-        };
-        
-        xhr.send();
-        return; // Exit early if XHR succeeds
-      } catch (xhrError) {
-        console.warn('XHR also failed:', xhrError);
-      }
-      
-      // Final fallback: Open in new tab
-              // All download methods failed, opening in new tab as fallback
-      window.open(url, '_blank');
+      // Final fallback: Open in new tab with auth token
+      window.open(downloadUrl, '_blank');
     }
   } catch (error) {
     console.error('Download failed:', error);
