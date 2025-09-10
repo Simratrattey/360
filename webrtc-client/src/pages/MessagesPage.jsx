@@ -1460,9 +1460,39 @@ export default function MessagesPage() {
         }
       }
     });
-    // Delete message
+    // Delete message - Enhanced with cache consistency and duplicate handling
     chatSocket.on('chat:delete', ({ messageId }) => {
-      setMessages(prev => prev.filter(m => m._id !== messageId));
+      console.log('🗑️ Received delete notification for message:', messageId);
+      
+      // Update current messages (with duplicate check)
+      setMessages(prev => {
+        const hasMessage = prev.some(m => m._id === messageId);
+        if (!hasMessage) {
+          console.log('🗑️ Message already deleted from current messages');
+          return prev;
+        }
+        return prev.filter(m => m._id !== messageId);
+      });
+      
+      // Also update messages cache for consistency
+      setMessagesCache(prevCache => {
+        const updatedCache = { ...prevCache };
+        Object.keys(updatedCache).forEach(convId => {
+          const hasMessage = updatedCache[convId].some(m => m._id === messageId);
+          if (hasMessage) {
+            updatedCache[convId] = updatedCache[convId].filter(m => m._id !== messageId);
+            console.log('🗑️ Removed message from cache for conversation:', convId);
+          }
+        });
+        return updatedCache;
+      });
+      
+      // Update the ref for consistency
+      Object.keys(messagesCacheRef.current).forEach(convId => {
+        if (messagesCacheRef.current[convId]?.some(m => m._id === messageId)) {
+          messagesCacheRef.current[convId] = messagesCacheRef.current[convId].filter(m => m._id !== messageId);
+        }
+      });
     });
     // React to message
     chatSocket.on('chat:react', ({ messageId, emoji, userId }) => {
@@ -2415,7 +2445,107 @@ export default function MessagesPage() {
   };
 
   const handleDelete = async (msgId) => {
-    chatSocket.deleteMessage({ messageId: msgId });
+    console.log('🗑️ Deleting message:', msgId);
+    
+    // Find the message to delete for potential rollback
+    const messageToDelete = messages.find(m => m._id === msgId);
+    if (!messageToDelete) {
+      console.error('Message to delete not found:', msgId);
+      return;
+    }
+    
+    // Check if this is an avatar conversation
+    const isAvatarConv = isAvatarConversation && isAvatarConversation(selected);
+    
+    try {
+      // Optimistically remove message from UI immediately
+      setMessages(prev => {
+        const filtered = prev.filter(m => m._id !== msgId);
+        console.log('🗑️ Optimistically removed message from UI');
+        return filtered;
+      });
+      
+      // Handle avatar conversation messages differently
+      if (isAvatarConv) {
+        console.log('🤖 Deleting from avatar conversation - updating avatarMessages storage');
+        // Update avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const filteredMessages = conversationMessages.filter(m => m._id !== msgId);
+          newMap.set(selected._id, filteredMessages);
+          console.log('🤖 Updated avatarMessages storage');
+          return newMap;
+        });
+      } else {
+        // Regular conversation - update messages cache
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = updatedCache[selected._id].filter(m => m._id !== msgId);
+            console.log('🗑️ Updated messages cache');
+          }
+          return updatedCache;
+        });
+        
+        // Update the ref for consistency
+        messagesCacheRef.current = {
+          ...messagesCacheRef.current,
+          [selected?._id]: messagesCacheRef.current[selected?._id]?.filter(m => m._id !== msgId) || []
+        };
+        
+        // Try to delete via socket for regular conversations
+        if (chatSocket?.connected) {
+          chatSocket.deleteMessage({ messageId: msgId });
+          console.log('🗑️ Sent delete request via socket');
+        } else {
+          console.warn('🗑️ Socket not connected, attempting REST API fallback');
+          // Fallback to REST API
+          await messageAPI.deleteMessage(msgId);
+          console.log('🗑️ Successfully deleted via REST API');
+        }
+      }
+      
+    } catch (error) {
+      console.error('🗑️ Failed to delete message:', error);
+      
+      // Rollback: restore the message in UI
+      setMessages(prev => {
+        // Insert message back in correct position (sorted by createdAt)
+        const restored = [...prev, messageToDelete];
+        return restored.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      });
+      
+      // Rollback based on conversation type
+      if (isAvatarConv) {
+        // Rollback: restore in avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const restored = [...conversationMessages, messageToDelete]
+            .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          newMap.set(selected._id, restored);
+          return newMap;
+        });
+      } else {
+        // Rollback: restore in cache for regular conversations
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = [...updatedCache[selected._id], messageToDelete]
+              .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          }
+          return updatedCache;
+        });
+      }
+      
+      // Show error notification
+      setNotification({
+        message: 'Failed to delete message. Please try again.',
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   const handleStar = (convId) => {
