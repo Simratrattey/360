@@ -31,7 +31,15 @@ router.get('/stats', authMiddleware, async (req, res) => {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23, 59, 59, 999);
 
-    // Use a single aggregation query to get multiple stats efficiently
+    // Calculate date ranges for comparison
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const lastWeekStart = new Date(startOfWeek);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(endOfWeek);
+    lastWeekEnd.setDate(lastWeekEnd.getDate() - 7);
+
+    // Use a single aggregation query to get multiple stats efficiently with historical data
     const userStats = await Meeting.aggregate([
       {
         $match: {
@@ -48,6 +56,16 @@ router.get('/stats', authMiddleware, async (req, res) => {
             { $match: { status: 'ended' } },
             { $count: 'count' }
           ],
+          // Last month's meetings for comparison
+          lastMonthMeetings: [
+            { 
+              $match: { 
+                status: 'ended',
+                actualStartTime: { $gte: lastMonthStart, $lte: lastMonthEnd }
+              }
+            },
+            { $count: 'count' }
+          ],
           // Upcoming meetings
           upcomingMeetings: [
             { 
@@ -58,12 +76,33 @@ router.get('/stats', authMiddleware, async (req, res) => {
             },
             { $count: 'count' }
           ],
-          // Weekly hours calculation
+          // This week's hours
           weeklyHours: [
             {
               $match: {
                 status: 'ended',
                 actualStartTime: { $gte: startOfWeek, $lte: endOfWeek }
+              }
+            },
+            { $unwind: '$participantSessions' },
+            {
+              $match: {
+                'participantSessions.userId': new mongoose.Types.ObjectId(userId)
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                totalMinutes: { $sum: '$participantSessions.durationMinutes' }
+              }
+            }
+          ],
+          // Last week's hours for comparison
+          lastWeekHours: [
+            {
+              $match: {
+                status: 'ended',
+                actualStartTime: { $gte: lastWeekStart, $lte: lastWeekEnd }
               }
             },
             { $unwind: '$participantSessions' },
@@ -120,34 +159,54 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const minutesThisWeek = stats.weeklyHours[0]?.totalMinutes || 0;
     const hoursThisWeek = (minutesThisWeek / 60).toFixed(1);
     const activeContactsCount = Math.max(0, (recentContacts[0]?.uniqueContacts || 1) - 1); // Subtract self
+    
+    // Calculate historical comparison metrics
+    const lastMonthMeetings = stats.lastMonthMeetings[0]?.count || 0;
+    const lastWeekMinutes = stats.lastWeekHours[0]?.totalMinutes || 0;
+    
+    // Calculate percentage changes
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? '+100%' : '0%';
+      const change = ((current - previous) / previous) * 100;
+      return change > 0 ? `+${Math.round(change)}%` : `${Math.round(change)}%`;
+    };
+    
+    const getChangeType = (current, previous) => {
+      if (current > previous) return 'positive';
+      if (current < previous) return 'negative';
+      return 'neutral';
+    };
+    
+    const meetingsChange = calculateChange(totalMeetings, lastMonthMeetings);
+    const hoursChange = calculateChange(minutesThisWeek, lastWeekMinutes);
 
     const dashboardStats = [
       {
         name: 'Total Meetings',
         value: totalMeetings.toString(),
         icon: 'Video',
-        change: '+0%', // Simplified - no historical comparison for performance
-        changeType: 'neutral'
+        change: meetingsChange,
+        changeType: getChangeType(totalMeetings, lastMonthMeetings)
       },
       {
         name: 'Active Contacts',
         value: activeContactsCount.toString(),
         icon: 'Users',
-        change: '+0%',
+        change: '+0%', // Keep simplified for contacts as it requires more complex historical tracking
         changeType: 'neutral'
       },
       {
         name: 'Hours This Week',
         value: hoursThisWeek.toString(),
         icon: 'Clock',
-        change: '+0%', // Simplified for performance
-        changeType: 'neutral'
+        change: hoursChange,
+        changeType: getChangeType(minutesThisWeek, lastWeekMinutes)
       },
       {
         name: 'Upcoming',
         value: upcomingMeetings.toString(),
         icon: 'Calendar',
-        change: '0%',
+        change: '0%', // Upcoming meetings don't have historical comparison
         changeType: 'neutral'
       }
     ];
