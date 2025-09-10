@@ -1075,6 +1075,20 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
+    // CRITICAL: Check for avatar conversations FIRST before doing any message clearing/loading
+    // Avatar conversations use their own storage system and should skip the regular message loading flow
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: useEffect detected avatar conversation, skipping regular message loading flow');
+      setMessageOffset(0);
+      setHasMoreMessages(false); // Avatar conversations don't use pagination
+      setLoadingMore(false);
+      // Reset conversation switch flag immediately
+      setTimeout(() => {
+        setIsConversationSwitch(false);
+      }, 50);
+      return; // Exit early - avatar messages are handled by handleSelect function
+    }
+    
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
     // Use ref to get the most current cache (important for navigation from notifications)
     const cachedMessages = messagesCacheRef.current[convId] || [];
@@ -1127,11 +1141,7 @@ export default function MessagesPage() {
     }
     
     // Always fetch from server in background to ensure we have latest messages
-    // Skip API calls for avatar conversations - they're client-side only
-    if (isAvatarConversation && isAvatarConversation(selected)) {
-      console.log('🤖 MessagesPage: Skipping server fetch for avatar conversation');
-      return;
-    }
+    // Note: Avatar conversations are already handled at the beginning of this useEffect
     
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
