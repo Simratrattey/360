@@ -79,6 +79,16 @@ router.get('/stats', authMiddleware, async (req, res) => {
             },
             { $count: 'count' }
           ],
+          // Last week's upcoming meetings for comparison
+          lastWeekUpcoming: [
+            { 
+              $match: { 
+                status: 'scheduled',
+                startTime: { $gte: lastWeekStart, $lte: lastWeekEnd }
+              }
+            },
+            { $count: 'count' }
+          ],
           // This week's hours
           weeklyHours: [
             {
@@ -125,32 +135,70 @@ router.get('/stats', authMiddleware, async (req, res) => {
       }
     ]);
 
-    // Quick approximation for active contacts - just count unique organizers/participants from recent meetings
-    const recentContacts = await Meeting.aggregate([
+    // Get active contacts for current and previous periods
+    const contactsData = await Meeting.aggregate([
       {
         $match: {
           $or: [
             { organizer: new mongoose.Types.ObjectId(userId) },
             { 'participantSessions.userId': new mongoose.Types.ObjectId(userId) }
           ],
-          status: 'ended',
-          actualStartTime: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+          status: 'ended'
         }
       },
       {
-        $group: {
-          _id: null,
-          organizers: { $addToSet: '$organizer' },
-          participants: { $addToSet: '$participantSessions.userId' }
-        }
-      },
-      {
-        $project: {
-          uniqueContacts: {
-            $size: {
-              $setUnion: ['$organizers', { $reduce: { input: '$participants', initialValue: [], in: { $setUnion: ['$$value', '$$this'] } } }]
+        $facet: {
+          // Current period - last 30 days
+          currentContacts: [
+            {
+              $match: {
+                actualStartTime: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                organizers: { $addToSet: '$organizer' },
+                participants: { $addToSet: '$participantSessions.userId' }
+              }
+            },
+            {
+              $project: {
+                uniqueContacts: {
+                  $size: {
+                    $setUnion: ['$organizers', { $reduce: { input: '$participants', initialValue: [], in: { $setUnion: ['$$value', '$$this'] } } }]
+                  }
+                }
+              }
             }
-          }
+          ],
+          // Previous period - 31-60 days ago
+          previousContacts: [
+            {
+              $match: {
+                actualStartTime: { 
+                  $gte: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+                  $lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                }
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                organizers: { $addToSet: '$organizer' },
+                participants: { $addToSet: '$participantSessions.userId' }
+              }
+            },
+            {
+              $project: {
+                uniqueContacts: {
+                  $size: {
+                    $setUnion: ['$organizers', { $reduce: { input: '$participants', initialValue: [], in: { $setUnion: ['$$value', '$$this'] } } }]
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     ]);
@@ -161,11 +209,16 @@ router.get('/stats', authMiddleware, async (req, res) => {
     const upcomingMeetings = stats.upcomingMeetings[0]?.count || 0;
     const minutesThisWeek = stats.weeklyHours[0]?.totalMinutes || 0;
     const hoursThisWeek = (minutesThisWeek / 60).toFixed(1);
-    const activeContactsCount = Math.max(0, (recentContacts[0]?.uniqueContacts || 1) - 1); // Subtract self
+    
+    // Extract contacts data
+    const contactsResult = contactsData[0];
+    const currentContacts = Math.max(0, (contactsResult?.currentContacts[0]?.uniqueContacts || 1) - 1); // Subtract self
+    const previousContacts = Math.max(0, (contactsResult?.previousContacts[0]?.uniqueContacts || 1) - 1); // Subtract self
     
     // Calculate historical comparison metrics
     const lastMonthMeetings = stats.lastMonthMeetings[0]?.count || 0;
     const lastWeekMinutes = stats.lastWeekHours[0]?.totalMinutes || 0;
+    const lastWeekUpcoming = stats.lastWeekUpcoming[0]?.count || 0;
     
     // Calculate percentage changes
     const calculateChange = (current, previous) => {
@@ -182,6 +235,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
     
     const meetingsChange = calculateChange(totalMeetings, lastMonthMeetings);
     const hoursChange = calculateChange(minutesThisWeek, lastWeekMinutes);
+    const contactsChange = calculateChange(currentContacts, previousContacts);
+    const upcomingChange = calculateChange(upcomingMeetings, lastWeekUpcoming);
 
     const dashboardStats = [
       {
@@ -193,10 +248,10 @@ router.get('/stats', authMiddleware, async (req, res) => {
       },
       {
         name: 'Active Contacts',
-        value: activeContactsCount.toString(),
+        value: currentContacts.toString(),
         icon: 'Users',
-        change: '+0%', // Keep simplified for contacts as it requires more complex historical tracking
-        changeType: 'neutral'
+        change: contactsChange,
+        changeType: getChangeType(currentContacts, previousContacts)
       },
       {
         name: 'Hours This Week',
@@ -209,8 +264,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
         name: 'Upcoming',
         value: upcomingMeetings.toString(),
         icon: 'Calendar',
-        change: '0%', // Upcoming meetings don't have historical comparison
-        changeType: 'neutral'
+        change: upcomingChange,
+        changeType: getChangeType(upcomingMeetings, lastWeekUpcoming)
       }
     ];
 
