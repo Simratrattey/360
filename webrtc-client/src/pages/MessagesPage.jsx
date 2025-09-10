@@ -301,6 +301,17 @@ export default function MessagesPage() {
   const fetchDebounceRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
 
+  // Pinned conversations state with localStorage persistence (moved here to fix hoisting issue)
+  const [pinnedConversations, setPinnedConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pinnedConversations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading pinned conversations from localStorage:', error);
+      return [];
+    }
+  });
+
   // Enhanced helper function to sort conversations with hierarchy: Avatar → Pinned → Regular
   const sortConversationsWithAvatarTop = (conversations) => {
     return conversations.sort((a, b) => {
@@ -654,17 +665,6 @@ export default function MessagesPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [messageOffset, setMessageOffset] = useState(0);
-  
-  // Pinned conversations state with localStorage persistence
-  const [pinnedConversations, setPinnedConversations] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pinnedConversations');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error loading pinned conversations from localStorage:', error);
-      return [];
-    }
-  });
   
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
