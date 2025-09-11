@@ -139,20 +139,38 @@ export default function DashboardPage() {
   // Fetch unread message notifications
 
 
-  // Real-time conversation creation/deletion updates for dashboard
+  // Real-time dashboard refresh for meeting changes
   useEffect(() => {
-    if (!chatSocket || !chatSocket.socket) return;
+    if (!sfuSocket) {
+      console.log('[Dashboard] sfuSocket not available yet');
+      return;
+    }
+    
+    console.log('[Dashboard] Setting up dashboard:refresh listener on sfuSocket');
     
     const handleDashboardRefresh = (data) => {
       console.log('🔄 Dashboard received refresh event:', data);
       // Refresh dashboard stats when a meeting involving this user is scheduled/updated
+      console.log('[Dashboard] Calling loadDashboardData() due to refresh event');
       loadDashboardData();
       
       // Optionally show a notification
       if (data.reason === 'meeting_scheduled' && data.organizerName) {
-        console.log(`📅 Meeting scheduled by ${data.organizerName}, refreshing dashboard`);
+        console.log(`📅 Meeting "${data.meetingTitle}" scheduled by ${data.organizerName}, refreshing dashboard`);
       }
     };
+    
+    sfuSocket.on('dashboard:refresh', handleDashboardRefresh);
+    
+    return () => {
+      console.log('[Dashboard] Cleaning up dashboard:refresh listener');
+      sfuSocket.off('dashboard:refresh', handleDashboardRefresh);
+    };
+  }, [sfuSocket]);
+
+  // Real-time conversation creation/deletion updates for dashboard
+  useEffect(() => {
+    if (!chatSocket || !chatSocket.socket) return;
     
     const handleConversationCreated = (data) => {
       console.log('📢 Dashboard received conversation:created event:', data);
@@ -292,14 +310,12 @@ export default function DashboardPage() {
       }
     };
 
-    chatSocket.on('dashboard:refresh', handleDashboardRefresh);
     chatSocket.on('conversation:created', handleConversationCreated);
     chatSocket.on('conversation:deleted', handleConversationDeleted);
     chatSocket.on('conversation:memberAdded', handleMemberAdded);
     chatSocket.on('conversation:memberRemoved', handleMemberRemoved);
     
     return () => {
-      chatSocket.off('dashboard:refresh', handleDashboardRefresh);
       chatSocket.off('conversation:created', handleConversationCreated);
       chatSocket.off('conversation:deleted', handleConversationDeleted);
       chatSocket.off('conversation:memberAdded', handleMemberAdded);

@@ -408,4 +408,36 @@ router.get('/recent-meetings', authMiddleware, async (req, res) => {
   }
 });
 
+// Test endpoint to trigger dashboard refresh for debugging
+router.post('/test-refresh', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(`[Dashboard] Test refresh requested by user ${userId}`);
+    
+    // Send dashboard refresh event to the user
+    if (req.app.locals.sendDashboardRefresh) {
+      req.app.locals.sendDashboardRefresh(userId, {
+        reason: 'test_refresh',
+        message: 'Manual dashboard refresh test'
+      });
+      
+      res.json({
+        success: true,
+        message: 'Dashboard refresh event sent'
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Dashboard refresh function not available'
+      });
+    }
+  } catch (error) {
+    console.error('Error sending test dashboard refresh:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send test dashboard refresh'
+    });
+  }
+});
+
 export default router;

@@ -85,9 +85,11 @@ export const createMeeting = async (req, res, next) => {
           
           // Send dashboard refresh event to participant
           if (req.app.locals.sendDashboardRefresh) {
+            console.log(`[Dashboard] Sending refresh to participant ${participantId} for meeting "${meeting.title}"`);
             req.app.locals.sendDashboardRefresh(participantId, {
               reason: 'meeting_scheduled',
               meetingId: meeting._id,
+              meetingTitle: meeting.title,
               organizerName
             });
           }
