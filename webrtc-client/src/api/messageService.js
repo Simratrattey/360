@@ -41,19 +41,16 @@ export const getFileUrl = (filename) => {
 // Helper function to construct proper file URL from file object
 export const constructFileUrl = (fileObj, includeAuth = true) => {
   if (!fileObj) {
-    console.warn('[File URL] No file object provided');
     return null;
   }
   
   if (!fileObj.url) {
-    console.warn('[File URL] No URL in file object:', fileObj);
     return null;
   }
   
   let url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  console.log('[constructFileUrl] Input:', { url, baseUrl, fileObj, includeAuth });
   
   // If it's already a complete URL, check if we need to fix the domain
   if (url.startsWith('http') || url.startsWith('blob:')) {
@@ -83,9 +80,7 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
         // Reconstruct with correct base URL
         const oldUrl = url;
         url = `${baseUrl}${pathAndQuery}`;
-        console.log('[constructFileUrl] Domain corrected:', { oldUrl, newUrl: url, reason: needsDomainFix ? 'wrong_domain' : 'not_base_url' });
       } catch (error) {
-        console.warn('[constructFileUrl] Failed to parse URL for domain correction:', url, error);
       }
     }
     
@@ -97,7 +92,6 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
         return `${url}${separator}token=${encodeURIComponent(token)}`;
       }
     }
-    console.log('[constructFileUrl] Final URL:', url);
     return url;
   }
   
@@ -128,7 +122,6 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     }
   }
   
-  console.log('[constructFileUrl] Final URL (relative):', finalUrl);
   return finalUrl;
 };
 
@@ -293,7 +286,6 @@ export const downloadFile = async (url, filename, mimeType) => {
       // Clean up blob URL
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (fetchError) {
-      console.warn('Initial fetch failed, trying alternative approaches:', fetchError);
       
       // Second attempt: Try with Authorization header
       try {
@@ -333,7 +325,6 @@ export const downloadFile = async (url, filename, mimeType) => {
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return;
       } catch (authFetchError) {
-        console.warn('Auth fetch also failed:', authFetchError);
       }
       
       // Third attempt: Try the API file endpoint
@@ -380,20 +371,16 @@ export const downloadFile = async (url, filename, mimeType) => {
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         return;
       } catch (apiError) {
-        console.warn('API endpoint also failed:', apiError);
       }
       
       // Final fallback: Open in new tab with auth token
       window.open(downloadUrl, '_blank');
     }
   } catch (error) {
-    console.error('Download failed:', error);
-    
     // Ultimate fallback: try to open in new tab
     try {
       window.open(url, '_blank');
     } catch (fallbackError) {
-      console.error('Fallback download also failed:', fallbackError);
       throw new Error('Download failed. Please try again or contact support.');
     }
   }

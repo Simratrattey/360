@@ -9,11 +9,11 @@ import {
   shouldShowNotification 
 } from '../utils/notificationTypes';
 
-// Local storage keys
-const STORAGE_KEYS = {
-  NOTIFICATIONS: 'notifications_cache',
-  UNREAD_COUNT: 'unread_count_cache'
-};
+// Local storage keys - user-specific
+const getStorageKeys = (userId) => ({
+  NOTIFICATIONS: `notifications_cache_${userId}`,
+  UNREAD_COUNT: `unread_count_cache_${userId}`
+});
 
 const NotificationContext = createContext();
 
@@ -35,14 +35,18 @@ export const NotificationProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [error, setError] = useState(null);
 
-  // Load notifications from cache on mount
+  // Load notifications from cache on mount - user-specific
   useEffect(() => {
+    if (!user?.id) return;
+    
     try {
+      const STORAGE_KEYS = getStorageKeys(user.id);
       const cachedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
       const cachedUnread = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
       
       if (cachedNotifications) {
-        setNotifications(JSON.parse(cachedNotifications));
+        const parsed = JSON.parse(cachedNotifications);
+        setNotifications(parsed);
       }
       
       if (cachedUnread) {
@@ -51,7 +55,7 @@ export const NotificationProvider = ({ children }) => {
     } catch (err) {
       console.error('Error loading notifications from cache:', err);
     }
-  }, []);
+  }, [user?.id]);
 
   // Load notifications from server when user changes
   useEffect(() => {
@@ -59,10 +63,54 @@ export const NotificationProvider = ({ children }) => {
       loadNotifications();
       loadUnreadCount();
     } else {
+      // Clear user-specific cache when user logs out
       setNotifications([]);
       setUnreadCount(0);
+      // Clear all user caches on logout
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('notifications_cache_') || key.startsWith('unread_count_cache_')) {
+          localStorage.removeItem(key);
+        }
+      });
     }
-  }, [user]);
+  }, [user, loadNotifications, loadUnreadCount]);
+
+  // Handle page visibility change - refresh notifications when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user && isOnline) {
+        // Refresh notifications when page becomes visible
+        loadNotifications();
+        loadUnreadCount();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, isOnline, loadNotifications, loadUnreadCount]);
+
+  // Handle storage changes across tabs (sync notifications between tabs)
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const handleStorageChange = (event) => {
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
+      if (event.key === STORAGE_KEYS.NOTIFICATIONS && event.newValue) {
+        try {
+          const updatedNotifications = JSON.parse(event.newValue);
+          setNotifications(updatedNotifications);
+        } catch (err) {
+          console.error('Error parsing notifications from storage event:', err);
+        }
+      } else if (event.key === STORAGE_KEYS.UNREAD_COUNT && event.newValue) {
+        setUnreadCount(parseInt(event.newValue, 10) || 0);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [user?.id]);
 
   // Handle online/offline status
   useEffect(() => {
@@ -95,7 +143,11 @@ export const NotificationProvider = ({ children }) => {
 
   // Mark notification as read function
   const markAsRead = useCallback(async (notificationId) => {
+    if (!user?.id) return;
+    
     try {
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
       // Find the notification to get its details
       const notification = (Array.isArray(notifications) ? notifications : []).find(n => n._id === notificationId);
       
@@ -108,15 +160,22 @@ export const NotificationProvider = ({ children }) => {
             : notification
         );
         
+        // Update cache with new state
+        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
         return updated;
       });
       
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setUnreadCount(prev => {
+        const newCount = Math.max(0, prev - 1);
+        // Update cache with new unread count
+        localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, newCount.toString());
+        return newCount;
+      });
     } catch (error) {
       console.error('Error marking notification as read:', error);
       setError('Failed to mark notification as read');
     }
-  }, [notifications]);
+  }, [notifications, user?.id]);
 
   // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
@@ -203,12 +262,15 @@ export const NotificationProvider = ({ children }) => {
 
   // Handle new notification
   const handleNewNotification = useCallback((notification) => {
+    if (!user?.id) return;
     
     // Skip if this is a duplicate notification
     const isDuplicate = (Array.isArray(notifications) ? notifications : []).some(n => n._id === notification._id);
     if (isDuplicate) {
       return;
     }
+    
+    const STORAGE_KEYS = getStorageKeys(user.id);
     
     // Add to notifications list
     setNotifications(prev => {
@@ -218,8 +280,14 @@ export const NotificationProvider = ({ children }) => {
       return updated;
     });
     
-    // Note: Unread count is managed by the Layout component through API calls
-    // to avoid double counting with the messages page unread logic
+    // Update unread count
+    if (!notification.read) {
+      setUnreadCount(prev => {
+        const newCount = prev + 1;
+        localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, newCount.toString());
+        return newCount;
+      });
+    }
     
     // Show browser notification for important notification types (always show for conversation events)
     const alwaysShowTypes = ['conversation_created', 'community_created', 'conversation_deleted'];
@@ -229,7 +297,7 @@ export const NotificationProvider = ({ children }) => {
     if (shouldShowBrowser) {
       showBrowserNotification(notification);
     }
-  }, [notifications, showBrowserNotification]);
+  }, [notifications, showBrowserNotification, user?.id]);
 
   // Setup socket event listeners
   const setupListeners = useCallback(() => {
@@ -283,9 +351,13 @@ export const NotificationProvider = ({ children }) => {
   }, [socket, user, setupListeners]);
 
   const loadNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
       setLoading(true);
       setError(null);
+      
+      const STORAGE_KEYS = getStorageKeys(user.id);
       
       // Try to fetch from server first
       try {
@@ -314,11 +386,15 @@ export const NotificationProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [isOnline]);
+  }, [isOnline, user?.id]);
 
   const loadUnreadCount = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
       setError(null);
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
       const count = await notificationService.getUnreadCount();
       setUnreadCount(count);
       // Update cache
@@ -326,6 +402,7 @@ export const NotificationProvider = ({ children }) => {
     } catch (error) {
       console.error('Error loading unread count:', error);
       if (!isOnline) {
+        const STORAGE_KEYS = getStorageKeys(user.id);
         const cached = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
         if (cached) {
           setUnreadCount(parseInt(cached, 10));
@@ -335,32 +412,56 @@ export const NotificationProvider = ({ children }) => {
         setError('Failed to load unread count');
       }
     }
-  }, [isOnline]);
+  }, [isOnline, user?.id]);
 
 
 
   const markAllAsRead = async () => {
+    if (!user?.id) return;
+    
     try {
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
       await notificationService.markAllAsRead();
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: true }))
-      );
+      setNotifications(prev => {
+        const updated = prev.map(notification => ({ ...notification, read: true }));
+        // Update cache
+        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
+        return updated;
+      });
       setUnreadCount(0);
+      // Update cache
+      localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, '0');
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
   };
 
   const deleteNotification = async (notificationId) => {
+    if (!user?.id) return;
+    
     try {
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
       await notificationService.deleteNotification(notificationId);
-      setNotifications(prev => 
-        prev.filter(notification => notification._id !== notificationId)
-      );
+      
       // Update unread count if the deleted notification was unread
       const deletedNotification = notifications.find(n => n._id === notificationId);
+      
+      setNotifications(prev => {
+        const updated = prev.filter(notification => notification._id !== notificationId);
+        // Update cache
+        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updated));
+        return updated;
+      });
+      
       if (deletedNotification && !deletedNotification.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
+        setUnreadCount(prev => {
+          const newCount = Math.max(0, prev - 1);
+          // Update cache
+          localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, newCount.toString());
+          return newCount;
+        });
       }
     } catch (error) {
       console.error('Error deleting notification:', error);

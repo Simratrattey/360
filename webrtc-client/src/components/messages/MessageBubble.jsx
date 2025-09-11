@@ -140,7 +140,6 @@ function MessageBubble({
     try {
       await downloadFile(url, filename, msg.file?.type);
     } catch (error) {
-      console.error('Download failed:', error);
       // You could show a notification here
     }
   };

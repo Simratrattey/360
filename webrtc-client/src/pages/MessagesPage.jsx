@@ -2260,7 +2260,6 @@ export default function MessagesPage() {
           });
           fileMeta = res.data;
         } catch (uploadError) {
-          console.error('File upload failed:', uploadError);
           setNotification({
             message: 'Failed to upload file. Please try again.'
           });
