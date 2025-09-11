@@ -1303,16 +1303,20 @@ To convert to MP4:
             const updated = [...prev, subtitleEntry];
             console.log(`📝 Recorded: [${participantName}] ${text} (${updated.length} total)`);
             
-            // Always save to server for late joiners (they will load history and then generate their own)
-            console.log('💾 Saving transcript to server for late joiners');
-            transcriptAPI.saveTranscriptEntry(roomId, {
-              id: subtitleEntry.id,
-              text: subtitleEntry.text,
-              speaker: subtitleEntry.speaker,
-              speakerId: peerId === 'local' ? user?.id : peerId,
-              timestamp: subtitleEntry.timestamp,
-              createdAt: subtitleEntry.createdAt
-            });
+            // Only save to server if this is the speaker's own transcript (prevent duplicates)
+            if (peerId === 'local') {
+              console.log('💾 Saving own transcript to server for late joiners');
+              transcriptAPI.saveTranscriptEntry(roomId, {
+                id: subtitleEntry.id,
+                text: subtitleEntry.text,
+                speaker: subtitleEntry.speaker,
+                speakerId: user?.id,
+                timestamp: subtitleEntry.timestamp,
+                createdAt: subtitleEntry.createdAt
+              });
+            } else {
+              console.log('👂 Not saving - this is another participant\'s speech');
+            }
             
             return updated;
           });
