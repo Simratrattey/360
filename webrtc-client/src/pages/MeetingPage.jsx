@@ -2613,15 +2613,6 @@ To convert to MP4:
           {isVideoEnabled ? <Video size={20}/> : <VideoOff size={20}/>} 
         </button>
         
-        {/* Invite button */}
-        <button 
-          onClick={generateInviteLink} 
-          className="p-3 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors" 
-          title="Invite participants"
-        >
-          <Share2 size={20}/>
-        </button>
-        
         <button 
           onClick={isRecording ? stopRecording : startRecording} 
           className={`p-3 rounded-full ${isRecording ? 'bg-red-600' : 'bg-gray-600'} text-white`}
