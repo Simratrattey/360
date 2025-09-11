@@ -72,8 +72,6 @@ export default function MeetingPage() {
   const [lateJoinerSummary, setLateJoinerSummary] = useState(null); // AI summary for late joiners
   const [showSummaryButton, setShowSummaryButton] = useState(false); // Show summary button for 3rd+ participants
   const [isLoadingSummary, setIsLoadingSummary] = useState(false); // Loading state for summary
-  const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
-  const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
   
   // Audio context and elements for multilingual audio output
   const [audioContext, setAudioContext] = useState(null);
@@ -88,22 +86,6 @@ export default function MeetingPage() {
   const transcriptScrollRef = useRef(null);
   const transcriptEndRef = useRef(null);
 
-  // Supported languages for subtitles and translation
-  const supportedLanguages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-    { code: 'fr', name: 'French', flag: '🇫🇷' },
-    { code: 'de', name: 'German', flag: '🇩🇪' },
-    { code: 'it', name: 'Italian', flag: '🇮🇹' },
-    { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
-    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
-    { code: 'ko', name: 'Korean', flag: '🇰🇷' },
-    { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
-    { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
-    { code: 'auto', name: 'Auto-detect', flag: '🌐' }
-  ];
 
   const [showAvatar, setShowAvatar]             = useState(false);
   const [avatarClips, setAvatarClips]           = useState([]);
@@ -1279,8 +1261,6 @@ To convert to MP4:
             text,
             timestamp: new Date().toISOString(),
             speaker: participantName, // Show actual participant name
-            sourceLanguage: 'en',
-            targetLanguage: 'en',
             isTranslated: false,
             createdAt: Date.now()
           };
@@ -1841,8 +1821,6 @@ To convert to MP4:
             text: `[STT Error: ${sttResult.error}]`,
             timestamp: new Date().toISOString(),
             speaker: participantName,
-            sourceLanguage: sourceLanguage,
-            targetLanguage: targetLanguage,
             isTranslated: false
           };
           setSubtitleHistory(prev => [...prev.slice(-4), debugEntry]);
@@ -1858,33 +1836,13 @@ To convert to MP4:
       
       console.log(`Original text from ${participantName}: ${originalText}`);
       
-      // Step 2: Translation (if multilingual is enabled and target language is different)
-      let translatedText = originalText;
-      let isTranslated = false;
-      
-      if (multilingualEnabled && targetLanguage !== sourceLanguage) {
-        const translationResult = await SubtitleService.translateText(originalText, sourceLanguage, targetLanguage);
-        if (translationResult.success && translationResult.data?.translatedText) {
-          translatedText = translationResult.data.translatedText;
-          isTranslated = true;
-          console.log(`Translated text: ${translatedText}`);
-        } else {
-          console.warn(`Translation failed for ${participantName}:`, translationResult.error);
-        }
-      }
-      
-      // Step 3: Display subtitles (if enabled)
+      // Display subtitles (if enabled)
       if (subtitlesEnabled) {
         const subtitleEntry = {
           id: `${peerId}-${Date.now()}`, // Unique ID for each subtitle
-          original: originalText,
-          translated: isTranslated ? translatedText : null,
-          text: translatedText, // Show translated version if available
+          text: originalText,
           timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           speaker: participantName,
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
-          isTranslated: isTranslated,
           createdAt: Date.now() // For auto-cleanup
         };
         
@@ -1900,11 +1858,6 @@ To convert to MP4:
           
           return updated;
         });
-      }
-      
-      // Step 4: Audio output (if multilingual is enabled)
-      if (multilingualEnabled && translatedText !== originalText) {
-        await playTranslatedAudio(translatedText, peerId, participantName);
       }
       
     } catch (error) {
@@ -2002,8 +1955,6 @@ To convert to MP4:
           text: `[Speech detected from ${participantName}]`,
           timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           speaker: participantName,
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
           isTranslated: false
         };
         
@@ -2788,7 +2739,7 @@ To convert to MP4:
                     💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
                   <p className="text-xs text-gray-400 mt-1 px-3">
-                    Transcripts are recorded when 2+ participants are present. This setting only controls subtitle display.
+                    This setting only controls subtitle display.
                   </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
@@ -2806,65 +2757,6 @@ To convert to MP4:
                 </div>
               </div>
 
-              {/* Language Settings */}
-              {(subtitlesEnabled || multilingualEnabled) && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-medium text-gray-300 mb-2">Language Settings</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Source Language (Detection)</label>
-                      <select
-                        value={sourceLanguage}
-                        onChange={(e) => setSourceLanguage(e.target.value)}
-                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
-                      >
-                        {supportedLanguages.map(lang => (
-                          <option key={lang.code} value={lang.code}>
-                            {lang.flag} {lang.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Target Language</label>
-                      <select
-                        value={targetLanguage}
-                        onChange={(e) => setTargetLanguage(e.target.value)}
-                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
-                      >
-                        {supportedLanguages.filter(lang => lang.code !== 'auto').map(lang => (
-                          <option key={lang.code} value={lang.code}>
-                            {lang.flag} {lang.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="text-xs text-gray-400 bg-gray-700 p-2 rounded">
-                      <div className="flex items-center justify-between">
-                        <span>💬 Subtitles:</span>
-                        <span className={subtitlesEnabled ? 'text-green-400' : 'text-gray-500'}>
-                          {subtitlesEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </div>
-                      {/* Temporarily commented out - will re-enable later
-                      <div className="flex items-center justify-between">
-                        <span>🌐 Multilingual Audio:</span>
-                        <span className={multilingualEnabled ? 'text-purple-400' : 'text-gray-500'}>
-                          {multilingualEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </div>
-                      */}
-                      {multilingualEnabled && (
-                        <div className="mt-1 text-xs text-orange-300">
-                          ⚠️ Audio translation may have 2-3 second delay
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
 
             </div>
           )}
@@ -3043,12 +2935,6 @@ To convert to MP4:
                     {subtitle.text}
                   </div>
                   
-                  {/* Translation indicator */}
-                  {subtitle.isTranslated && (
-                    <div className="mt-2 text-xs text-green-400">
-                      🌐 Translated from {subtitle.sourceLanguage} to {subtitle.targetLanguage}
-                    </div>
-                  )}
                 </div>
               ))}
               <div ref={transcriptEndRef} />
