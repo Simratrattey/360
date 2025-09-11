@@ -475,6 +475,7 @@ function MessageBubble({
                 <img
                   src={imageSrc}
                   alt={msg.file.name}
+                  crossOrigin="use-credentials"
                   onError={(e) => {
                     console.error('Image failed to load:', imageSrc, e);
                     setImgError(true);

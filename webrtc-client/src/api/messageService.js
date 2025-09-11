@@ -53,7 +53,7 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
   let url = fileObj.url;
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
   
-  console.log('[constructFileUrl] Input:', { url, baseUrl, fileObj });
+  console.log('[constructFileUrl] Input:', { url, baseUrl, fileObj, includeAuth });
   
   // If it's already a complete URL, check if we need to fix the domain
   if (url.startsWith('http') || url.startsWith('blob:')) {
@@ -72,8 +72,8 @@ export const constructFileUrl = (fileObj, includeAuth = true) => {
     
     const needsDomainFix = wrongDomains.some(domain => url.includes(domain));
     
-    // Also check if URL doesn't start with our base URL (more aggressive correction)
-    const isWrongDomain = !url.startsWith(baseUrl) && !url.startsWith('blob:');
+    // More restrictive domain check - only fix if we're certain it's wrong
+    const isWrongDomain = needsDomainFix;
     
     if ((needsDomainFix || isWrongDomain) && !url.startsWith(baseUrl)) {
       try {
