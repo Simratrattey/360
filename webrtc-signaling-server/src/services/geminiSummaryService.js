@@ -158,6 +158,58 @@ export function validateGeminiConfig() {
   return true;
 }
 
+// --- Generate quick summary for late joiners ---
+export async function generateLateJoinerSummary(transcriptEntries, meetingTitle = "Meeting") {
+  try {
+    console.log(`[Gemini] Generating late joiner summary for: ${meetingTitle}`);
+    
+    // Convert transcript entries to plain text
+    const transcript = transcriptEntries
+      .map(entry => `${entry.speaker}: ${entry.text}`)
+      .join('\n');
+    
+    if (!transcript || transcript.trim().length === 0) {
+      console.log('[Gemini] No transcript content for late joiner summary');
+      return null;
+    }
+
+    console.log(`[Gemini] Late joiner transcript length: ${transcript.length} characters`);
+    
+    // Use a more focused prompt for late joiners
+    const prompt = `
+You are an AI assistant helping someone who just joined an ongoing meeting titled "${meetingTitle}".
+
+Please provide a brief, conversational summary of what has been discussed so far. Focus on:
+- Main topics being discussed
+- Key points or highlights
+- Current context or situation being addressed
+
+Keep it concise (2-3 sentences max) and conversational, as if you're quickly briefing someone who just walked into the room.
+
+Do NOT include:
+- Action items or tasks
+- Detailed decisions
+- Meeting structure headings
+- Formal language
+
+Just provide a natural, brief catch-up summary.
+
+Transcript so far:
+${transcript}
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summary = response.text();
+    
+    console.log('[Gemini] ✅ Late joiner summary generated');
+    return summary;
+  } catch (error) {
+    console.error('[Gemini] Error generating late joiner summary:', error);
+    return null;
+  }
+}
+
 // --- Test function for development ---
 export async function testGeminiConnection() {
   try {

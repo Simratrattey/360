@@ -203,7 +203,7 @@ export default function SidebarConversation({
             
             <div className="flex items-center justify-between">
               <p className="text-xs text-blue-600 font-medium truncate">
-                Ask me anything about TipTop!
+                Ask me anything about 360!
               </p>
             </div>
           </div>

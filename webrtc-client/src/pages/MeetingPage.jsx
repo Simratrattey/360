@@ -69,6 +69,7 @@ export default function MeetingPage() {
   const [permanentSubtitleHistory, setPermanentSubtitleHistory] = useState([]); // Full meeting transcript
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [meetingJoinedAt, setMeetingJoinedAt] = useState(null);
+  const [lateJoinerSummary, setLateJoinerSummary] = useState(null); // AI summary for late joiners
   const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
   const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
   
@@ -454,6 +455,19 @@ export default function MeetingPage() {
         if (preJoinHistory.length > 0) {
           console.log(`📋 Loaded ${preJoinHistory.length} pre-join transcript entries (${history.length} total available)`);
           setPermanentSubtitleHistory(preJoinHistory);
+          
+          // Generate AI summary for late joiners
+          console.log('🤖 Generating late joiner summary...');
+          transcriptAPI.generateLateJoinerSummary(roomId, meetingJoinedAt).then((summary) => {
+            if (summary) {
+              setLateJoinerSummary(summary);
+              console.log('✅ Late joiner summary generated');
+            } else {
+              console.log('ℹ️ No late joiner summary available');
+            }
+          }).catch((error) => {
+            console.error('❌ Failed to generate late joiner summary:', error);
+          });
         } else if (history.length > 0) {
           console.log(`📋 No pre-join transcripts (${history.length} total exist, but all after join time)`);
         }
@@ -2957,6 +2971,19 @@ To convert to MP4:
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Late Joiner Summary */}
+              {lateJoinerSummary && (
+                <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-600/50 mb-4">
+                  <div className="flex items-center mb-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                    <span className="font-medium text-blue-300 text-sm">Meeting Summary (Before You Joined)</span>
+                  </div>
+                  <div className="text-gray-200 text-sm leading-relaxed">
+                    {lateJoinerSummary}
+                  </div>
+                </div>
+              )}
+              
               {[...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map((subtitle, index) => (
                 <div 
                   key={subtitle.id} 

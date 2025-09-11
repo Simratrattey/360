@@ -1,6 +1,7 @@
 import express from 'express';
 import Transcript from '../models/transcript.js';
 import authMiddleware from '../middleware/auth.js';
+import Meeting from '../models/meeting.js';
 
 const router = express.Router();
 
@@ -114,6 +115,78 @@ router.delete('/:roomId', authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to clear transcript'
+    });
+  }
+});
+
+// Generate summary for late joiners
+router.post('/:roomId/late-joiner-summary', authMiddleware, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { joinedAt } = req.body; // When the user joined the meeting
+    
+    // Get the meeting to fetch its title
+    const meeting = await Meeting.findOne({ roomId, status: 'active' });
+    const meetingTitle = meeting?.title || 'Meeting';
+    
+    // Get transcript entries before the user joined
+    const transcript = await Transcript.findOne({ roomId });
+    
+    if (!transcript || !transcript.entries || transcript.entries.length === 0) {
+      return res.json({
+        success: true,
+        summary: null,
+        message: 'No transcript available for summary'
+      });
+    }
+    
+    // Filter entries created before the user joined
+    const preJoinEntries = transcript.entries.filter(entry => 
+      entry.createdAt < new Date(joinedAt)
+    );
+    
+    if (preJoinEntries.length === 0) {
+      return res.json({
+        success: true,
+        summary: null,
+        message: 'No pre-join discussion to summarize'
+      });
+    }
+    
+    console.log(`[Transcript] Generating late joiner summary for ${preJoinEntries.length} entries`);
+    
+    // Try to generate AI summary
+    try {
+      const { generateLateJoinerSummary, validateGeminiConfig } = await import('../services/geminiSummaryService.js');
+      
+      if (validateGeminiConfig()) {
+        const summary = await generateLateJoinerSummary(preJoinEntries, meetingTitle);
+        
+        if (summary && summary.trim().length > 0) {
+          console.log(`[Transcript] ✅ Late joiner summary generated (${summary.length} characters)`);
+          return res.json({
+            success: true,
+            summary: summary.trim(),
+            entriesCount: preJoinEntries.length
+          });
+        }
+      }
+    } catch (aiError) {
+      console.error('[Transcript] Error generating AI summary for late joiner:', aiError);
+    }
+    
+    // Fallback: No summary if AI fails (user will just see transcripts)
+    res.json({
+      success: true,
+      summary: null,
+      message: 'AI summary not available, showing transcripts only'
+    });
+    
+  } catch (error) {
+    console.error('Error generating late joiner summary:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate summary'
     });
   }
 });

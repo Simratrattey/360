@@ -47,6 +47,24 @@ class TranscriptAPI {
       console.error('❌ Failed to clear transcript:', error);
     }
   }
+
+  // Generate summary for late joiners
+  async generateLateJoinerSummary(roomId, joinedAt) {
+    try {
+      console.log('🤖 Requesting late joiner summary...');
+      const response = await API.post(`/transcripts/${roomId}/late-joiner-summary`, {
+        joinedAt: joinedAt
+      });
+      if (response.data.success) {
+        console.log(`✅ Late joiner summary: ${response.data.summary ? 'Generated' : 'Not available'}`);
+        return response.data.summary;
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to generate late joiner summary:', error);
+      return null;
+    }
+  }
 }
 
 export default new TranscriptAPI();

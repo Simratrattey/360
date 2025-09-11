@@ -447,7 +447,7 @@ export default function MessagesPage() {
             isPermanent: true,
             alwaysOnTop: true,
             lastMessage: {
-              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!',
+              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about 360!',
               senderId: 'avatar_system_user',
               senderName: 'Avatar',
               timestamp: new Date().toISOString()
