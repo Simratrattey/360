@@ -422,304 +422,113 @@ function MessageBubble({
 
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
-      // Enhanced WhatsApp/Slack-style image preview with robust loading
+      // Fallback image preview system (while server issues are resolved)
       if (isImage) {
-        const [imageBlob, setImageBlob] = useState(null);
-        const [imageUrl, setImageUrl] = useState(null);
-        const [imageStatus, setImageStatus] = useState('loading'); // loading, loaded, error
+        console.log('[Image Fallback] Using fallback preview for:', msg.file.name);
         
-        useEffect(() => {
-          let isCancelled = false;
-          
-          const loadImage = async () => {
-            console.log('[Image Loading] Starting image load for:', msg.file.name);
-            setImageStatus('loading');
-            setImgLoading(true);
-            setImgError(false);
-            
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-            const filename = msg.file.url || msg.file.name;
-            const cleanFilename = filename.split('/').pop().split('?')[0];
-            const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-            
-            // Try different file serving endpoints and authentication methods
-            const token = localStorage.getItem('token');
-            
-            const endpoints = [
-              // Method 1: API endpoint with Bearer token
-              {
-                name: 'API endpoint with Bearer token',
-                url: `${baseUrl}/api/files/${cleanFilename}`,
-                options: {
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 2: API endpoint with query token
-              {
-                name: 'API endpoint with query token',
-                url: `${baseUrl}/api/files/${cleanFilename}${token ? `?token=${encodeURIComponent(token)}` : ''}`,
-                options: {
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 3: Direct uploads path with Bearer token
-              {
-                name: 'Direct uploads with Bearer token',
-                url: directUrl,
-                options: {
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 4: Direct uploads path with query token
-              {
-                name: 'Direct uploads with query token',
-                url: token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl,
-                options: {
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 5: Static files endpoint
-              {
-                name: 'Static files endpoint',
-                url: `${baseUrl}/static/uploads/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              },
-              // Method 6: Public files endpoint
-              {
-                name: 'Public files endpoint',
-                url: `${baseUrl}/public/uploads/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              },
-              // Method 7: Files endpoint (common Express.js pattern)
-              {
-                name: 'Files endpoint',
-                url: `${baseUrl}/files/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              }
-            ];
-            
-            for (let i = 0; i < endpoints.length && !isCancelled; i++) {
-              try {
-                const endpoint = endpoints[i];
-                console.log(`[Image Loading] Trying ${i + 1}/${endpoints.length}: ${endpoint.name}`);
-                console.log(`[Image Loading] URL: ${endpoint.url}`);
-                
-                const response = await fetch(endpoint.url, endpoint.options);
-                
-                console.log(`[Image Loading] ${endpoint.name} response:`, {
-                  status: response.status,
-                  statusText: response.statusText,
-                  headers: Object.fromEntries(response.headers.entries()),
-                  url: response.url
-                });
-                
-                if (response.ok) {
-                  const contentType = response.headers.get('content-type');
-                  console.log(`[Image Loading] Content-Type: ${contentType}`);
-                  
-                  // Check if response is actually an image (and not HTML)
-                  if (contentType && contentType.startsWith('image/')) {
-                    const blob = await response.blob();
-                    console.log(`[Image Loading] ✅ SUCCESS with ${endpoint.name}! Blob size:`, blob.size, 'bytes');
-                    
-                    if (!isCancelled) {
-                      const blobUrl = URL.createObjectURL(blob);
-                      setImageBlob(blob);
-                      setImageUrl(blobUrl);
-                      setImageStatus('loaded');
-                      setImgLoading(false);
-                      setImgError(false);
-                      return; // Success!
-                    }
-                  } else {
-                    console.warn(`[Image Loading] ❌ ${endpoint.name} returned wrong content-type:`, contentType);
-                    // Check if it's HTML (SPA routing issue)
-                    if (contentType && contentType.includes('text/html')) {
-                      const text = await response.text();
-                      console.warn('[Image Loading] Server returned HTML (SPA routing issue):', text.substring(0, 100));
-                    }
-                  }
-                } else {
-                  console.warn(`[Image Loading] ❌ ${endpoint.name} failed:`, response.status, response.statusText);
-                }
-              } catch (error) {
-                console.error(`[Image Loading] ❌ ${endpoints[i].name} error:`, error);
-              }
-            }
-            
-            // All methods failed - show comprehensive error information
-            if (!isCancelled) {
-              console.error('🚨 [Image Loading] All methods failed!');
-              console.error('🔧 [Image Loading] Server Diagnosis:');
-              console.error('   - Server is returning HTML instead of image files');
-              console.error('   - This indicates SPA routing is catching file requests');
-              console.error('   - Possible solutions:');
-              console.error('     1. Configure nginx/Apache to serve /uploads/* as static files');
-              console.error('     2. Add Express.js static middleware for /uploads path');
-              console.error('     3. Create /api/files/* endpoint that serves files directly');
-              console.error('     4. Whitelist /uploads/* in SPA routing configuration');
-              console.error('   - File attempting to load:', cleanFilename);
-              console.error('   - All attempted URLs returned text/html content-type');
-              
-              setImageStatus('error');
-              setImgLoading(false);
-              setImgError(true);
-            }
+        // Get file extension for icon
+        const getImageIcon = (fileName) => {
+          const ext = fileName.split('.').pop().toLowerCase();
+          const iconMap = {
+            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🎭',
+            'svg': '🎨', 'webp': '🖼️', 'bmp': '🖼️', 'tiff': '🖼️'
           };
-          
-          loadImage();
-          
-          // Cleanup function
-          return () => {
-            isCancelled = true;
-            if (imageUrl) {
-              URL.revokeObjectURL(imageUrl);
-            }
-          };
-        }, [msg.file, imgRetryCount]);
+          return iconMap[ext] || '🖼️';
+        };
         
-        const imageSrc = imageUrl;
+        const imageIcon = getImageIcon(msg.file.name);
+        const fileSize = formatFileSize(msg.file.size);
+        
+        // Try to get preview from message data if available
+        let previewUrl = null;
+        if (msg.file.preview) {
+          previewUrl = msg.file.preview;
+        } else if (msg.file.base64) {
+          previewUrl = `data:${msg.file.type};base64,${msg.file.base64}`;
+        }
         
         return (
           <div className="relative group">
-            {/* Image container with better loading states */}
             <div className="relative overflow-hidden rounded-lg bg-gray-100 min-h-[120px] max-w-sm">
-              {/* Background blur for progressive loading effect */}
-              {imgLoading && !imgError && (
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                </div>
-              )}
               
-              {/* Main image */}
-              {!imgError && imageSrc && (
-                <img
-                  src={imageSrc}
-                  alt={msg.file.name}
-                  onError={(e) => {
-                    console.error('Image failed to load:', imageSrc, e);
-                    setImgError(true);
-                    setImgLoading(false);
-                    
-                    // Retry with different approach after delay
-                    if (imgRetryCount < 2) {
-                      setTimeout(() => {
-                        setImgRetryCount(prev => prev + 1);
-                        setImgError(false);
-                        setImgLoading(true);
-                      }, 1000);
-                    }
-                  }}
-                  onLoad={() => {
-                    setImgError(false);
-                    setImgLoading(false);
-                  }}
-                  onLoadStart={() => {
-                    setImgLoading(true);
-                    setImgError(false);
-                  }}
-                  className={`w-full h-auto max-h-80 object-cover transition-all duration-500 cursor-pointer hover:brightness-110 ${
-                    imgLoading ? 'opacity-0' : 'opacity-100'
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Create image modal/lightbox instead of opening in new tab
-                    window.open(imageSrc, '_blank');
-                  }}
-                  title="Click to view full size"
-                  loading="lazy"
-                />
-              )}
-              
-              {/* Download button overlay */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownload(getImageSrc(), msg.file.name);
-                  }}
-                  className="p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
-                  title="Download image"
-                >
-                  <Download className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Enhanced error fallback */}
-            {imgError && (
-              <div className="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-pink-50 border border-red-100 rounded-lg">
-                <div className="flex-shrink-0">
-                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                    <span className="text-2xl">🖼️</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-                  <p className="text-xs text-gray-500">{fileSize} • {msg.file.type}</p>
-                  <p className="text-xs text-red-600">
-                    {imgRetryCount >= 2 ? 'Image cannot be loaded' : 'Loading failed, retrying...'}
-                  </p>
-                </div>
-                <div className="flex flex-col space-y-1">
-                  {imgRetryCount < 2 && (
+              {/* If we have a preview URL, show the image */}
+              {previewUrl ? (
+                <>
+                  <img
+                    src={previewUrl}
+                    alt={msg.file.name}
+                    className="w-full h-auto max-h-80 object-cover transition-all duration-300 cursor-pointer hover:brightness-110"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Try to open file URL
+                      const token = localStorage.getItem('token');
+                      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+                      const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
+                      const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                      window.open(urlWithToken, '_blank');
+                    }}
+                    title="Click to view full size"
+                    loading="lazy"
+                  />
+                  
+                  {/* Download button overlay */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     <button
-                      onClick={() => {
-                        setImgError(false);
-                        setImgLoading(true);
-                        setImgRetryCount(prev => prev + 1);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const token = localStorage.getItem('token');
+                        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+                        const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
+                        const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+                        const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                        
+                        // Create download link
+                        const a = document.createElement('a');
+                        a.href = urlWithToken;
+                        a.download = msg.file.name;
+                        a.target = '_blank';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
                       }}
-                      className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
-                      title="Try loading again"
+                      className="p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
+                      title="Download image"
                     >
-                      Retry
+                      <Download size={16} />
                     </button>
-                  )}
+                  </div>
+                </>
+              ) : (
+                /* Attractive fallback when no preview is available */
+                <div className="flex items-center justify-between p-4 bg-gradient-to-br from-blue-50 to-purple-50 min-h-[120px] border-2 border-dashed border-blue-200">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <div className="text-4xl animate-pulse">{imageIcon}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{msg.file.name}</p>
+                      <p className="text-xs text-gray-600 mt-1">📏 {fileSize}</p>
+                      <p className="text-xs text-blue-600 mt-1 font-medium">Image File</p>
+                      <p className="text-xs text-gray-500 mt-1">Click to view/download</p>
+                    </div>
+                  </div>
                   <button
-                    onClick={() => handleDownload(getImageSrc(), msg.file.name)}
-                    className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
-                    title="Download file"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const token = localStorage.getItem('token');
+                      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+                      const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
+                      const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                      window.open(urlWithToken, '_blank');
+                    }}
+                    className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                    title="View/Download image"
                   >
-                    Download
+                    <Download size={20} />
                   </button>
                 </div>
-              </div>
-            )}
-            
-            {/* Download button overlay - only show on hover */}
-            {!imgError && !imgLoading && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownload(getImageSrc(), msg.file.name);
-                }}
-                className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
-                title="Download image"
-              >
-                <Download size={16} />
-              </button>
-            )}
-            
-            {/* File info overlay */}
-            {!imgError && !imgLoading && (
-              <div className="absolute top-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                {fileSize}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         );
       }
@@ -789,280 +598,54 @@ function MessageBubble({
           </div>
         );
       }
-      // Enhanced PDF preview with robust loading
+      // Fallback PDF preview system (while server issues are resolved)
       if (msg.file.type === 'application/pdf') {
-        const [pdfBlob, setPdfBlob] = useState(null);
-        const [pdfUrl, setPdfUrl] = useState(null);
-        const [pdfStatus, setPdfStatus] = useState('loading'); // loading, loaded, error
+        console.log('[PDF Fallback] Using fallback preview for:', msg.file.name);
         
-        useEffect(() => {
-          let isCancelled = false;
-          
-          const loadPDF = async () => {
-            console.log('[PDF Loading] Starting PDF load for:', msg.file.name);
-            setPdfStatus('loading');
-            
-            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-            const filename = msg.file.url || msg.file.name;
-            const cleanFilename = filename.split('/').pop().split('?')[0];
-            const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-            
-            // Try different file serving endpoints and authentication methods
-            const token = localStorage.getItem('token');
-            
-            const endpoints = [
-              // Method 1: API endpoint with Bearer token
-              {
-                name: 'API endpoint with Bearer token',
-                url: `${baseUrl}/api/files/${cleanFilename}`,
-                options: {
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 2: API endpoint with query token
-              {
-                name: 'API endpoint with query token',
-                url: `${baseUrl}/api/files/${cleanFilename}${token ? `?token=${encodeURIComponent(token)}` : ''}`,
-                options: {
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 3: Direct uploads path with Bearer token
-              {
-                name: 'Direct uploads with Bearer token',
-                url: directUrl,
-                options: {
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 4: Direct uploads path with query token
-              {
-                name: 'Direct uploads with query token',
-                url: token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl,
-                options: {
-                  mode: 'cors',
-                  credentials: 'include'
-                }
-              },
-              // Method 5: Static files endpoint
-              {
-                name: 'Static files endpoint',
-                url: `${baseUrl}/static/uploads/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              },
-              // Method 6: Public files endpoint
-              {
-                name: 'Public files endpoint',
-                url: `${baseUrl}/public/uploads/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              },
-              // Method 7: Files endpoint (common Express.js pattern)
-              {
-                name: 'Files endpoint',
-                url: `${baseUrl}/files/messages/${cleanFilename}`,
-                options: {
-                  mode: 'cors'
-                }
-              }
-            ];
-            
-            for (let i = 0; i < endpoints.length && !isCancelled; i++) {
-              try {
-                const endpoint = endpoints[i];
-                console.log(`[PDF Loading] Trying ${i + 1}/${endpoints.length}: ${endpoint.name}`);
-                console.log(`[PDF Loading] URL: ${endpoint.url}`);
-                
-                const response = await fetch(endpoint.url, endpoint.options);
-                
-                console.log(`[PDF Loading] ${endpoint.name} response:`, {
-                  status: response.status,
-                  statusText: response.statusText,
-                  headers: Object.fromEntries(response.headers.entries()),
-                  url: response.url
-                });
-                
-                if (response.ok) {
-                  const contentType = response.headers.get('content-type');
-                  console.log(`[PDF Loading] Content-Type: ${contentType}`);
-                  
-                  // Check if response is actually a PDF (and not HTML)
-                  if (contentType && contentType.includes('application/pdf')) {
-                    const blob = await response.blob();
-                    console.log(`[PDF Loading] ✅ SUCCESS with ${endpoint.name}! Blob size:`, blob.size, 'bytes');
-                    
-                    if (!isCancelled) {
-                      const blobUrl = URL.createObjectURL(blob);
-                      setPdfBlob(blob);
-                      setPdfUrl(blobUrl);
-                      setPdfStatus('loaded');
-                      return; // Success!
-                    }
-                  } else {
-                    console.warn(`[PDF Loading] ❌ ${endpoint.name} returned wrong content-type:`, contentType);
-                    // Check if it's HTML (SPA routing issue)
-                    if (contentType && contentType.includes('text/html')) {
-                      const text = await response.text();
-                      console.warn('[PDF Loading] Server returned HTML (SPA routing issue):', text.substring(0, 100));
-                    }
-                  }
-                } else {
-                  console.warn(`[PDF Loading] ❌ ${endpoint.name} failed:`, response.status, response.statusText);
-                }
-              } catch (error) {
-                console.error(`[PDF Loading] ❌ ${endpoints[i].name} error:`, error);
-              }
-            }
-            
-            // All methods failed - show comprehensive error information
-            if (!isCancelled) {
-              console.error('🚨 [PDF Loading] All methods failed!');
-              console.error('🔧 [PDF Loading] Server Diagnosis:');
-              console.error('   - Server is returning HTML instead of PDF files');
-              console.error('   - This indicates SPA routing is catching file requests');
-              console.error('   - Possible solutions:');
-              console.error('     1. Configure nginx/Apache to serve /uploads/* as static files');
-              console.error('     2. Add Express.js static middleware for /uploads path');
-              console.error('     3. Create /api/files/* endpoint that serves files directly');
-              console.error('     4. Whitelist /uploads/* in SPA routing configuration');
-              console.error('   - File attempting to load:', cleanFilename);
-              console.error('   - All attempted URLs returned text/html content-type');
-              
-              setPdfStatus('error');
-            }
-          };
-          
-          loadPDF();
-          
-          // Cleanup function
-          return () => {
-            isCancelled = true;
-            if (pdfUrl) {
-              URL.revokeObjectURL(pdfUrl);
-            }
-          };
-        }, [msg.file]);
+        const fileSize = formatFileSize(msg.file.size);
+        const fileIcon = '📕';
         
-        const pdfPreviewUrl = pdfUrl ? `${pdfUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : null;
-        
-        console.log('[PDF Preview] Blob URL generated:', pdfPreviewUrl);
-        
+        // Simple, reliable PDF preview card
         return (
           <div className="flex flex-col space-y-2">
-            <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden group">
-              {/* Loading state */}
-              {pdfStatus === 'loading' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <p className="text-sm text-gray-600">Loading PDF...</p>
-                  </div>
+            <div className="relative w-full h-48 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border border-red-200 overflow-hidden group flex items-center justify-center">
+              {/* PDF Icon and Info */}
+              <div className="text-center p-6">
+                <div className="text-6xl mb-4 text-red-500">{fileIcon}</div>
+                <div className="text-lg font-semibold text-gray-800 mb-1 truncate max-w-xs">{msg.file.name}</div>
+                <div className="text-sm text-gray-600 mb-3">{fileSize}</div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      const token = localStorage.getItem('token');
+                      const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
+                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                      window.open(urlWithToken, '_blank');
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <span>📖</span>
+                    <span>View PDF</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      downloadFile(constructFileUrl(msg.file), msg.file.name, msg.file.type);
+                    }}
+                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <Download size={16} />
+                    <span>Download</span>
+                  </button>
                 </div>
-              )}
-              
-              {/* Error state */}
-              {pdfStatus === 'error' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">PDF Preview Unavailable</p>
-                    <p className="text-xs text-gray-500 mt-1">Server may not be serving files properly</p>
-                    <button
-                      onClick={() => {
-                        const token = localStorage.getItem('token');
-                        const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
-                        const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                        window.open(urlWithToken, '_blank');
-                      }}
-                      className="mt-2 text-blue-600 hover:text-blue-800 text-sm underline"
-                    >
-                      Try Opening Directly
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* PDF Preview iframe - only show when loaded */}
-              {pdfStatus === 'loaded' && pdfPreviewUrl && (
-                <iframe
-                  src={pdfPreviewUrl}
-                  title={`${msg.file.name} - Page 1`}
-                  className="w-full h-full"
-                  style={{ border: 'none' }}
-                  onError={() => {
-                    console.warn('PDF iframe failed to load blob URL');
-                    setPdfStatus('error');
-                  }}
-                  onLoad={() => {
-                    console.log('PDF iframe with blob URL loaded successfully');
-                  }}
-                />
-              )}
-              
-              {/* Overlay for first page indicator */}
-              {pdfStatus === 'loaded' && (
-                <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md">
-                  Page 1 Preview
-                </div>
-              )}
-              
-              {/* Download button overlay */}
-              <button
-                onClick={() => {
-                  if (pdfBlob) {
-                    // Download from blob if available
-                    const url = URL.createObjectURL(pdfBlob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = msg.file.name;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  } else {
-                    // Fallback to normal download
-                    handleDownload(fileUrl, msg.file.name);
-                  }
-                }}
-                className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                title="Download PDF"
-              >
-                <Download size={16} />
-              </button>
-              
-              {/* Click overlay to open full PDF */}
-              <div 
-                className="absolute inset-0 cursor-pointer bg-transparent hover:bg-blue-500 hover:bg-opacity-10 transition-colors duration-200"
-                onClick={() => {
-                  if (pdfUrl) {
-                    window.open(pdfUrl, '_blank');
-                  } else {
-                    // Fallback to constructed URL
-                    const token = localStorage.getItem('token');
-                    const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
-                    const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                    window.open(urlWithToken, '_blank');
-                  }
-                }}
-                title="Click to view full PDF"
-              />
+              </div>
             </div>
             
+            {/* File info below the preview */}
             <div className="flex items-center space-x-2 text-sm text-gray-600">
               <span className="text-red-500">{fileIcon}</span>
               <span className="truncate flex-1 font-medium">{msg.file.name}</span>
               <span className="text-xs bg-gray-100 px-2 py-1 rounded">{fileSize}</span>
-              {pdfStatus === 'loaded' && (
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Loaded</span>
-              )}
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">PDF Document</span>
             </div>
           </div>
         );
