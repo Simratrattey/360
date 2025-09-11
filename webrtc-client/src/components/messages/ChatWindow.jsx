@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useLayoutEffect } from 'react';
 import MessageBubble from './MessageBubble';
 
 // Utility function to detect system messages
@@ -74,6 +74,8 @@ export default function ChatWindow({
   onLoadMore,
   hasMoreMessages = false,
   loadingMore = false,
+  unreadStartIndex = null,
+  isConversationSwitch = false,
 }) {
   const chatRef = useRef(null);
   const lastScrollHeight = useRef(0);
@@ -83,8 +85,33 @@ export default function ChatWindow({
   const scrollTimeoutRef = useRef(null);
   const grouped = groupMessagesByDate(messages);
   
-  // Debug: Log messages length to see if ChatWindow receives updated messages
-  console.log('📨 ChatWindow messages count:', messages.length, 'Latest message ID:', messages[messages.length - 1]?._id);
+
+  // Pre-position scroll for conversation switches BEFORE render
+  useLayoutEffect(() => {
+    if (!chatRef.current || !isConversationSwitch) return;
+    
+    const chatElement = chatRef.current;
+    chatElement.style.scrollBehavior = 'auto';
+    
+    // Force scroll to bottom immediately, before any rendering happens
+    const scrollToBottom = () => {
+      const maxScroll = chatElement.scrollHeight - chatElement.clientHeight;
+      chatElement.scrollTop = Math.max(0, maxScroll);
+    };
+    
+    scrollToBottom();
+    
+    // Double-check on next frame and then reset the flag
+    requestAnimationFrame(() => {
+      if (chatElement) {
+        scrollToBottom();
+        // Reset the flag immediately after positioning
+        requestAnimationFrame(() => {
+        });
+      }
+    });
+    
+  }, [messages, isConversationSwitch]);
 
   // Enhanced scroll management with performance optimizations
   useEffect(() => {
@@ -95,20 +122,42 @@ export default function ChatWindow({
     const previousScrollHeight = lastScrollHeight.current;
     
     if (shouldAutoScroll && !isUserScrolling.current) {
-      // Smooth scroll to bottom for new messages
       isScrollingToBottom.current = true;
       
-      // Use CSS scroll-behavior for smooth native scrolling
-      chatElement.style.scrollBehavior = 'smooth';
-      chatElement.scrollTop = chatElement.scrollHeight;
-      
-      // Reset after scrolling completes
-      setTimeout(() => {
-        if (chatElement) {
-          chatElement.style.scrollBehavior = 'auto';
-        }
+      if (isConversationSwitch) {
+        // For conversation switches, scroll immediately without any delay or animation
+        chatElement.style.scrollBehavior = 'auto';
+        
+        // Set scroll position immediately, even before the layout is complete
+        const scrollToBottom = () => {
+          const maxScroll = chatElement.scrollHeight - chatElement.clientHeight;
+          chatElement.scrollTop = Math.max(0, maxScroll);
+        };
+        
+        // Scroll immediately
+        scrollToBottom();
+        
+        // Also scroll on next frame to catch any layout changes
+        requestAnimationFrame(() => {
+          if (chatElement) {
+            scrollToBottom();
+          }
+        });
+        
         isScrollingToBottom.current = false;
-      }, 500);
+      } else {
+        // Smooth scroll for new messages in the same conversation
+        chatElement.style.scrollBehavior = 'smooth';
+        chatElement.scrollTop = chatElement.scrollHeight;
+        
+        // Reset after scrolling completes
+        setTimeout(() => {
+          if (chatElement) {
+            chatElement.style.scrollBehavior = 'auto';
+          }
+          isScrollingToBottom.current = false;
+        }, 500);
+      }
       
     } else if (previousScrollHeight > 0 && currentScrollHeight > previousScrollHeight) {
       // When loading previous messages, maintain scroll position without animation
@@ -198,7 +247,7 @@ export default function ChatWindow({
   return (
     <div
       ref={chatRef}
-      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative smooth-scroll"
+      className="flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50 relative"
     >
       {/* Loading more messages indicator */}
       {loadingMore && (
@@ -225,12 +274,16 @@ export default function ChatWindow({
                 </div>
               </div>
               <div className="space-y-2 sm:space-y-4">
-                {msgs.map((msg, index) => {
+                {msgs.map((msg, msgIndex) => {
                   const isSystemMsg = isSystemMessage(msg);
                   
                   if (isSystemMsg) {
                     // System message detected - render as centered notification
                   }
+                  
+                  // Calculate global index for unread indicator
+                  const globalIndex = messages.findIndex(m => m._id === msg._id);
+                  const showUnreadIndicator = unreadStartIndex !== null && globalIndex === unreadStartIndex;
                   
                   const isSearchResult = searchResults.some(result => result._id === msg._id);
                   const isCurrentSearchResult = searchResults.length > 0 && 
@@ -259,17 +312,28 @@ export default function ChatWindow({
                   }
                   
                   return (
-                    <div 
-                      key={msg._id || msg.id}
-                      id={`message-${msg._id || msg.id}`}
-                      className={`transition-all duration-300 ${
-                        isCurrentSearchResult 
-                          ? 'ring-2 ring-blue-400 ring-opacity-75 bg-blue-50 rounded-lg p-2 -m-2'
-                          : isSearchResult 
-                          ? 'bg-yellow-50 rounded-lg p-1 -m-1'
-                          : ''
-                      }`}
-                    >
+                    <>
+                      {/* Unread messages indicator */}
+                      {showUnreadIndicator && (
+                        <div className="flex items-center justify-center my-6">
+                          <div className="flex items-center bg-blue-500/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-blue-200/50">
+                            <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+                            <span className="text-sm font-semibold text-white">New Messages</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div 
+                        key={msg._id || msg.id}
+                        id={`message-${msg._id || msg.id}`}
+                        className={`transition-all duration-300 ${
+                          isCurrentSearchResult 
+                            ? 'ring-2 ring-blue-400 ring-opacity-75 bg-blue-50 rounded-lg p-2 -m-2'
+                            : isSearchResult 
+                            ? 'bg-yellow-50 rounded-lg p-1 -m-1'
+                            : ''
+                        }`}
+                      >
                       <MessageBubble
                         msg={msg}
                         isOwn={
@@ -291,7 +355,13 @@ export default function ChatWindow({
                         setEditInput={setEditInput}
                         handleEditSave={handleEditSave}
                         handleEditCancel={handleEditCancel}
-                        replyContext={null}
+                        replyContext={
+                          msg.replyTo && typeof msg.replyTo === 'object' 
+                            ? msg.replyTo 
+                            : msg.replyTo && typeof msg.replyTo === 'string'
+                            ? messages.find(m => m._id === msg.replyTo)
+                            : null
+                        }
                         messageStatus={messageStatus}
                         onlineUsers={onlineUsers}
                         currentUserId={currentUserId}
@@ -301,7 +371,8 @@ export default function ChatWindow({
                         isPinned={pinnedMessages.includes(msg._id || msg.id)}
                         isStarred={starredMessages.includes(msg._id || msg.id)}
                       />
-                    </div>
+                      </div>
+                    </>
                   );
                 })}
               </div>

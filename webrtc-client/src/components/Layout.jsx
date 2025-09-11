@@ -67,8 +67,8 @@ export default function Layout({ children }) {
   return (
     <MessageNotificationContext.Provider value={{ unreadCount, refreshUnreadCount }}>
       <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50">
-        {/* Mobile sidebar */}
-        <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
+        {/* Mobile/Tablet sidebar (up to xl) */}
+        <div className={`fixed inset-0 z-50 xl:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
           <motion.div
             initial={{ x: -300 }}
@@ -124,8 +124,8 @@ export default function Layout({ children }) {
           </motion.div>
         </div>
 
-        {/* Desktop sidebar */}
-        <div className={`hidden lg:fixed lg:inset-y-0 lg:flex ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} lg:flex-col z-30 transition-all duration-300`}>
+        {/* Desktop sidebar (xl and up) */}
+        <div className={`hidden xl:fixed xl:inset-y-0 xl:flex ${sidebarCollapsed ? 'xl:w-20' : 'xl:w-72'} xl:flex-col z-30 transition-all duration-300`}>
           <div className="flex flex-col flex-grow bg-white/20 backdrop-blur-2xl shadow-2xl rounded-r-3xl border-r border-white/20 h-full transition-all duration-300">
             <div className={`flex h-20 items-center ${sidebarCollapsed ? 'px-2 justify-center' : 'px-8'} transition-all duration-300`}>
               <h1 className={`text-2xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm transition-all duration-300 ${sidebarCollapsed ? 'hidden' : 'block'}`}>Comm360</h1>
@@ -181,14 +181,14 @@ export default function Layout({ children }) {
         </div>
 
         {/* Main content */}
-        <div className={`${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all duration-300`}>
+        <div className={`${sidebarCollapsed ? 'xl:pl-20' : 'xl:pl-72'} transition-all duration-300`}>
           {/* Header */}
           <header className="backdrop-blur-xl bg-white/60 bg-gradient-to-r from-blue-100/60 via-white/60 to-purple-100/60 shadow-xl border-b border-white/30 relative z-20">
-            <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative">
+            <div className="flex h-20 items-center justify-between px-4 sm:px-8 lg:px-16 relative gap-2">
               {/* Mobile sidebar button */}
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
+                className="xl:hidden p-2 mr-1 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md"
               >
                 <Menu className="h-7 w-7" />
               </button>
@@ -196,26 +196,26 @@ export default function Layout({ children }) {
               {/* Search bar */}
               <form
                 onSubmit={handleSearch}
-                className="flex-1 flex justify-center"
+                className="flex-1 flex justify-center px-2 sm:px-0"
               >
-                <div className="relative w-full max-w-md z-10">
+                <div className="relative w-full max-w-[260px] sm:max-w-md z-10">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-400/80" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Search…"
-                    className="w-full pl-12 pr-24 py-2 rounded-full bg-white border border-blue-200 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 transition placeholder:text-blue-300 text-blue-900 text-base"
+                    className="w-full pl-12 pr-20 sm:pr-24 py-2 rounded-full bg-white border border-blue-200 shadow focus:outline-none focus:ring-2 focus:ring-blue-400 transition placeholder:text-blue-300 text-blue-900 text-sm sm:text-base"
                   />
                   {/* brand label inside the input */}
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm pointer-events-none select-none">
+                  <span className="hidden sm:inline absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent tracking-wider drop-shadow-sm pointer-events-none select-none">
                     Comm360
                   </span>
                 </div>
               </form>
 
               {/* Right icons */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 sm:space-x-4">
                 <button
                   onClick={() => navigate('/messages')}
                   className="p-2 rounded-full text-blue-500 hover:bg-blue-100/60 transition shadow-md relative"

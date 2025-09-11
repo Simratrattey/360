@@ -5,6 +5,7 @@ const { RRule } = RRulePkg;
 import User from '../models/user.js';
 import { createNotification } from './notificationController.js';
 import { randomUUID } from 'crypto';
+import { dashboardCache } from '../routes/dashboard.js';
 
 export const createMeeting = async (req, res, next) => {
   try {
@@ -15,7 +16,8 @@ export const createMeeting = async (req, res, next) => {
       participants,
       startTime,
       durationMinutes,
-      recurrence
+      recurrence,
+      visibility
     } = req.body;
 
     // Validation
@@ -47,6 +49,7 @@ export const createMeeting = async (req, res, next) => {
       durationMinutes,
       recurrence,
       roomId,
+      visibility: visibility || 'public',
     });
 
     // Populate organizer and participants for response
@@ -79,6 +82,17 @@ export const createMeeting = async (req, res, next) => {
           if (req.app.locals.sendNotification) {
             req.app.locals.sendNotification(participantId, notification);
           }
+          
+          // Send dashboard refresh event to participant
+          if (req.app.locals.sendDashboardRefresh) {
+            console.log(`[Dashboard] Sending refresh to participant ${participantId} for meeting "${meeting.title}"`);
+            req.app.locals.sendDashboardRefresh(participantId, {
+              reason: 'meeting_scheduled',
+              meetingId: meeting._id,
+              meetingTitle: meeting.title,
+              organizerName
+            });
+          }
         }
       }
     } catch (notificationError) {
@@ -86,6 +100,21 @@ export const createMeeting = async (req, res, next) => {
       // Don't fail the meeting creation if notifications fail
     }
 
+    // Invalidate dashboard cache for the organizer and all participants
+    const organizerId = req.user.id;
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    // Also invalidate cache for all participants so they see the updated upcoming count
+    for (const participantId of participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId.toString()) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        console.log(`[Dashboard] Invalidated cache for participant ${participantIdStr}`);
+      }
+    }
+    
     res.status(201).json(meeting);
   } catch (err) {
     console.error('Error creating meeting:', err);
@@ -142,6 +171,10 @@ export const getUpcomingMeetings = async (req, res, next) => {
 
 export const getMeetingById = async (req, res, next) => {
   try {
+    // Skip if this is a special route like 'past', 'upcoming', etc.
+    if (req.params.id === 'past' || req.params.id === 'upcoming') {
+      return next(); // Pass to next route handler
+    }
     const meeting = await Meeting.findById(req.params.id)
       .populate('organizer',    'fullName email')
       .populate('participants', 'fullName email');
@@ -160,6 +193,37 @@ export const deleteMeeting = async (req, res, next) => {
     if (!m) return res.status(404).json({ message: 'Meeting not found' });
     if (m.organizer.toString() !== req.user.id)
       return res.status(403).json({ message: 'Not authorized' });
+    
+    // Invalidate dashboard cache for organizer and all participants before deletion
+    const organizerId = m.organizer.toString();
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    for (const participantId of m.participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        console.log(`[Dashboard] Invalidated cache for participant ${participantIdStr} (meeting deleted)`);
+        
+        // Send dashboard refresh event to participant
+        if (req.app.locals.sendDashboardRefresh) {
+          req.app.locals.sendDashboardRefresh(participantIdStr, {
+            reason: 'meeting_cancelled',
+            meetingTitle: m.title
+          });
+        }
+      }
+    }
+    
+    // Send dashboard refresh to organizer too
+    if (req.app.locals.sendDashboardRefresh) {
+      req.app.locals.sendDashboardRefresh(organizerId, {
+        reason: 'meeting_cancelled',
+        meetingTitle: m.title
+      });
+    }
+    
     await m.deleteOne();
     return res.sendStatus(204);
   } catch (err) {
@@ -172,15 +236,71 @@ export const leaveMeeting = async (req, res, next) => {
   try {
     const m = await Meeting.findById(req.params.id);
     if (!m) return res.status(404).json({ message: 'Meeting not found' });
+    
+    // Invalidate cache for the leaving participant
+    const leavingUserId = req.user.id.toString();
+    dashboardCache.delete(`dashboard-stats-${leavingUserId}`);
+    dashboardCache.delete(`recent-meetings-${leavingUserId}`);
+    
+    // Send dashboard refresh to leaving participant
+    if (req.app.locals.sendDashboardRefresh) {
+      req.app.locals.sendDashboardRefresh(leavingUserId, {
+        reason: 'meeting_left',
+        meetingTitle: m.title
+      });
+    }
+    
     // remove this user
     m.participants = m.participants.filter(
       pid => pid.toString() !== req.user.id
     );
+    
     // if fewer than 2 remain, delete entire meeting
     if (m.participants.length < 2) {
+      // Invalidate cache for remaining participants and organizer before deletion
+      const organizerId = m.organizer.toString();
+      dashboardCache.delete(`dashboard-stats-${organizerId}`);
+      dashboardCache.delete(`recent-meetings-${organizerId}`);
+      
+      for (const participantId of m.participants) {
+        const participantIdStr = participantId.toString();
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+      }
+      
       await m.deleteOne();
       return res.sendStatus(204);
     }
+    
+    // Invalidate cache for organizer and remaining participants
+    const organizerId = m.organizer.toString();
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    for (const participantId of m.participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId && participantIdStr !== leavingUserId) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        
+        // Send dashboard refresh to remaining participants
+        if (req.app.locals.sendDashboardRefresh) {
+          req.app.locals.sendDashboardRefresh(participantIdStr, {
+            reason: 'meeting_participant_left',
+            meetingTitle: m.title
+          });
+        }
+      }
+    }
+    
+    // Send dashboard refresh to organizer
+    if (req.app.locals.sendDashboardRefresh && organizerId !== leavingUserId) {
+      req.app.locals.sendDashboardRefresh(organizerId, {
+        reason: 'meeting_participant_left',
+        meetingTitle: m.title
+      });
+    }
+    
     await m.save();
     // re-populate for response
     await m.populate('organizer', 'fullName email');
@@ -197,6 +317,48 @@ export const joinMeeting = async (req, res, next) => {
     if (!m) return res.status(404).end();
     if (!m.participants.includes(req.user.id)) {
       m.participants.push(req.user.id);
+      
+      // Invalidate cache for the new participant and organizer
+      const newParticipantId = req.user.id.toString();
+      const organizerId = m.organizer.toString();
+      
+      dashboardCache.delete(`dashboard-stats-${newParticipantId}`);
+      dashboardCache.delete(`recent-meetings-${newParticipantId}`);
+      dashboardCache.delete(`dashboard-stats-${organizerId}`);
+      dashboardCache.delete(`recent-meetings-${organizerId}`);
+      
+      // Also invalidate cache for existing participants
+      for (const participantId of m.participants) {
+        const participantIdStr = participantId.toString();
+        if (participantIdStr !== newParticipantId && participantIdStr !== organizerId) {
+          dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+          dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+          
+          // Send dashboard refresh to existing participants
+          if (req.app.locals.sendDashboardRefresh) {
+            req.app.locals.sendDashboardRefresh(participantIdStr, {
+              reason: 'meeting_participant_joined',
+              meetingTitle: m.title
+            });
+          }
+        }
+      }
+      
+      // Send dashboard refresh to new participant and organizer
+      if (req.app.locals.sendDashboardRefresh) {
+        req.app.locals.sendDashboardRefresh(newParticipantId, {
+          reason: 'meeting_joined',
+          meetingTitle: m.title
+        });
+        
+        if (organizerId !== newParticipantId) {
+          req.app.locals.sendDashboardRefresh(organizerId, {
+            reason: 'meeting_participant_joined',
+            meetingTitle: m.title
+          });
+        }
+      }
+      
       await m.save();
     }
     await m.populate('participants', 'fullName email');

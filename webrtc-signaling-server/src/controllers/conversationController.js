@@ -1,6 +1,7 @@
 import Conversation, { ReadReceipt } from '../models/conversation.js';
 import User from '../models/user.js';
 import Message from '../models/message.js';
+import Notification from '../models/notification.js';
 import mongoose from 'mongoose';
 import { createNotification } from './notificationController.js';
 

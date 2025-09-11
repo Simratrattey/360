@@ -7,12 +7,29 @@ import { Device } from 'mediasoup-client';
 import API from '../api/client.js';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { AuthContext } from '../context/AuthContext';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, CircleDot, StopCircle, Download, Settings, Monitor, MonitorSpeaker, Users, FileText, X, Share2 } from 'lucide-react';
 import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
-import SubtitleService from '../api/subtitleService';
+import AssemblyRealtimeClient from '../api/assemblyClient';
+import transcriptAPI from '../api/transcriptApi';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
+
+// Helper function to format UTC timestamp to user's local timezone
+const formatTimestamp = (utcTimestamp) => {
+  try {
+    // Handle both ISO string timestamps and legacy formatted timestamps
+    const date = new Date(utcTimestamp);
+    if (isNaN(date.getTime())) {
+      // If it's not a valid date, return the original timestamp (for backward compatibility)
+      return utcTimestamp;
+    }
+    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  } catch (error) {
+    // Fallback to original timestamp if parsing fails
+    return utcTimestamp;
+  }
+};
 
 export default function MeetingPage() {
   const { roomId } = useParams();
@@ -49,31 +66,28 @@ export default function MeetingPage() {
   const subtitlesEnabledRef = useRef(false);
   const [currentSubtitle, setCurrentSubtitle] = useState('');
   const [subtitleHistory, setSubtitleHistory] = useState([]);
-  const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
-  const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
+  const [permanentSubtitleHistory, setPermanentSubtitleHistory] = useState([]); // Full meeting transcript
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
+  const [meetingJoinedAt, setMeetingJoinedAt] = useState(null);
+  const [lateJoinerSummary, setLateJoinerSummary] = useState(null); // AI summary for late joiners
+  const [showSummaryButton, setShowSummaryButton] = useState(false); // Show summary button for 3rd+ participants
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false); // Loading state for summary
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false); // Show scroll to bottom button
+  const [newMessagesCount, setNewMessagesCount] = useState(0); // Count of new messages while scrolled up
   
   // Audio context and elements for multilingual audio output
   const [audioContext, setAudioContext] = useState(null);
   const [activeAudioSources, setActiveAudioSources] = useState(new Map());
   const audioContextRef = useRef(null);
   const speechRecognitionRef = useRef(null);
+  const assemblyRef = useRef(null); // Legacy ref (not used in new implementation)
+  const assemblyClientsRef = useRef(null); // Map of peerId -> AssemblyAI client
+  const audioProcessorsRef = useRef(null); // Map of peerId -> audio processor
+  const pcmWorkerRef = useRef(null);
+  const transcriptInitializingRef = useRef(new Set()); // Track which participants are being initialized
+  const transcriptScrollRef = useRef(null);
+  const transcriptEndRef = useRef(null);
 
-  // Supported languages for subtitles and translation
-  const supportedLanguages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-    { code: 'fr', name: 'French', flag: '🇫🇷' },
-    { code: 'de', name: 'German', flag: '🇩🇪' },
-    { code: 'it', name: 'Italian', flag: '🇮🇹' },
-    { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
-    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
-    { code: 'ko', name: 'Korean', flag: '🇰🇷' },
-    { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
-    { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
-    { code: 'auto', name: 'Auto-detect', flag: '🌐' }
-  ];
 
   const [showAvatar, setShowAvatar]             = useState(false);
   const [avatarClips, setAvatarClips]           = useState([]);
@@ -113,16 +127,94 @@ export default function MeetingPage() {
   // Host transfer system
   const [hostTransferNotification, setHostTransferNotification] = useState(null);
   
+  // Invite system
+  const [inviteLink, setInviteLink] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+  
   // Debug participant map changes
+  // Initialize meeting settings based on meeting configuration
+  useEffect(() => {
+    // Check if this meeting has subtitles enabled
+    const meetingInfoKey = `meeting-${roomId}`;
+    const meetingInfoStr = localStorage.getItem(meetingInfoKey);
+    
+    if (meetingInfoStr) {
+      try {
+        const meetingInfo = JSON.parse(meetingInfoStr);
+        console.log(`[MeetingPage] Found meeting info for room ${roomId}:`, meetingInfo);
+        
+      } catch (error) {
+        console.warn('[MeetingPage] Failed to parse meeting info:', error);
+      }
+    }
+
+    // Generate invite link when component mounts
+    generateInviteLink();
+  }, [roomId]);
+
   useEffect(() => {
     console.log('[MeetingPage] participantMap changed:', participantMap, 'count:', Object.keys(participantMap).length);
   }, [participantMap]);
   const [screenSharingUserId, setScreenSharingUserId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // 'gallery' or 'speaker'
+  const [isSmallScreen, setIsSmallScreen] = useState(typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false);
+
+  // Track screen size to optimize mobile layout
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const onChange = (e) => setIsSmallScreen(e.matches);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', onChange);
+    } else {
+      // Safari
+      mq.addListener(onChange);
+    }
+    return () => {
+      if (mq.removeEventListener) {
+        mq.removeEventListener('change', onChange);
+      } else {
+        mq.removeListener(onChange);
+      }
+    };
+  }, []);
 
   // FFmpeg state for video conversion
   const [ffmpeg, setFfmpeg] = useState(null);
   const [isConverting, setIsConverting] = useState(false);
+
+  const handleGenerateSummary = async () => {
+    setIsLoadingSummary(true);
+    try {
+      console.log('🤖 Generating late joiner summary...');
+      const summary = await transcriptAPI.generateLateJoinerSummary(roomId, meetingJoinedAt);
+      if (summary) {
+        setLateJoinerSummary(summary);
+        setShowSummaryButton(false); // Hide button after generating summary
+        console.log('✅ Late joiner summary generated');
+      } else {
+        console.log('ℹ️ No late joiner summary available');
+      }
+    } catch (error) {
+      console.error('❌ Failed to generate late joiner summary:', error);
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
+
+  const scrollToBottomOfTranscript = () => {
+    try {
+      if (transcriptEndRef.current) {
+        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } else if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        el.scrollTop = el.scrollHeight;
+      }
+      setNewMessagesCount(0);
+      setShowScrollToBottom(false);
+    } catch (error) {
+      console.error('Error scrolling to bottom:', error);
+    }
+  };
 
   const handleAvatarQuery = async () => {
     if (!avatarQuery) return;
@@ -304,7 +396,7 @@ export default function MeetingPage() {
       if (sfuSocket) {
         sfuSocket.emit('screenShareStarted', {
           userId: user.id,
-          userName: user.name,
+          userName: user.fullName || user.username,
           roomId: roomId
         });
       }
@@ -348,6 +440,7 @@ export default function MeetingPage() {
       joinMeeting(roomId)
         .then(() => {
           console.log('✅ [MeetingPage] Join meeting completed successfully');
+          setMeetingJoinedAt(Date.now()); // Record when user joined
           setIsJoining(false);
           // Set meeting start time when successfully joining
           if (!meetingStartTime) {
@@ -374,10 +467,26 @@ export default function MeetingPage() {
     }
   }, [localStream]);
 
+  // Load existing transcript history when joining the room
   useEffect(() => {
-    // TODO: Define chatRef and messages or remove this effect if not needed
-    // if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, []);
+    if (roomId && user && meetingJoinedAt) {
+      console.log('📋 Loading transcript history for room:', roomId);
+      transcriptAPI.loadTranscriptHistory(roomId).then((history) => {
+        // Only load transcripts that were created before the user joined
+        const preJoinHistory = history.filter(entry => entry.createdAt < meetingJoinedAt);
+        if (preJoinHistory.length > 0) {
+          console.log(`📋 Loaded ${preJoinHistory.length} pre-join transcript entries (${history.length} total available)`);
+          setPermanentSubtitleHistory(preJoinHistory);
+          
+          // Show summary button if there are any pre-join transcripts
+          console.log('📋 Pre-join transcripts found, showing summary button');
+          setShowSummaryButton(true);
+        } else if (history.length > 0) {
+          console.log(`📋 No pre-join transcripts (${history.length} total exist, but all after join time)`);
+        }
+      });
+    }
+  }, [roomId, user, meetingJoinedAt]);
 
   // Ensure local video always gets the stream and start audio analysis
   useEffect(() => {
@@ -388,6 +497,8 @@ export default function MeetingPage() {
       if (localStream.getAudioTracks().length > 0 && !audioAnalyzers.current.has('local')) {
         startAudioAnalyzer(localStream, 'local', true);
       }
+
+      // Local stream available - transcript recording will start when meeting has 2+ participants
     }
   }, [localStream]);
 
@@ -402,6 +513,8 @@ export default function MeetingPage() {
       audioTracks: stream.getAudioTracks().length
     })));
     
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    
     remoteStreams.forEach((stream, id) => {
       // Skip processing for participants who have left (not in participantMap)
       if (participantMap[id] === undefined) {
@@ -411,6 +524,15 @@ export default function MeetingPage() {
       // Start audio analyzer for speaking detection
       if (stream.getAudioTracks().length > 0 && !audioAnalyzers.current.has(id)) {
         startAudioAnalyzer(stream, id, false);
+      }
+
+      // Start transcript recording for this remote participant (only if 2+ participants total)
+      const participantName = participantMap[id];
+      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
+        if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
+          console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
+          startParticipantTranscriptRecording(stream, id, participantName);
+        }
       }
       const videoElement = document.getElementById(`remote-video-${id}`);
       if (videoElement && stream) {
@@ -444,13 +566,16 @@ export default function MeetingPage() {
         }
       }
       
-      // Start processing this stream if subtitles or multilingual is enabled
-      if ((subtitlesEnabled || multilingualEnabled) && stream.getAudioTracks().length > 0) {
-        const participantName = participantMap[id];
-        console.log(`Starting audio processing for ${participantName} (${id})`);
-        startRemoteStreamRecognition(stream, id, participantName);
-      }
+      // Audio processing for multilingual mode removed - using AssemblyAI only
     });
+
+    // Start local transcript recording if conditions are met (outside the loop to avoid duplicates)
+    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
+      if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
+        console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
+        startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
+      }
+    }
     
     // Cleanup audio analyzers for streams that are no longer present or participants who have left
     const currentStreamIds = new Set(Array.from(remoteStreams.keys()));
@@ -460,7 +585,23 @@ export default function MeetingPage() {
         stopAudioAnalyzer(id);
       }
     });
-  }, [remoteStreams, subtitlesEnabled, multilingualEnabled, participantMap]);
+
+    // Cleanup AssemblyAI clients for participants who left
+    if (assemblyClientsRef.current) {
+      assemblyClientsRef.current.forEach((client, id) => {
+        if (id !== 'local' && (!currentStreamIds.has(id) || participantMap[id] === undefined)) {
+          console.log(`🛑 Cleaning up AssemblyAI client for departed participant ${id}`);
+          try {
+            client.close();
+          } catch (error) {
+            console.warn(`Failed to close client for ${id}:`, error);
+          }
+          assemblyClientsRef.current.delete(id);
+          transcriptInitializingRef.current.delete(id); // Also clean up initialization tracking
+        }
+      });
+    }
+  }, [remoteStreams, participantMap]); // Start transcript recording when participants are available
 
   // parse incoming avatar output
   useEffect(() => {
@@ -1055,28 +1196,181 @@ To convert to MP4:
     };
   };
 
-  // Speech recognition for subtitles - processes remote participant audio only
+  // Start continuous transcript recording (only when 2+ participants)
+  const startTranscriptRecording = async () => {
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    if (totalParticipants < 2) {
+      console.log(`⏸️ Transcript recording requires 2+ participants, currently have ${totalParticipants}`);
+      return;
+    }
+
+    console.log(`🚀 Starting continuous AssemblyAI transcript recording for ${totalParticipants} participants`);
+    
+    // Process each remote participant's audio stream separately
+    let remoteCount = 0;
+    remoteStreams.forEach((stream, peerId) => {
+      const participantName = participantMap[peerId];
+      if (participantName && stream.getAudioTracks().length > 0) {
+        console.log(`✅ Setting up transcript recording for ${participantName} (${peerId})`);
+        startParticipantTranscriptRecording(stream, peerId, participantName);
+        remoteCount++;
+      } else {
+        console.log(`⚠️ Skipping ${peerId} - no name or audio: name=${participantName}, audio=${stream.getAudioTracks().length}`);
+      }
+    });
+
+    // Also start recording local user's speech
+    if (localStream && localStream.getAudioTracks().length > 0) {
+      console.log('✅ Setting up transcript recording for local user');
+      startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
+    } else {
+      console.log('⚠️ No local stream or audio available for transcript recording');
+    }
+    
+    console.log(`📊 Transcript recording started for ${remoteCount} remote participants + local user`);
+  };
+
+  // Toggle live subtitle display (but recording continues)
   const startSubtitles = async () => {
-    console.log('Starting subtitle recognition for remote participants');
-    
-    // Check STT service health first
-    const healthCheck = await SubtitleService.checkHealth();
-    console.log('STT Service Health:', healthCheck);
-    
-    // Enable debug mode for testing (set to false for production)
-    // SubtitleService.setDebugMode(true); // Disabled - using real speech recognition
-    
+    console.log('Enabling live subtitle display');
     setSubtitlesEnabled(true);
     subtitlesEnabledRef.current = true;
-    
-    // Start processing each remote stream directly
-    remoteStreams.forEach((stream, peerId) => {
-      // Skip departed participants
-      if (participantMap[peerId] === undefined) return;
+  };
+
+  // Process individual participant audio for continuous transcript recording
+  const startParticipantTranscriptRecording = async (stream, peerId, participantName) => {
+    try {
+      // Initialize the clients ref if it doesn't exist
+      if (!assemblyClientsRef.current) {
+        assemblyClientsRef.current = new Map();
+      }
+
+      // Check if client already exists or is being initialized for this participant
+      if (assemblyClientsRef.current.has(peerId)) {
+        console.log(`⚠️ AssemblyAI client already exists for ${participantName} (${peerId}) - skipping`);
+        return;
+      }
+
+      if (transcriptInitializingRef.current.has(peerId)) {
+        console.log(`⚠️ AssemblyAI client already being initialized for ${participantName} (${peerId}) - skipping`);
+        return;
+      }
+
+      // Mark as being initialized to prevent duplicate creation
+      transcriptInitializingRef.current.add(peerId);
+      console.log(`🎯 Creating AssemblyAI client for ${participantName} (${peerId})`);
       
-      const participantName = participantMap[peerId];
-      startRemoteStreamRecognition(stream, peerId, participantName);
-    });
+      // Create separate AssemblyAI client for this participant
+      const client = new AssemblyRealtimeClient({
+        sampleRate: 16000,
+        onPartial: (evt) => {
+          const text = evt.text?.trim();
+          if (!text) return;
+          // Partial transcripts - no logging to reduce noise
+        },
+        onFinal: (evt) => {
+          const text = evt.text?.trim();
+          if (!text) return;
+          console.log(`[${participantName}] Final: ${text}`);
+          
+          const subtitleEntry = {
+            id: `${peerId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            original: text,
+            translated: null,
+            text,
+            timestamp: new Date().toISOString(),
+            speaker: participantName, // Show actual participant name
+            isTranslated: false,
+            createdAt: Date.now()
+          };
+          
+          // ALWAYS add to permanent history (continuous recording)
+          setPermanentSubtitleHistory(prev => {
+            // Check for duplicates in recent history (last 10 entries) based on text and speaker
+            const recentEntries = prev.slice(-10);
+            const isDuplicate = recentEntries.some(entry => 
+              entry.text.trim().toLowerCase() === text.trim().toLowerCase() && 
+              entry.speaker === participantName &&
+              Math.abs(entry.createdAt - subtitleEntry.createdAt) < 5000 // Within 5 seconds
+            );
+            
+            if (isDuplicate) {
+              console.log(`🚫 Skipping duplicate transcript: [${participantName}] ${text}`);
+              return prev;
+            }
+            
+            const updated = [...prev, subtitleEntry];
+            console.log(`📝 Recorded: [${participantName}] ${text} (${updated.length} total)`);
+            
+            // Only save to server if this is the speaker's own transcript (prevent duplicates)
+            if (peerId === 'local') {
+              console.log('💾 Saving own transcript to server for late joiners');
+              transcriptAPI.saveTranscriptEntry(roomId, {
+                id: subtitleEntry.id,
+                text: subtitleEntry.text,
+                speaker: subtitleEntry.speaker,
+                speakerId: user?.id,
+                timestamp: subtitleEntry.timestamp,
+                createdAt: subtitleEntry.createdAt
+              });
+            } else {
+              console.log('👂 Not saving - this is another participant\'s speech');
+            }
+            
+            return updated;
+          });
+
+          // Only add to temporary subtitle display if subtitles are enabled
+          if (subtitlesEnabledRef.current) {
+            setSubtitleHistory(prev => {
+              const updated = [...prev.slice(-4), subtitleEntry];
+              setTimeout(() => {
+                setSubtitleHistory(cur => cur.filter(s => s.id !== subtitleEntry.id));
+              }, 8000);
+              return updated;
+            });
+          }
+        },
+        onError: (e) => console.warn(`Assembly error for ${participantName}:`, e),
+        onClose: () => console.log(`Assembly socket closed for ${participantName}`)
+      });
+
+      await client.connect();
+      
+      // Store client for cleanup and remove from initializing set
+      assemblyClientsRef.current.set(peerId, client);
+      transcriptInitializingRef.current.delete(peerId);
+
+      // Create audio context for this participant
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(2048, 1, 1);
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      processor.onaudioprocess = (e) => {
+        // Always process audio for transcript recording (independent of subtitle display)
+        const input = e.inputBuffer.getChannelData(0);
+        // Float32 [-1,1] → Int16 PCM
+        const int16 = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        client.sendPcmFrame(int16);
+      };
+
+      // Store audio context for cleanup
+      if (!audioProcessorsRef.current) {
+        audioProcessorsRef.current = new Map();
+      }
+      audioProcessorsRef.current.set(peerId, { audioCtx, processor });
+
+    } catch (error) {
+      console.error(`Failed to setup transcript recording for ${participantName}:`, error);
+      // Clean up initialization tracking on error
+      transcriptInitializingRef.current.delete(peerId);
+    }
   };
 
   // Process individual remote stream for speech recognition
@@ -1544,10 +1838,8 @@ To convert to MP4:
             original: `[STT Error: ${sttResult.error}]`,
             translated: null,
             text: `[STT Error: ${sttResult.error}]`,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+            timestamp: new Date().toISOString(),
             speaker: participantName,
-            sourceLanguage: sourceLanguage,
-            targetLanguage: targetLanguage,
             isTranslated: false
           };
           setSubtitleHistory(prev => [...prev.slice(-4), debugEntry]);
@@ -1563,33 +1855,13 @@ To convert to MP4:
       
       console.log(`Original text from ${participantName}: ${originalText}`);
       
-      // Step 2: Translation (if multilingual is enabled and target language is different)
-      let translatedText = originalText;
-      let isTranslated = false;
-      
-      if (multilingualEnabled && targetLanguage !== sourceLanguage) {
-        const translationResult = await SubtitleService.translateText(originalText, sourceLanguage, targetLanguage);
-        if (translationResult.success && translationResult.data?.translatedText) {
-          translatedText = translationResult.data.translatedText;
-          isTranslated = true;
-          console.log(`Translated text: ${translatedText}`);
-        } else {
-          console.warn(`Translation failed for ${participantName}:`, translationResult.error);
-        }
-      }
-      
-      // Step 3: Display subtitles (if enabled)
+      // Display subtitles (if enabled)
       if (subtitlesEnabled) {
         const subtitleEntry = {
           id: `${peerId}-${Date.now()}`, // Unique ID for each subtitle
-          original: originalText,
-          translated: isTranslated ? translatedText : null,
-          text: translatedText, // Show translated version if available
+          text: originalText,
           timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           speaker: participantName,
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
-          isTranslated: isTranslated,
           createdAt: Date.now() // For auto-cleanup
         };
         
@@ -1605,11 +1877,6 @@ To convert to MP4:
           
           return updated;
         });
-      }
-      
-      // Step 4: Audio output (if multilingual is enabled)
-      if (multilingualEnabled && translatedText !== originalText) {
-        await playTranslatedAudio(translatedText, peerId, participantName);
       }
       
     } catch (error) {
@@ -1673,8 +1940,9 @@ To convert to MP4:
     }
   };
 
-  // Process remote audio blob - now uses the multilingual pipeline
+  // Process remote audio blob - now uses the multilingual pipeline (LEGACY - only for fallback)
   const processRemoteAudioBlob = async (audioBlob, peerId, participantName) => {
+    // Legacy system - only used as fallback, transcript recording now handled by AssemblyAI
     if (subtitlesEnabled || multilingualEnabled) {
       await processMultilingualAudio(audioBlob, peerId, participantName);
     }
@@ -1706,8 +1974,6 @@ To convert to MP4:
           text: `[Speech detected from ${participantName}]`,
           timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           speaker: participantName,
-          sourceLanguage: sourceLanguage,
-          targetLanguage: targetLanguage,
           isTranslated: false
         };
         
@@ -1716,25 +1982,132 @@ To convert to MP4:
     }
   };
 
-  // Handle new remote participants joining during active subtitles
+  // Log participant status - transcript recording handled by remote streams useEffect
   useEffect(() => {
-    if (subtitlesEnabled && remoteStreams.size > 0) {
-      // Start recognition for any new remote streams
-      remoteStreams.forEach((stream, peerId) => {
-        // Skip departed participants
-        if (participantMap[peerId] === undefined) return;
-        
-        if (!speechRecognitionRef.current?.has(peerId)) {
-          const participantName = participantMap[peerId];
-          startRemoteStreamRecognition(stream, peerId, participantName);
-        }
-      });
+    const totalParticipants = remoteStreams.size + 1; // +1 for local user
+    if (totalParticipants >= 2) {
+      console.log(`🎙️ Meeting has ${totalParticipants} participants - transcript recording will be managed by stream handlers`);
+    } else {
+      console.log(`⏸️ Only ${totalParticipants} participant(s) in meeting - transcript recording will start when 2+ participants join`);
     }
-  }, [remoteStreams, subtitlesEnabled, participantMap]);
+  }, [remoteStreams.size, participantMap]);
+
+  // Cleanup transcript recording when leaving meeting
+  useEffect(() => {
+    return () => {
+      stopTranscriptRecording();
+    };
+  }, []);
+
+  // Auto-scroll transcript panel to the latest entry when open (only if user is near bottom)
+  useEffect(() => {
+    if (!isHistoryPanelOpen) return;
+    
+    try {
+      if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        // Check if user is near the bottom (within 100px)
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        
+        // Only auto-scroll if user is near the bottom or if panel was just opened
+        if (isNearBottom || permanentSubtitleHistory.length <= 1) {
+          if (transcriptEndRef.current) {
+            transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          } else {
+            el.scrollTop = el.scrollHeight;
+          }
+          // Reset new messages count when user is at bottom
+          setNewMessagesCount(0);
+          setShowScrollToBottom(false);
+        } else {
+          // User is scrolled up, increment new messages count
+          setNewMessagesCount(prev => prev + 1);
+          setShowScrollToBottom(true);
+        }
+      }
+    } catch {}
+  }, [permanentSubtitleHistory, isHistoryPanelOpen]);
+
+  // Handle manual scroll to detect when user reaches bottom
+  useEffect(() => {
+    if (!isHistoryPanelOpen || !transcriptScrollRef.current) return;
+    
+    const handleScroll = () => {
+      if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        
+        if (isNearBottom && showScrollToBottom) {
+          setNewMessagesCount(0);
+          setShowScrollToBottom(false);
+        }
+      }
+    };
+    
+    const scrollElement = transcriptScrollRef.current;
+    scrollElement.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      if (scrollElement) {
+        scrollElement.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [isHistoryPanelOpen, showScrollToBottom]);
+
+  // Multilingual processing removed - using AssemblyAI only
 
   const stopSubtitles = () => {
-    console.log('🛑 Stopping subtitles for all participants...');
+    console.log('🛑 Disabling live subtitle display...');
+    setSubtitlesEnabled(false);
+    subtitlesEnabledRef.current = false;
+    // Clear temporary subtitle display
+    setSubtitleHistory([]);
+  };
+
+  const stopTranscriptRecording = () => {
+    console.log('🛑 Stopping transcript recording for all participants...');
     
+    // Close all individual AssemblyAI clients
+    if (assemblyClientsRef.current) {
+      assemblyClientsRef.current.forEach((client, peerId) => {
+        try {
+          console.log(`🛑 Closing AssemblyAI client for ${peerId}`);
+          client.close();
+        } catch (error) {
+          console.warn(`Failed to close client for ${peerId}:`, error);
+        }
+      });
+      assemblyClientsRef.current.clear();
+    }
+
+    // Close all audio processors
+    if (audioProcessorsRef.current) {
+      audioProcessorsRef.current.forEach((processor, peerId) => {
+        try {
+          console.log(`🛑 Closing audio processor for ${peerId}`);
+          processor.processor.disconnect();
+          processor.audioCtx.close();
+        } catch (error) {
+          console.warn(`Failed to close audio processor for ${peerId}:`, error);
+        }
+      });
+      audioProcessorsRef.current.clear();
+    }
+
+    // Legacy cleanup (for backward compatibility)
+    if (assemblyRef.current) {
+      try { assemblyRef.current.close(); } catch {}
+      assemblyRef.current = null;
+    }
+
+    if (pcmWorkerRef.current) {
+      try {
+        pcmWorkerRef.current.processor.disconnect();
+        pcmWorkerRef.current.audioCtx.close();
+      } catch {}
+      pcmWorkerRef.current = null;
+    }
+
     if (speechRecognitionRef.current) {
       if (speechRecognitionRef.current instanceof Map) {
         // Stop all remote stream recognitions
@@ -1786,6 +2159,32 @@ To convert to MP4:
     // If we're enabling multilingual, also start subtitle processing if not already active
     if (!multilingualEnabled && !subtitlesEnabled) {
       startSubtitles();
+    }
+  };
+
+  // Generate invite link
+  const generateInviteLink = () => {
+    const baseUrl = window.location.origin;
+    const meetingUrl = `${baseUrl}/meeting/${roomId}`;
+    setInviteLink(meetingUrl);
+  };
+
+  const copyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy invite link:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = inviteLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
     }
   };
 
@@ -2002,7 +2401,10 @@ To convert to MP4:
   // Memoized grid calculation
   const { gridColumns, gridRows, isScreenShareMode } = useMemo(() => {
     const participantCount = videoTiles.length;
-    const columns = participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount));
+    // On small screens: 1 column for up to 2 participants; 2 columns for 3+ participants
+    const columns = isSmallScreen
+      ? (participantCount <= 2 ? 1 : 2)
+      : (participantCount === 1 ? 1 : participantCount === 2 ? 2 : Math.ceil(Math.sqrt(participantCount)));
     const rows = Math.ceil(participantCount / columns);
     const screenShareMode = screenSharingUserId !== null && viewMode === 'speaker';
     
@@ -2011,7 +2413,7 @@ To convert to MP4:
       gridRows: rows,
       isScreenShareMode: screenShareMode
     };
-  }, [videoTiles.length, screenSharingUserId, viewMode]);
+  }, [videoTiles.length, screenSharingUserId, viewMode, isSmallScreen]);
 
   if (!user) {
     return <div className="p-8 text-center text-white bg-gray-900 min-h-screen flex items-center justify-center">Please log in to join meetings.</div>;
@@ -2033,6 +2435,12 @@ To convert to MP4:
         isHost={roomSettings?.isHost}
         onApproveJoinRequest={approveJoinRequest}
         onDenyJoinRequest={denyJoinRequest}
+        participantMap={participantMap}
+        inviteLink={inviteLink}
+        onCopyInviteLink={() => {
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+        }}
       />
       
       
@@ -2102,9 +2510,9 @@ To convert to MP4:
                       autoPlay
                       muted={isLocal}
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                       style={{ 
-                        background: '#1f2937',
+                        background: '#000000',
                         transform: isLocal ? 'scaleX(-1)' : 'none'
                       }}
                       srcObject={isLocal ? undefined : stream}
@@ -2149,9 +2557,9 @@ To convert to MP4:
                       autoPlay
                       muted={isLocal}
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-black"
                       style={{ 
-                        background: '#1f2937',
+                        background: '#000000',
                         transform: isLocal ? 'scaleX(-1)' : 'none'
                       }}
                       srcObject={isLocal ? undefined : stream}
@@ -2206,7 +2614,7 @@ To convert to MP4:
           style={{
             left: subtitlePosition.x === 0 ? '50%' : `${subtitlePosition.x}px`,
             top: subtitlePosition.y === 0 ? 'auto' : `${subtitlePosition.y}px`,
-            bottom: subtitlePosition.y === 0 ? '80px' : 'auto',
+            bottom: subtitlePosition.y === 0 ? '8vh' : 'auto',
             transform: subtitlePosition.x === 0 && subtitlePosition.y === 0 ? 'translateX(-50%)' : 'none',
             pointerEvents: 'auto',
             userSelect: 'none'
@@ -2214,23 +2622,31 @@ To convert to MP4:
           onMouseDown={handleSubtitleMouseDown}
         >
           {subtitleHistory.slice(-1).map((subtitle) => (
-            <div key={subtitle.id} className="bg-black/90 text-white rounded-lg px-4 py-2 text-sm shadow-lg border border-gray-600 select-none">
+            <div 
+              key={subtitle.id} 
+              className="rounded-xl px-4 py-3 text-sm shadow-2xl select-none"
+              style={{
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.78) 100%)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(6px)'
+              }}
+            >
               <div className="flex items-center justify-between mb-1">
-                <span className="font-medium text-blue-300">{subtitle.speaker}</span>
+                <span className="font-semibold text-blue-300 tracking-wide">{subtitle.speaker}</span>
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
                     resetSubtitlePosition();
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="text-xs text-gray-400 hover:text-white ml-2 opacity-60 hover:opacity-100 cursor-pointer"
+                  className="text-[11px] text-gray-400 hover:text-white ml-2 opacity-70 hover:opacity-100 cursor-pointer"
                   title="Reset position"
                 >
                   ⌂
                 </button>
               </div>
-              <div className="text-white">{subtitle.text}</div>
-              <div className="text-xs text-gray-400 mt-1 flex items-center">
+              <div className="text-white text-[15px] leading-relaxed tracking-wide">{subtitle.text}</div>
+              <div className="text-[11px] text-gray-400 mt-2 flex items-center">
                 <span>💬 Drag to move • Click ⌂ to center</span>
               </div>
             </div>
@@ -2283,6 +2699,15 @@ To convert to MP4:
             <Download size={20}/>
           </button>
         )}
+
+        {/* Transcript History Button */}
+        <button 
+          onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)} 
+          className={`p-3 rounded-full text-white ${isHistoryPanelOpen ? 'bg-blue-600' : 'bg-gray-600'} hover:bg-blue-700`}
+          title={isHistoryPanelOpen ? "Close transcript history" : "View transcript history"}
+        >
+          <FileText size={20}/>
+        </button>
         
         <button 
           onClick={handleLeave} 
@@ -2368,8 +2793,11 @@ To convert to MP4:
                       subtitlesEnabled ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
                     }`}
                   >
-                    💬 Live Subtitles {subtitlesEnabled ? '(Active)' : ''}
+                    💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
                   </button>
+                  <p className="text-xs text-gray-400 mt-1 px-3">
+                    This setting only controls subtitle display.
+                  </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
                     onClick={() => {
@@ -2386,65 +2814,6 @@ To convert to MP4:
                 </div>
               </div>
 
-              {/* Language Settings */}
-              {(subtitlesEnabled || multilingualEnabled) && (
-                <div className="mb-4">
-                  <h4 className="text-xs font-medium text-gray-300 mb-2">Language Settings</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Source Language (Detection)</label>
-                      <select
-                        value={sourceLanguage}
-                        onChange={(e) => setSourceLanguage(e.target.value)}
-                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
-                      >
-                        {supportedLanguages.map(lang => (
-                          <option key={lang.code} value={lang.code}>
-                            {lang.flag} {lang.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Target Language</label>
-                      <select
-                        value={targetLanguage}
-                        onChange={(e) => setTargetLanguage(e.target.value)}
-                        className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
-                      >
-                        {supportedLanguages.filter(lang => lang.code !== 'auto').map(lang => (
-                          <option key={lang.code} value={lang.code}>
-                            {lang.flag} {lang.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="text-xs text-gray-400 bg-gray-700 p-2 rounded">
-                      <div className="flex items-center justify-between">
-                        <span>💬 Subtitles:</span>
-                        <span className={subtitlesEnabled ? 'text-green-400' : 'text-gray-500'}>
-                          {subtitlesEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </div>
-                      {/* Temporarily commented out - will re-enable later
-                      <div className="flex items-center justify-between">
-                        <span>🌐 Multilingual Audio:</span>
-                        <span className={multilingualEnabled ? 'text-purple-400' : 'text-gray-500'}>
-                          {multilingualEnabled ? 'ON' : 'OFF'}
-                        </span>
-                      </div>
-                      */}
-                      {multilingualEnabled && (
-                        <div className="mt-1 text-xs text-orange-300">
-                          ⚠️ Audio translation may have 2-3 second delay
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
 
             </div>
           )}
@@ -2536,6 +2905,155 @@ To convert to MP4:
           </div>
         </div>
       )}
+
+      {/* Transcript History Panel */}
+      <div 
+        className={`fixed top-0 right-0 h-full w-96 bg-gray-900 border-l border-gray-700 z-50 transform transition-transform duration-300 ease-in-out ${
+          isHistoryPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white flex items-center">
+            <FileText size={20} className="mr-2" />
+            Meeting Transcript
+          </h3>
+          <button
+            onClick={() => setIsHistoryPanelOpen(false)}
+            className="text-gray-400 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Panel Content */}
+        <div ref={transcriptScrollRef} className="flex-1 overflow-y-auto p-4 h-full pb-24">
+          {permanentSubtitleHistory.length === 0 ? (
+            <div className="text-gray-400 text-center mt-8">
+              <FileText size={48} className="mx-auto mb-4 opacity-50" />
+              <p>No transcript available yet.</p>
+              <p className="text-sm mt-2">Start subtitles to begin recording the conversation.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Late Joiner Summary Button */}
+              {showSummaryButton && (
+                <div className="bg-blue-900/20 rounded-xl p-4 border border-blue-600/30 mb-4 text-center">
+                  <div className="mb-3">
+                    <span className="text-blue-300 text-sm">Get a quick summary of what happened before you joined</span>
+                  </div>
+                  <button
+                    onClick={handleGenerateSummary}
+                    disabled={isLoadingSummary}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center mx-auto min-w-[140px]"
+                  >
+                    {isLoadingSummary ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      'Get Summary'
+                    )}
+                  </button>
+                </div>
+              )}
+              
+              {/* Late Joiner Summary */}
+              {lateJoinerSummary && (
+                <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-600/50 mb-4">
+                  <div className="flex items-center mb-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                    <span className="font-medium text-blue-300 text-sm">Meeting Summary (Before You Joined)</span>
+                  </div>
+                  <div className="text-gray-200 text-sm leading-relaxed">
+                    {lateJoinerSummary}
+                  </div>
+                </div>
+              )}
+              
+              {[...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map((subtitle, index) => (
+                <div 
+                  key={subtitle.id} 
+                  className="bg-gray-800/90 rounded-xl p-3 border border-gray-700 hover:bg-gray-750 transition-colors shadow-lg"
+                >
+                  {/* Header with speaker name and timestamp */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-blue-300 text-sm">
+                      {subtitle.speaker}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {formatTimestamp(subtitle.timestamp)}
+                    </span>
+                  </div>
+                  
+                  {/* Transcript text */}
+                  <div className="text-white text-sm leading-relaxed">
+                    {subtitle.text}
+                  </div>
+                  
+                </div>
+              ))}
+              <div ref={transcriptEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Panel Footer with stats */}
+        <div className="sticky bottom-0 left-0 right-0 bg-gray-800/95 border-t border-gray-700 p-3">
+          {/* Scroll to bottom button */}
+          {showScrollToBottom && (
+            <div className="flex justify-center mb-2">
+              <button
+                onClick={scrollToBottomOfTranscript}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs transition-colors shadow-lg"
+              >
+                <span>{newMessagesCount} new message{newMessagesCount !== 1 ? 's' : ''}</span>
+                <svg width="16" height="16" fill="currentColor" className="bi bi-arrow-down" viewBox="0 0 16 16">
+                  <path fillRule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                </svg>
+              </button>
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <span>{permanentSubtitleHistory.length} transcript entries</span>
+            <div className="flex space-x-4">
+              <button 
+                onClick={() => {
+                  const transcript = [...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map(entry => 
+                    `[${formatTimestamp(entry.timestamp)}] ${entry.speaker}: ${entry.text}`
+                  ).join('\n\n');
+                  navigator.clipboard.writeText(transcript);
+                }}
+                className="text-blue-400 hover:text-blue-300 transition-colors"
+                title="Copy transcript to clipboard"
+              >
+                Copy All
+              </button>
+              <button 
+                onClick={() => {
+                  const transcript = [...permanentSubtitleHistory].sort((a, b) => a.createdAt - b.createdAt).map(entry => 
+                    `[${formatTimestamp(entry.timestamp)}] ${entry.speaker}: ${entry.text}`
+                  ).join('\n\n');
+                  const blob = new Blob([transcript], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `meeting-transcript-${new Date().toISOString().split('T')[0]}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="text-green-400 hover:text-green-300 transition-colors"
+                title="Download transcript as text file"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
 
     </div>
   );

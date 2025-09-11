@@ -117,9 +117,15 @@ router.post('/upload', upload.single('file'), fileValidationMiddleware, (req, re
   
   try {
     // Create proper file URL using environment variable or default local server
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? (process.env.BACKEND_URL || 'https://webrtc-signaling-server.onrender.com')
-      : 'http://localhost:8181';
+    // For file serving, we need the base domain without /api path
+    let baseUrl;
+    if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging') {
+      // Remove /api from BACKEND_URL for file serving
+      const backendUrl = process.env.BACKEND_URL || 'https://webrtc-signaling-server.onrender.com';
+      baseUrl = backendUrl.replace('/api', '');
+    } else {
+      baseUrl = 'http://localhost:8181';
+    }
     
     const fileUrl = `${baseUrl}/uploads/messages/${req.file.filename}`;
     

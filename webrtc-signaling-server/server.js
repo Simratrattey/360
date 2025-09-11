@@ -17,13 +17,9 @@ import { Server as SocketIO } from 'socket.io';
 import User    from './src/models/user.js';
 import Message from './src/models/message.js';
 import Conversation, { ReadReceipt } from './src/models/conversation.js';
+import Meeting from './src/models/meeting.js';
 
 import { generateReply } from './llm.js';
-import { 
-  transcribeAudio, 
-  generateAudio, 
-  translateText 
-} from './realtime-speech/index.js';
 
 import authRoutes from './src/routes/auth.js';
 import authMiddleware from './src/middleware/auth.js';
@@ -34,6 +30,8 @@ import fileRoutes from './src/routes/file.js';
 import meetingRoutes from './src/routes/meetings.js';
 import sfuRoutes, { producers } from './src/routes/sfu.js';
 import notificationRoutes from './src/routes/notification.js';
+import transcriptRoutes from './src/routes/transcript.js';
+import dashboardRoutes from './src/routes/dashboard.js';
 import { createNotification } from './src/controllers/notificationController.js';
 
 import helmet from 'helmet';
@@ -242,249 +240,79 @@ app.use(
 );
 // ──────────────────────────────────────────────────────────────────────────
 
-// Bot reply endpoint:
-//  • If client POSTs multipart/form-data with field "audio", we STT → LLM.
-//  • Else if client POSTs JSON { text }, we skip STT and go straight to LLM.
-// Returns JSON { reply: "…assistant response text…" }.
+// Bot reply endpoint - text only
 app.post(
   '/api/bot/reply',
-  upload.single('audio'),           // parse an uploaded audio file
-  express.json({ limit: '1mb' }),   // parse JSON text fallback
+  express.json({ limit: '1mb' }),
   async (req, res) => {
     try {
-      let userText;
-
-      // 1) JSON text path (highest priority)
-      if (req.body?.text) {
-        userText = req.body.text;
-      }
-      // 2) Audio path
-      else if (req.file) {
-        // 1) Audio path: read and transcribe
-        const audioBuf = await fs.promises.readFile(req.file.path);
-        userText = await transcribeAudio(audioBuf, {
-          prompt:   '',        // optional STT prompt
-          language: 'auto',
-          translate: false
-        });
-      }
-      // 3) Neither provided
-      else {
-        return res.status(400).json({ error: 'No audio or text provided' });
+      const userText = req.body?.text;
+      
+      if (!userText) {
+        return res.status(400).json({ error: 'No text provided' });
       }
 
-      // 3) LLM reply
       const replyText = await generateReply(userText);
-
-      // 4) Return JSON
       return res.json({ reply: replyText });
     } catch (err) {
       console.error('❌ /api/bot/reply error:', err);
       return res.status(500).json({ error: 'Bot reply failed', details: err.toString() });
-    } finally {
-      // Clean up uploaded file
-      if (req.file) {
-        await fs.promises.unlink(req.file.path).catch(() => {/* ignore */});
-      }
     }
   }
 );
 
-// TTS endpoint: accepts { text } and returns audio bytes (Opus/WebM)
-app.post(
-  '/bot/tts',
-  express.json({ limit: '200kb' }),
-  async (req, res) => {
-    try {
-      const text = req.body?.text;
-      if (!text) return res.status(400).json({ error: 'No "text" provided' });
 
-      // 1) get the raw axios response from ElevenLabs
-      const elevenResp = await generateAudio(text);
-      const audioBuffer = Buffer.from(elevenResp.data);
-      const contentType = elevenResp.headers['content-type'] || 'application/octet-stream';
 
-      // 2) proxy back the exact Content-Type
-      res.set({
-        'Content-Type':        contentType,
-        'Content-Length':      audioBuffer.length,
-        'Cache-Control':       'no-cache'
-      });
-      return res.send(audioBuffer);
-    } catch (err) {
-      // Unwrap any Buffer payload from Axios
-      let detail = err.response?.data;
-      if (detail && Buffer.isBuffer(detail)) {
-        const str = detail.toString('utf8');
-        try {
-          detail = JSON.parse(str);
-        } catch {
-          detail = str;
+
+
+// AssemblyAI ephemeral token generation
+app.post('/api/stt/token', authMiddleware, async (req, res) => {
+  try {
+    const apiKey = process.env.ASSEMBLYAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'ASSEMBLYAI_API_KEY not configured' });
+    }
+
+    const { expires_in_seconds = 300 } = req.body; // Reduced to 5 minutes for testing
+    
+    // Generate ephemeral token from AssemblyAI
+    const tokenResponse = await fetch(
+      `https://streaming.assemblyai.com/v3/token?expires_in_seconds=${expires_in_seconds}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': apiKey
         }
       }
-      console.error('❌ /bot/tts error:', err.message, detail);
-      return res.status(500).json({
-        error:   'TTS generation failed',
-        details: detail || err.message
+    );
+
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error('AssemblyAI token generation failed:', errorData);
+      return res.status(500).json({ 
+        error: 'Failed to generate ephemeral token',
+        details: errorData
       });
     }
-  }
-);
 
-// Translation endpoint: accepts { text, sourceLanguage, targetLanguage }
-app.post(
-  '/api/translate',
-  express.json({ limit: '200kb' }),
-  async (req, res) => {
-    try {
-      const { text, sourceLanguage = 'auto', targetLanguage = 'en' } = req.body;
-      
-      if (!text) {
-        return res.status(400).json({ error: 'No "text" provided' });
-      }
-
-      const translatedText = await translateText(text, sourceLanguage, targetLanguage);
-      
-      return res.json({ 
-        originalText: text,
-        translatedText,
-        sourceLanguage,
-        targetLanguage
-      });
-
-    } catch (err) {
-      console.error('❌ /api/translate error:', err.message);
-      return res.status(500).json({
-        error: 'Translation failed',
-        details: err.message
-      });
-    }
-  }
-);
-
-// STT endpoint with fallback for non-FFmpeg environments
-app.post(
-  '/api/stt',
-  upload.single('audio'),
-  async (req, res) => {
-    try {
-      console.log('[STT] Request received:', {
-        hasFile: !!req.file,
-        body: req.body,
-        fileSize: req.file?.size,
-        filename: req.file?.filename,
-        mimetype: req.file?.mimetype
-      });
-
-      if (!req.file) {
-        console.error('[STT] No audio file provided');
-        return res.status(400).json({ error: 'No audio file provided' });
-      }
-
-      console.log('[STT] Reading audio file...');
-      const audioBuffer = await fs.promises.readFile(req.file.path);
-      const { language = 'auto', translate = false } = req.body;
-      
-      console.log(`[STT] Processing ${audioBuffer.length} bytes of audio, language=${language}, translate=${translate}`);
-      console.log(`[STT] GROQ_API_KEY exists: ${!!process.env.GROQ_API_KEY}`);
-      
-      const transcription = await transcribeAudio(audioBuffer, {
-        language,
-        translate: translate === 'true'
-      });
-      
-      console.log(`[STT] Transcription successful: ${transcription}`);
-      
-      return res.json({ 
-        transcription,
-        language,
-        translate
-      });
-
-    } catch (err) {
-      console.error('❌ /api/stt error:', err.message);
-      console.error('❌ /api/stt stack:', err.stack);
-      return res.status(500).json({
-        error: 'Speech-to-text failed',
-        details: err.message
-      });
-    } finally {
-      // Clean up uploaded file
-      if (req.file) {
-        await fs.promises.unlink(req.file.path).catch(() => {});
-      }
-    }
-  }
-);
-
-// STT health check endpoint
-app.get('/api/stt-health', async (req, res) => {
-  try {
-    const { transcribeAudio } = await import('./realtime-speech/index.js');
-    res.json({ 
-      status: 'ok',
-      sttAvailable: typeof transcribeAudio === 'function',
-      groqKeyConfigured: !!process.env.GROQ_API_KEY,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    res.json({ 
-      status: 'error', 
-      error: err.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Test FFmpeg availability endpoint
-app.get('/api/test-ffmpeg', async (req, res) => {
-  try {
-    const { checkFFmpegAvailable } = await import('./realtime-speech/audioConverter.js');
-    const available = await checkFFmpegAvailable();
-    res.json({ ffmpegAvailable: available });
-  } catch (err) {
-    res.json({ ffmpegAvailable: false, error: err.message });
-  }
-});
-
-// Debug STT endpoint (for testing without real API keys)
-app.post('/api/stt-debug', upload.single('audio'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
-    }
-
-    const audioBuffer = await fs.promises.readFile(req.file.path);
-    const { language = 'auto', translate = false } = req.body;
+    const tokenData = await tokenResponse.json();
     
-    console.log(`[STT-DEBUG] Processing ${audioBuffer.length} bytes of audio`);
-    console.log(`[STT-DEBUG] Language: ${language}, Translate: ${translate}`);
-    console.log(`[STT-DEBUG] GROQ_API_KEY set: ${process.env.GROQ_API_KEY ? 'Yes' : 'No'}`);
-    console.log(`[STT-DEBUG] GROQ_API_KEY value: ${process.env.GROQ_API_KEY?.substring(0, 10)}...`);
-    
-    // Return mock transcription for testing
-    const mockTranscription = `Mock transcription for ${audioBuffer.length} bytes of audio data`;
-    
-    return res.json({ 
-      transcription: mockTranscription,
-      language,
-      translate,
-      debug: true
+    return res.json({
+      token: tokenData.token,
+      expiresIn: tokenData.expires_in_seconds,
+      expiresAt: Date.now() + (tokenData.expires_in_seconds * 1000)
     });
-
+    
   } catch (err) {
-    console.error('❌ /api/stt-debug error:', err.message);
-    return res.status(500).json({
-      error: 'STT debug failed',
+    console.error('Token generation error:', err);
+    return res.status(500).json({ 
+      error: 'Failed to generate ephemeral token',
       details: err.message
     });
-  } finally {
-    // Clean up uploaded file
-    if (req.file) {
-      await fs.promises.unlink(req.file.path).catch(() => {});
-    }
   }
 });
+
+
 // ─────────────────────────────────────────────────────────────────────
 
 // Health check for Render
@@ -596,8 +424,20 @@ const sendNotificationToUser = (userId, notification) => {
 // Keep the old function for backward compatibility
 const sendNotification = sendNotificationToUser;
 
-// Make sendNotification available to routes
+// Function to send dashboard refresh events
+const sendDashboardRefresh = (userId, data) => {
+  const userSocket = onlineUsers.get(userId);
+  if (userSocket) {
+    console.log(`🔄 Sending dashboard refresh to user ${userId} via socket ${userSocket.socketId}`);
+    io.to(userSocket.socketId).emit('dashboard:refresh', data);
+  } else {
+    console.log(`🔄 User ${userId} not online, dashboard refresh will happen on next login`);
+  }
+};
+
+// Make functions available to routes
 app.locals.sendNotification = sendNotification;
+app.locals.sendDashboardRefresh = sendDashboardRefresh;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
 
@@ -679,7 +519,7 @@ io.on('connection', async socket => {
   io.emit('user:online', { userId: socket.userId, user: onlineUsers.get(socket.userId) });
   
   // roomId can still come from client, optionally with meeting info
-  socket.on('joinRoom', (roomId, meetingInfo = null) => {
+  socket.on('joinRoom', async (roomId, meetingInfo = null) => {
     console.log(`[Signaling] socket ${socket.id} requesting joinRoom ${roomId}`);
     if (meetingInfo) {
       console.log(`[Signaling] 📋 Received meeting info:`, meetingInfo);
@@ -687,6 +527,17 @@ io.on('connection', async socket => {
     
     if (socket.currentRoom) {
       socket.leave(socket.currentRoom);
+      // Remove participant from previous meeting
+      try {
+        const prevMeeting = await Meeting.findOne({ roomId: socket.currentRoom, status: 'active' });
+        if (prevMeeting) {
+          await prevMeeting.removeParticipant(socket.userId);
+          console.log(`[Meeting] User ${socket.userId} left room ${socket.currentRoom}`);
+        }
+      } catch (error) {
+        console.error('[Meeting] Error removing participant from previous meeting:', error);
+      }
+      
       // Remove by socketId, not username
       if (rooms[socket.currentRoom]) {
         rooms[socket.currentRoom].participants = rooms[socket.currentRoom].participants.filter(
@@ -699,20 +550,48 @@ io.on('connection', async socket => {
     socket.currentRoom = roomId;
 
     if (!rooms[roomId]) {
-      // Use provided meeting info or try to get from cache or use defaults
-      const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
+      // First check if there's a scheduled meeting with this roomId
+      let existingMeeting = null;
+      try {
+        existingMeeting = await Meeting.findOne({ roomId: roomId, status: 'scheduled' });
+      } catch (error) {
+        console.error('[Signaling] Error looking for scheduled meeting:', error);
+      }
+
+      let roomInfo;
+      if (existingMeeting) {
+        // Start the scheduled meeting
+        console.log(`[Signaling] 🎯 Found scheduled meeting "${existingMeeting.title}" for room ${roomId}`);
+        await existingMeeting.startMeeting();
+        
+        roomInfo = {
+          name: existingMeeting.title,
+          visibility: existingMeeting.visibility,
+          createdAt: existingMeeting.createdAt.toISOString(),
+          host: existingMeeting.organizer.toString() // Scheduled meeting organizer becomes host
+        };
+      } else {
+        // Use provided meeting info or try to get from cache or use defaults for instant meeting
+        const storedMeetingInfo = meetingInfo || (global.meetingInfoCache ? global.meetingInfoCache[roomId] : null);
+        roomInfo = {
+          name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
+          visibility: storedMeetingInfo?.visibility || 'public',
+          createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+          host: socket.userId // First person to join becomes host for instant meetings
+        };
+      }
       
       rooms[roomId] = { 
         offers: [], 
         participants: [], 
-        host: socket.userId, // First person to join becomes host
+        host: roomInfo.host,
         avatarApiEnabled: true, // Default to enabled
         isRecording: false, // Track recording status
         recordedBy: null, // Who started the recording
         // Enhanced meeting info
-        name: storedMeetingInfo?.name || `Room ${roomId.slice(-6)}`,
-        visibility: storedMeetingInfo?.visibility || 'public',
-        createdAt: storedMeetingInfo?.createdAt || new Date().toISOString(),
+        name: roomInfo.name,
+        visibility: roomInfo.visibility,
+        createdAt: roomInfo.createdAt,
         // Join request tracking
         pendingJoinRequests: new Map() // userId -> request info
       };
@@ -720,9 +599,44 @@ io.on('connection', async socket => {
       console.log(`[Signaling] ✅ Created room ${roomId} with info:`, {
         name: rooms[roomId].name,
         visibility: rooms[roomId].visibility,
-        host: rooms[roomId].host
+        host: rooms[roomId].host,
+        type: existingMeeting ? 'scheduled' : 'instant'
+      });
+      
+      // Create meeting record in database only if it's not a scheduled meeting
+      if (!existingMeeting) {
+        try {
+          const meeting = new Meeting({
+            title: rooms[roomId].name,
+            roomId: roomId,
+            organizer: socket.userId,
+            type: 'instant',
+            status: 'active',
+            visibility: rooms[roomId].visibility,
+            startTime: new Date(),
+            actualStartTime: new Date(),
+            metadata: {
+              avatarApiEnabled: rooms[roomId].avatarApiEnabled
+            }
+          });
+        
+          await meeting.save();
+          rooms[roomId].meetingId = meeting._id; // Store meeting ID in room
+          console.log(`[Meeting] ✅ Created meeting record: ${meeting._id}`);
+        } catch (error) {
+          console.error('[Meeting] Error creating meeting record:', error);
+        }
+      }
+      
+      // Notify clients that a new room opened (dashboard can refresh)
+      io.emit('roomOpened', {
+        roomId,
+        name: rooms[roomId].name,
+        visibility: rooms[roomId].visibility,
+        createdAt: rooms[roomId].createdAt
       });
     }
+    
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
     // Only add if not already present
@@ -730,6 +644,17 @@ io.on('connection', async socket => {
       rooms[roomId].participants.push({ socketId: socket.id, userName, userId: socket.userId });
     }
     connectedSockets.push({ socketId: socket.id, userName, roomId });
+
+    // Add participant to meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: roomId, status: 'active' });
+      if (meeting) {
+        await meeting.addParticipant(socket.userId, userName);
+        console.log(`[Meeting] User ${userName} joined meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error adding participant to meeting:', error);
+    }
 
     io.to(roomId).emit('roomParticipants', rooms[roomId].participants);
     socket.emit('availableOffers', rooms[roomId].offers);
@@ -825,7 +750,7 @@ io.on('connection', async socket => {
     }
   });
 
-  socket.on('hangup', (peerId, ack) => {
+  socket.on('hangup', async (peerId, ack) => {
     console.log('[Signaling] hangup received from client:', peerId, 'typeof:', typeof peerId);
     const rid = socket.currentRoom;
     console.log('[Signaling] 🔔 hangup from', peerId, 'room', rid, 'socket.id:', socket.id, 'userName:', userName);
@@ -833,6 +758,18 @@ io.on('connection', async socket => {
       if (typeof ack === 'function') ack();
       return;
     }
+    
+    // Remove participant from meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+      if (meeting) {
+        await meeting.removeParticipant(socket.userId);
+        console.log(`[Meeting] User ${userName} left meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error removing participant from meeting:', error);
+    }
+    
     console.log('[Signaling] Emitting hangup to room', rid, 'with peerId:', peerId, 'participants:', rooms[rid]?.participants);
     socket.to(rid).emit('hangup', peerId);
     if (rooms[rid]) {
@@ -843,7 +780,19 @@ io.on('connection', async socket => {
       rooms[rid].offers = rooms[rid].offers.filter(o => o.offererSocketId !== socket.id);
       io.to(rid).emit('availableOffers', rooms[rid].offers);
       io.to(rid).emit('roomParticipants', rooms[rid].participants);
+      
+      // End meeting if no participants left
       if (rooms[rid].participants.length === 0) {
+        try {
+          const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+          if (meeting) {
+            await meeting.endMeeting();
+            console.log(`[Meeting] ✅ Meeting ${meeting._id} ended - no participants remaining`);
+          }
+        } catch (error) {
+          console.error('[Meeting] Error ending meeting:', error);
+        }
+        
         io.emit('roomClosed', rid);
         delete rooms[rid];
       }
@@ -856,13 +805,24 @@ io.on('connection', async socket => {
   });
   
   // Handle disconnections
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const rid = socket.currentRoom;
     if (!rid) return;
     // Remove user from online users
     onlineUsers.delete(socket.userId);
     io.emit('user:offline', { userId: socket.userId });
     console.log('[Signaling] 🔔 disconnect handler on server for', socket.id);
+    
+    // Remove participant from meeting record
+    try {
+      const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+      if (meeting) {
+        await meeting.removeParticipant(socket.userId);
+        console.log(`[Meeting] User ${socket.userId} disconnected from meeting ${meeting._id}`);
+      }
+    } catch (error) {
+      console.error('[Meeting] Error removing participant from meeting on disconnect:', error);
+    }
     
     if (rid) {
       socket.to(rid).emit('hangup', socket.id);
@@ -879,8 +839,18 @@ io.on('connection', async socket => {
         io.to(rid).emit('roomParticipants', rooms[rid].participants);
         io.to(rid).emit('availableOffers', rooms[rid].offers);
         
-        // If room is empty, clean it up
+        // End meeting if no participants left
         if (rooms[rid].participants.length === 0) {
+          try {
+            const meeting = await Meeting.findOne({ roomId: rid, status: 'active' });
+            if (meeting) {
+              await meeting.endMeeting();
+              console.log(`[Meeting] ✅ Meeting ${meeting._id} ended - last participant disconnected`);
+            }
+          } catch (error) {
+            console.error('[Meeting] Error ending meeting on disconnect:', error);
+          }
+          
           io.emit('roomClosed', rid);
           delete rooms[rid];
         }
@@ -1091,12 +1061,18 @@ io.on('connection', async socket => {
     try {
       await session.withTransaction(async () => {
         // Create and save the message
+        // Filter out invalid replyTo IDs (temp IDs are not valid ObjectIds)
+        let validReplyTo = null;
+        if (replyTo && mongoose.Types.ObjectId.isValid(replyTo)) {
+          validReplyTo = replyTo;
+        }
+        
         const message = new Message({
           conversation: conversationId,
           sender: userId,
           text,
           file,
-          replyTo,
+          replyTo: validReplyTo,
         });
         
         await message.save({ session });
@@ -1167,9 +1143,6 @@ io.on('connection', async socket => {
         }
       });
       
-      // Also send to the conversation room for anyone currently viewing it
-      io.to(conversationId).emit('chat:new', messageForClient);
-      
       // Create and send notifications
       const messagePreview = text 
         ? (text.length > 50 ? text.substring(0, 50) + '...' : text)
@@ -1180,15 +1153,28 @@ io.on('connection', async socket => {
           // Skip notification for sender
           if (recipientId === userId) continue;
           
-          // Create notification
+          // Create notification with conversation context for better differentiation
+          const senderName = populatedMessage.sender.fullName || populatedMessage.sender.username;
+          let notificationTitle = senderName;
+          
+          // Add conversation context to differentiate DM vs Group/Community messages
+          if (conversation.type === 'group' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          } else if (conversation.type === 'community' && conversation.name) {
+            notificationTitle = `${senderName} in ${conversation.name}`;
+          }
+          // For DMs, keep it simple with just sender name
+          
           const notification = await createNotification(
             recipientId,
             userId,
             'message',
-            `${populatedMessage.sender.fullName || populatedMessage.sender.username}`,
+            notificationTitle,
             messagePreview,
             {
               conversationId: conversationId,
+              conversationType: conversation.type,
+              conversationName: conversation.name,
               messageId: populatedMessage._id.toString(),
               senderAvatar: populatedMessage.sender.avatarUrl
             }
@@ -1290,9 +1276,6 @@ io.on('connection', async socket => {
                 io.to(memberSocket.socketId).emit('chat:read', readData);
               }
             });
-            
-            // Also send to the conversation room for anyone currently viewing it
-            io.to(conversation._id.toString()).emit('chat:read', readData);
             
             // Update in-memory status if it exists
             const status = messageStatus.get(messageId);
@@ -1451,6 +1434,8 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/transcripts', transcriptRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Serve uploaded message files statically from /uploads/messages at /uploads/messages/*.
 app.use('/uploads/messages', (req, res, next) => {

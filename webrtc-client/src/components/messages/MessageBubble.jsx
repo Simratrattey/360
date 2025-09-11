@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Smile, Edit, Trash2, Reply, Download, X, Check, CheckCheck, Play, Pause, Volume2, FileText, Code, Archive, MoreVertical, Copy, Pin, Star, ExternalLink, Clock, AlertCircle, RotateCcw } from 'lucide-react';
-import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl } from '../../api/messageService';
+import { downloadFile, getFileIcon, formatFileSize, canPreview, getPreviewUrl, constructFileUrl, isAvatarMessage } from '../../api/messageService';
 import DOMPurify from 'dompurify';
 import MessageErrorBoundary from '../MessageErrorBoundary';
 import LinkPreview from './LinkPreview';
+import AvatarMessageBubble from './AvatarMessageBubble';
 import { messageStatus, MESSAGE_STATUS, getMessageStatusInfo } from '../../services/messageStatus';
 
 // Memoize MessageBubble to prevent unnecessary re-renders when props haven't changed.
@@ -40,7 +41,8 @@ function MessageBubble({
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [showReadTooltip, setShowReadTooltip] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [imgLoading, setImgLoading] = useState(true);
+  const [imgLoading, setImgLoading] = useState(false);
+  const [imgRetryCount, setImgRetryCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 100, left: 100, placement: 'bottom-right' });
@@ -50,6 +52,11 @@ function MessageBubble({
   // File type checks - moved up to prevent hoisting issues
   const isImage = msg.file && msg.file.type && msg.file.type.startsWith('image/');
   const isVideo = msg.file && msg.file.type && msg.file.type.startsWith('video/');
+  
+  // Avatar conversation detection
+  const isAvatarConversation = msg.isAvatarConversationMessage || 
+                               conversationType === 'ai_avatar' || 
+                               msg.conversationId?.startsWith('avatar_conversation_');
   const isAudio = msg.file && msg.file.type && msg.file.type.startsWith('audio/');
   const isDocument = msg.file && msg.file.type && (msg.file.type.startsWith('application/pdf') || msg.file.type.includes('document') || msg.file.type.includes('spreadsheet') || msg.file.type.includes('presentation'));
   
@@ -141,6 +148,13 @@ function MessageBubble({
   const renderStatusIndicator = () => {
     // Only show status for own messages
     if (!isOwn) return null;
+    
+    // Don't show status indicators for avatar conversation messages
+    if (msg.isAvatarConversationMessage || 
+        conversationType === 'ai_avatar' || 
+        msg.conversationId?.startsWith('avatar_conversation_')) {
+      return null;
+    }
     
     // Get status info from the message status service with error handling
     const tempId = msg.tempId || messageId;
@@ -299,14 +313,15 @@ function MessageBubble({
   // Helper function to detect URLs in text
   const detectUrls = (text) => {
     if (!text) return [];
-    const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/g;
+    const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
     return text.match(urlRegex) || [];
   };
 
   const urls = detectUrls(msg.text);
 
   // Helper: safely highlight mentions in text with XSS protection
-  const renderTextWithMentions = useMemo(() => (text) => {
+  const renderTextWithMentions = useMemo(() => {
+    const renderText = (text) => {
     if (!text) return null;
     
     // First sanitize the input text to prevent XSS
@@ -369,6 +384,8 @@ function MessageBubble({
       }
       return part;
     });
+    };
+    return renderText;
   }, [searchFilters, currentUserId, getUserObj, highlightSearchTerms]);
 
   const renderFilePreview = () => {
@@ -405,71 +422,142 @@ function MessageBubble({
 
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
-      // Enhanced image preview with better styling and loading states
+      // Enhanced WhatsApp/Slack-style image preview with progressive loading
       if (isImage) {
+        // Try different URL construction approaches
+        const getImageSrc = () => {
+          const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+          let src;
+          
+          
+          if (imgRetryCount === 0) {
+            // First attempt: Use the constructed file URL
+            src = constructFileUrl(msg.file, true);
+          } else if (imgRetryCount === 1) {
+            // Second attempt: Try without auth token
+            src = constructFileUrl(msg.file, false);
+          } else if (imgRetryCount === 2) {
+            // Third attempt: Direct construction from base URL + filename
+            const filename = msg.file.url || msg.file.name;
+            // Extract just the filename if it's a full URL
+            const cleanFilename = filename.split('/').pop().split('?')[0];
+            
+            // Add auth token for this attempt too
+            const token = localStorage.getItem('token');
+            let directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+            if (token) {
+              directUrl += `?token=${encodeURIComponent(token)}`;
+            }
+            src = directUrl;
+          }
+          
+          console.log('[getImageSrc] Generated URL:', src);
+          return src;
+        };
+        
+        const imageSrc = getImageSrc();
+        
         return (
           <div className="relative group">
-            {/* Image container with loading state */}
-            <div className="relative overflow-hidden rounded-lg bg-gray-100">
-              {/* Always try to show the image first */}
-              <img
-                src={previewUrl || fileUrl}
-                alt={msg.file.name}
-                onError={(e) => {
-                  setImgError(true);
-                  setImgLoading(false);
-                }}
-                onLoad={() => {
-                  setImgError(false);
-                  setImgLoading(false);
-                }}
-                onLoadStart={() => {
-                  setImgLoading(true);
-                  setImgError(false);
-                }}
-                className={`max-w-full max-h-80 object-cover transition-all duration-300 hover:scale-105 cursor-pointer ${
-                  imgLoading ? 'opacity-0' : 'opacity-100'
-                }`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Open image in full screen or modal
-                  window.open(previewUrl || fileUrl, '_blank');
-                }}
-                title="Click to view full size"
-                style={{ display: imgError ? 'none' : 'block' }}
-              />
-              
-              {/* Loading placeholder - show while loading */}
+            {/* Image container with better loading states */}
+            <div className="relative overflow-hidden rounded-lg bg-gray-100 min-h-[120px] max-w-sm">
+              {/* Background blur for progressive loading effect */}
               {imgLoading && !imgError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
                 </div>
               )}
+              
+              {/* Main image */}
+              {!imgError && (
+                <img
+                  src={imageSrc}
+                  alt={msg.file.name}
+                  onError={(e) => {
+                    console.error('Image failed to load:', imageSrc, e);
+                    setImgError(true);
+                    setImgLoading(false);
+                    
+                    // Retry with different approach after delay
+                    if (imgRetryCount < 2) {
+                      setTimeout(() => {
+                        setImgRetryCount(prev => prev + 1);
+                        setImgError(false);
+                        setImgLoading(true);
+                      }, 1000);
+                    }
+                  }}
+                  onLoad={() => {
+                    setImgError(false);
+                    setImgLoading(false);
+                  }}
+                  onLoadStart={() => {
+                    setImgLoading(true);
+                    setImgError(false);
+                  }}
+                  className={`w-full h-auto max-h-80 object-cover transition-all duration-500 cursor-pointer hover:brightness-110 ${
+                    imgLoading ? 'opacity-0' : 'opacity-100'
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Create image modal/lightbox instead of opening in new tab
+                    window.open(imageSrc, '_blank');
+                  }}
+                  title="Click to view full size"
+                  loading="lazy"
+                />
+              )}
+              
+              {/* Download button overlay */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownload(getImageSrc(), msg.file.name);
+                  }}
+                  className="p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
+                  title="Download image"
+                >
+                  <Download className="h-3 w-3" />
+                </button>
+              </div>
             </div>
             
-            {/* Error fallback */}
+            {/* Enhanced error fallback */}
             {imgError && (
-              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <span className="text-3xl">{fileIcon}</span>
+              <div className="flex items-center space-x-3 p-4 bg-gradient-to-br from-red-50 to-pink-50 border border-red-100 rounded-lg">
+                <div className="flex-shrink-0">
+                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <span className="text-2xl">🖼️</span>
+                  </div>
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-                  <p className="text-xs text-gray-500">{fileSize}</p>
-                  <p className="text-xs text-gray-400">Image preview unavailable</p>
+                  <p className="text-xs text-gray-500">{fileSize} • {msg.file.type}</p>
+                  <p className="text-xs text-red-600">
+                    {imgRetryCount >= 2 ? 'Image cannot be loaded' : 'Loading failed, retrying...'}
+                  </p>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex flex-col space-y-1">
+                  {imgRetryCount < 2 && (
+                    <button
+                      onClick={() => {
+                        setImgError(false);
+                        setImgLoading(true);
+                        setImgRetryCount(prev => prev + 1);
+                      }}
+                      className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs transition-colors"
+                      title="Try loading again"
+                    >
+                      Retry
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      setImgError(false);
-                      setImgLoading(true);
-                    }}
-                    className="px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs transition-colors"
-                    title="Retry loading preview"
-                  >
-                    Retry
-                  </button>
-                  <button
-                    onClick={() => handleDownload(fileUrl, msg.file.name)}
-                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm transition-colors"
+                    onClick={() => handleDownload(getImageSrc(), msg.file.name)}
+                    className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors"
+                    title="Download file"
                   >
                     Download
                   </button>
@@ -482,7 +570,7 @@ function MessageBubble({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDownload(fileUrl, msg.file.name);
+                  handleDownload(getImageSrc(), msg.file.name);
                 }}
                 className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
                 title="Download image"
@@ -566,9 +654,58 @@ function MessageBubble({
           </div>
         );
       }
-      // PDF and text preview via iframe
+      // Enhanced PDF preview - first page only
+      if (msg.file.type === 'application/pdf') {
+        const pdfPreviewUrl = `${previewUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+        
+        return (
+          <div className="flex flex-col space-y-2">
+            <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden group">
+              {/* PDF Preview iframe - first page only */}
+              <iframe
+                src={pdfPreviewUrl}
+                title={`${msg.file.name} - Page 1`}
+                className="w-full h-full"
+                style={{ border: 'none' }}
+                onError={() => {
+                  // Fallback to basic preview if iframe fails
+                  console.warn('PDF iframe failed to load, showing file info only');
+                }}
+              />
+              
+              {/* Overlay for first page indicator */}
+              <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md">
+                Page 1 Preview
+              </div>
+              
+              {/* Download button overlay */}
+              <button
+                onClick={() => handleDownload(fileUrl, msg.file.name)}
+                className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                title="Download PDF"
+              >
+                <Download size={16} />
+              </button>
+              
+              {/* Click overlay to open full PDF */}
+              <div 
+                className="absolute inset-0 cursor-pointer bg-transparent hover:bg-blue-500 hover:bg-opacity-10 transition-colors duration-200"
+                onClick={() => window.open(fileUrl, '_blank')}
+                title="Click to view full PDF"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <span className="text-red-500">{fileIcon}</span>
+              <span className="truncate flex-1 font-medium">{msg.file.name}</span>
+              <span className="text-xs bg-gray-100 px-2 py-1 rounded">{fileSize}</span>
+            </div>
+          </div>
+        );
+      }
+      
+      // Text and other document preview via iframe
       if (
-        msg.file.type === 'application/pdf' ||
         msg.file.type.startsWith('text/') ||
         msg.file.type === 'application/json' ||
         msg.file.type === 'application/xml'
@@ -657,6 +794,15 @@ function MessageBubble({
       r.user === currentUserId || r.user?._id === currentUserId
     ) || false;
   }, [reactionGroups, currentUserId]);
+
+  // Handle avatar messages with special rendering
+  if (isAvatarMessage(msg)) {
+    return (
+      <MessageErrorBoundary>
+        <AvatarMessageBubble message={msg} />
+      </MessageErrorBoundary>
+    );
+  }
 
   return (
     <div 
@@ -793,8 +939,10 @@ function MessageBubble({
                 </div>
               )}
               
-              {/* Sending indicator - only for own messages */}
-              {isOwn && (() => {
+              {/* Sending indicator - only for own messages (but not for avatar conversations) */}
+              {isOwn && !msg.isAvatarConversationMessage && 
+               conversationType !== 'ai_avatar' && 
+               !msg.conversationId?.startsWith('avatar_conversation_') && (() => {
                 const tempId = msg.tempId || messageId;
                 let isSending = false;
                 
@@ -905,17 +1053,19 @@ function MessageBubble({
                       }}
                       ref={dropdownRef}
                     >
-                      {/* Reply option - available for all messages */}
-                      <button 
-                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
-                        onClick={() => {
-                          onReply(msg);
-                          setShowDropdown(false);
-                        }}
-                      >
-                        <Reply className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">Reply</span>
-                      </button>
+                      {/* Reply option - available for all messages except avatar conversations */}
+                      {!isAvatarConversation && (
+                        <button 
+                          className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
+                          onClick={() => {
+                            onReply(msg);
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <Reply className="h-4 w-4 text-gray-500" />
+                          <span className="font-medium">Reply</span>
+                        </button>
+                      )}
                       
                       {/* Copy text option - only if message has text */}
                       {msg.text && (
@@ -981,8 +1131,8 @@ function MessageBubble({
                       
                       <div className="border-t border-gray-100 my-1"></div>
                       
-                      {/* Edit option - only for own messages without files */}
-                      {isOwn && !msg.file && (
+                      {/* Edit option - only for own messages without files, not in avatar conversations */}
+                      {isOwn && !msg.file && !isAvatarConversation && (
                         <button 
                           className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-all duration-150"
                           onClick={() => {
@@ -995,8 +1145,8 @@ function MessageBubble({
                         </button>
                       )}
                       
-                      {/* Delete option - only for own messages */}
-                      {isOwn && (
+                      {/* Delete option - only for own messages, not in avatar conversations */}
+                      {isOwn && !isAvatarConversation && (
                         <button 
                           className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-3 transition-all duration-150"
                           onClick={() => {

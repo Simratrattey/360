@@ -48,6 +48,11 @@ import * as conversationAPI from '../api/conversationService';
 import * as messageAPI from '../api/messageService';
 import { useAuth } from '../context/AuthContext';
 import { useChatSocket } from '../context/ChatSocketContext';
+import { useAvatarConversation } from '../hooks/useAvatarConversation';
+import AvatarService from '../services/avatarService';
+import BotService from '../api/botService';
+import { useCurrentConversation } from '../context/CurrentConversationContext';
+import { useNotifications } from '../context/NotificationContext';
 import { useMediaQuery } from 'react-responsive';
 import { useMessageNotifications } from '../components/Layout';
 import NetworkStatus from '../components/NetworkStatus';
@@ -117,14 +122,20 @@ function groupMessagesByDate(messages) {
 export default function MessagesPage() {
   const { user } = useAuth();
   const chatSocket = useChatSocket();
+  const { updateCurrentConversation, updateMessagesPageStatus, clearCurrentConversation } = useCurrentConversation();
+  const { clearNotificationsForConversation } = useNotifications();
+  const { avatarConversation, isAvatarConversation, processAvatarQuery, isInitialized, isLoading } = useAvatarConversation();
+  
   const [allConversations, setAllConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0); // Force re-render when needed
   const [messages, setMessages] = useState([]);
+  const [pendingConversationId, setPendingConversationId] = useState(null);
   // Track whether messages are currently being fetched. When true, the chat
   // window will display a loading spinner. Messages remain an array to avoid
   // errors in event handlers that spread or map over the messages array.
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [isConversationSwitch, setIsConversationSwitch] = useState(false);
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
   const [showUserModal, setShowUserModal] = useState(false);
@@ -140,6 +151,10 @@ export default function MessagesPage() {
   const [reactions, setReactions] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Track where unread messages start (for unread indicator)
+  const [unreadStartIndex, setUnreadStartIndex] = useState(null);
+  const [lastReadMessageId, setLastReadMessageId] = useState(null);
   
   // Track conversations already marked as read to prevent duplicate API calls
   const readConversationsRef = useRef(new Set());
@@ -164,67 +179,433 @@ export default function MessagesPage() {
   const allConversationsRef = useRef(allConversations);
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
-  // Utility function to merge server messages with cached messages
+  // Enhanced merge function with better deduplication
   const mergeMessages = (serverMessages, cachedMessages) => {
     const messageMap = new Map();
+    const tempIdMap = new Map(); // Track tempId to _id mapping
     
-    // Add server messages first (they are the source of truth)
+    // First pass: Add all server messages (source of truth)
     serverMessages.forEach(msg => {
       if (msg._id) {
         messageMap.set(msg._id, msg);
-      }
-    });
-    
-    // Add cached messages that aren't in server messages
-    // This preserves real-time messages that might not be in server yet
-    cachedMessages.forEach(msg => {
-      if (msg._id && !messageMap.has(msg._id)) {
-        // Only add if it's not already in server messages
-        messageMap.set(msg._id, msg);
-      } else if (!msg._id && msg.tempId) {
-        // Handle temporary messages (optimistic updates)
-        const existingByTempId = Array.from(messageMap.values()).find(m => m.tempId === msg.tempId);
-        if (!existingByTempId) {
-          messageMap.set(msg.tempId || `temp-${Date.now()}`, msg);
+        // Track tempId mapping if present
+        if (msg.tempId) {
+          tempIdMap.set(msg.tempId, msg._id);
         }
       }
     });
     
-    // Convert back to array and sort by timestamp
-    const merged = Array.from(messageMap.values()).sort((a, b) => {
-      const dateA = new Date(a.createdAt || a.timestamp || 0);
-      const dateB = new Date(b.createdAt || b.timestamp || 0);
-      return dateA - dateB;
+    // Second pass: Add cached messages that aren't duplicates
+    cachedMessages.forEach(msg => {
+      // Skip if this is a server message we already have
+      if (msg._id && messageMap.has(msg._id)) {
+        return;
+      }
+      
+      // Skip if this temp message has a corresponding server message by tempId
+      if (msg.tempId && tempIdMap.has(msg.tempId)) {
+        return;
+      }
+      
+      // CRITICAL: Skip temp messages that have server equivalents by content matching
+      // This handles cases where server message doesn't include tempId
+      if ((msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending) && msg.senderId) {
+        const hasServerEquivalent = serverMessages.some(serverMsg => {
+          // Must be from same sender - handle both senderId and sender fields
+          const serverSenderId = serverMsg.senderId || (typeof serverMsg.sender === 'object' ? serverMsg.sender?._id : serverMsg.sender);
+          if (serverSenderId !== msg.senderId) return false;
+          
+          // Must have identical text content (including null/undefined handling)
+          const serverText = serverMsg.text || '';
+          const msgText = msg.text || '';
+          if (serverText !== msgText) return false;
+          
+          // Flexible timestamp comparison - try multiple timestamp fields
+          const serverTime = new Date(serverMsg.createdAt || serverMsg.timestamp || 0);
+          const msgTime = new Date(msg.createdAt || msg.timestamp || msg.sentAt || 0);
+          const timeDiff = Math.abs(serverTime - msgTime);
+          
+          // Extended time window to 10 minutes to handle edge cases
+          return timeDiff < 600000; // 10 minutes
+        });
+        
+        if (hasServerEquivalent) {
+          return;
+        }
+      }
+      
+      // Add temporary/optimistic messages that don't have server equivalents
+      if (msg.tempId || (msg._id && msg._id.startsWith('temp-'))) {
+        const key = msg._id || msg.tempId || `temp-${Date.now()}`;
+        if (!messageMap.has(key)) {
+          messageMap.set(key, msg);
+        }
+      } else if (msg._id) {
+        // Add real messages that aren't in server response (newer real-time messages)
+        messageMap.set(msg._id, msg);
+      }
     });
     
-    return merged;
+    // Convert back to array and sort by timestamp
+    const merged = Array.from(messageMap.values())
+      .filter(msg => msg && (msg._id || msg.tempId)) // Filter out invalid messages
+      .sort((a, b) => {
+        const dateA = new Date(a.createdAt || a.timestamp || 0);
+        const dateB = new Date(b.createdAt || b.timestamp || 0);
+        return dateA - dateB;
+      });
+    
+    // Final aggressive cleanup: Remove temp messages that have real server equivalents
+    // This is a failsafe in case the earlier content matching missed something
+    const finalCleaned = merged.filter((msg, index) => {
+      // Only check temp messages
+      if (!(msg._id?.startsWith('temp-') || msg.tempId || msg.pending || msg.sending)) {
+        return true; // Keep non-temp messages
+      }
+      
+      // Check if any later message in the array is a server equivalent
+      const hasLaterServerEquivalent = merged.slice(index + 1).some(laterMsg => {
+        // Must not be a temp message itself
+        if (laterMsg._id?.startsWith('temp-') || laterMsg.tempId || laterMsg.pending || laterMsg.sending) {
+          return false;
+        }
+        
+        // Same sender and text check
+        return laterMsg.senderId === msg.senderId && 
+               (laterMsg.text || '') === (msg.text || '') &&
+               Math.abs(new Date(laterMsg.createdAt || 0) - new Date(msg.createdAt || msg.timestamp || 0)) < 600000; // 10 minutes
+      });
+      
+      if (hasLaterServerEquivalent) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    return finalCleaned;
   };
   const [sidebarOpen, setSidebarOpen] = useState(true); // for mobile
+  
+  // Avatar conversation messages storage (client-side with localStorage persistence)
+  const [avatarMessages, setAvatarMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('avatarMessages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Convert object back to Map
+        return new Map(Object.entries(parsed));
+      }
+    } catch (error) {
+      console.error('Error loading avatar messages from localStorage:', error);
+    }
+    return new Map();
+  });
+  
+  // Debouncing ref to prevent excessive fetchConversations calls
+  const fetchDebounceRef = useRef(null);
+  const lastFetchTimeRef = useRef(0);
+
+  // Pinned conversations state with localStorage persistence (moved here to fix hoisting issue)
+  const [pinnedConversations, setPinnedConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pinnedConversations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading pinned conversations from localStorage:', error);
+      return [];
+    }
+  });
+
+  // Enhanced helper function to sort conversations with hierarchy: Avatar → Pinned → Regular
+  const sortConversationsWithAvatarTop = (conversations) => {
+    return conversations.sort((a, b) => {
+      // Check if either conversation is an avatar conversation (multiple ways to detect)
+      const aIsAvatar = a.conversationType === 'ai_avatar' || 
+                       a.settings?.isAvatarConversation || 
+                       a._id?.startsWith('avatar_conversation_');
+      const bIsAvatar = b.conversationType === 'ai_avatar' || 
+                       b.settings?.isAvatarConversation || 
+                       b._id?.startsWith('avatar_conversation_');
+      
+      // Avatar conversations always go to the top (highest priority)
+      if (aIsAvatar && !bIsAvatar) return -1;
+      if (!aIsAvatar && bIsAvatar) return 1;
+      
+      // If both are avatar conversations, sort by creation (but this is unlikely)
+      if (aIsAvatar && bIsAvatar) return 0;
+      
+      // For non-avatar conversations, handle pinned status (second priority)
+      const aIsPinned = a.isPinned === true;
+      const bIsPinned = b.isPinned === true;
+      
+      // Pinned conversations come before unpinned ones
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+      
+      // Within same group (both pinned or both unpinned), sort by last message date
+      const dateA = new Date(a.lastMessageAt || a.createdAt);
+      const dateB = new Date(b.lastMessageAt || b.createdAt);
+      return dateB - dateA;
+    });
+  };
+
+  // Define fetchConversations function early to avoid hoisting issues  
+  const fetchConversations = useCallback(async (forceRefresh = false) => {
+    try {
+      // Debounce rapid calls - only allow one call per 2 seconds unless forced
+      const now = Date.now();
+      if (!forceRefresh && (now - lastFetchTimeRef.current) < 2000) {
+        return;
+      }
+      
+      lastFetchTimeRef.current = now;
+      
+      const res = await conversationAPI.getConversations();
+      const conversations = res.data.conversations || res.data || [];
+      
+      // Sort conversations by lastMessageAt within each type, but keep avatar conversations at top
+      const sortByLastMessage = (a, b) => {
+        // Check if either conversation is an avatar conversation
+        const aIsAvatar = a.conversationType === 'ai_avatar' || a.settings?.isAvatarConversation;
+        const bIsAvatar = b.conversationType === 'ai_avatar' || b.settings?.isAvatarConversation;
+        
+        // Avatar conversations always go to the top
+        if (aIsAvatar && !bIsAvatar) return -1;
+        if (!aIsAvatar && bIsAvatar) return 1;
+        
+        // If both are avatar conversations, sort by creation (but this is unlikely)
+        if (aIsAvatar && bIsAvatar) return 0;
+        
+        // Normal sorting by last message date for non-avatar conversations
+        const dateA = new Date(a.lastMessageAt || a.createdAt);
+        const dateB = new Date(b.lastMessageAt || b.createdAt);
+        return dateB - dateA;
+      };
+      
+      // Remove duplicates from API data
+      const deduplicateConversations = (conversations) => {
+        const idMap = new Map();
+        const nameMap = new Map();
+        
+        return conversations.filter((conv) => {
+          // Remove ID duplicates
+          if (idMap.has(conv._id)) {
+            return false;
+          }
+          idMap.set(conv._id, true);
+          
+          // Remove name duplicates for communities
+          if (conv.type === 'community' && conv.name) {
+            if (nameMap.has(conv.name)) {
+              return false;
+            }
+            nameMap.set(conv.name, true);
+          }
+          
+          return true;
+        });
+      };
+      
+      const dmConversations = deduplicateConversations(conversations.filter(c => c.type === 'dm')).sort(sortByLastMessage);
+      const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
+      const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
+      
+      // Combine all conversations into a single unified list, restore pinned state, then sort
+      let allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations].map(conv => ({
+        ...conv,
+        isPinned: pinnedConversations.includes(conv._id)
+      }));
+      
+      // Sort with hierarchy: Avatar → Pinned → Regular
+      allConversationsUnified = sortConversationsWithAvatarTop(allConversationsUnified);
+      
+      // Add avatar conversation at the top - ALWAYS add it for testing
+      const userId = user?._id || user?.id;
+      console.log('🤖 MessagesPage: Avatar conversation check:', { 
+        avatarConversation: !!avatarConversation, 
+        user: !!user,
+        userId_id: user?._id,
+        userId_alt: user?.id,
+        finalUserId: userId,
+        conversationsCount: allConversationsUnified.length 
+      });
+      
+      // Force create avatar conversation if user exists (for testing)
+      if (userId) {
+        const testAvatarId = `avatar_conversation_${userId}`;
+        const alreadyExists = allConversationsUnified.some(conv => conv._id === testAvatarId);
+        
+        console.log('🤖 MessagesPage: Force adding avatar conversation, already exists:', alreadyExists);
+        
+        if (!alreadyExists) {
+          const forceAvatarConv = {
+            _id: testAvatarId,
+            name: 'Avatar',
+            type: 'dm',
+            conversationType: 'ai_avatar',
+            isPermanent: true,
+            alwaysOnTop: true,
+            lastMessage: {
+              text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about 360!',
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              timestamp: new Date().toISOString()
+            },
+            lastMessageAt: new Date().toISOString(),
+            unread: 0,
+            members: [
+              {
+                _id: userId,
+                fullName: user.fullName || user.username,
+                username: user.username,
+                email: user.email
+              },
+              {
+                _id: 'avatar_system_user',
+                fullName: 'Avatar',
+                username: 'avatar',
+                userType: 'ai_avatar',
+                isSystem: true
+              }
+            ],
+            settings: {
+              isAvatarConversation: true,
+              aiEnabled: true
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Always place avatar conversation at the very top
+          allConversationsUnified = [forceAvatarConv, ...allConversationsUnified];
+          console.log('🤖 MessagesPage: FORCE added avatar conversation, new count:', allConversationsUnified.length);
+        }
+      }
+      
+      // Use a single section for all conversations
+      const unifiedSection = [
+        { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
+      ];
+      
+      // Smart merge: preserve higher local unread counts from real-time updates
+      setAllConversations(prevSections => {
+        const newSections = [...unifiedSection];
+        
+        // If we have previous data, merge unread counts intelligently
+        if (prevSections.length > 0 && prevSections[0].items) {
+          const prevItems = prevSections[0].items;
+          
+          newSections[0].items = newSections[0].items.map(newConv => {
+            const prevConv = prevItems.find(p => p._id === newConv._id);
+            if (prevConv && prevConv.unread > newConv.unread) {
+              // Keep the higher local unread count (from real-time updates)
+              return { ...newConv, unread: prevConv.unread };
+            }
+            return newConv;
+          });
+        }
+        
+        return newSections;
+      });
+
+      // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
+      // We limit the number of conversations prefetched per section to avoid overwhelming the server.
+      const PREFETCH_CONVERSATIONS_PER_SECTION = 3;
+      const PREFETCH_MESSAGES_LIMIT = 10;
+      const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
+      
+      // FIXED: Smart prefetch that never overwrites real-time cached messages
+      conversationsToPrefetch.forEach(conv => {
+        if (!conv || !conv._id) return;
+        
+        // Skip prefetching for avatar conversations - they're client-side only
+        if (conv.conversationType === 'ai_avatar' || conv.settings?.isAvatarConversation) {
+          return;
+        }
+        
+        // Only prefetch if NO cache exists at all (empty or undefined)
+        const existingCache = messagesCache[conv._id];
+        if (!existingCache || existingCache.length === 0) {
+          messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
+            .then(res => {
+              const msgs = (res.data?.messages || res.data || []).reverse(); // Reverse since API now returns newest first
+              // Only update cache if it's still empty (avoid overwriting real-time messages)
+              setMessagesCache(prev => {
+                if (prev[conv._id] && prev[conv._id].length > 0) {
+                  return prev;
+                }
+                return { ...prev, [conv._id]: msgs };
+              });
+            })
+            .catch(err => {
+              console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
+            });
+        }
+      });
+      
+      // Auto-selection removed - let user choose which conversation to open
+      // if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
+      //   handleSelect(conversations[0]);
+      // }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    }
+  }, [messagesCache, avatarConversation, pinnedConversations]);
   
   // Keep refs in sync with state
   useEffect(() => {
     selectedRef.current = selected;
   }, [selected]);
 
+  // Track entering/leaving messages page
+  useEffect(() => {
+    updateMessagesPageStatus(true);
+    
+    // Only refresh on entry if we don't have conversations loaded yet
+    if (allConversations.length === 0) {
+      fetchConversations();
+    }
+    
+    return () => {
+      updateMessagesPageStatus(false);
+      clearCurrentConversation();
+    };
+  }, [updateMessagesPageStatus, clearCurrentConversation, fetchConversations, allConversations.length]);
+
+  // Update current conversation when selected conversation changes
+  useEffect(() => {
+    if (selected?._id) {
+      updateCurrentConversation(selected._id);
+      clearNotificationsForConversation(selected._id);
+    } else {
+      clearCurrentConversation();
+    }
+  }, [selected?._id, updateCurrentConversation, clearCurrentConversation, clearNotificationsForConversation]);
+
   // Debounced function to mark conversation as read (prevents API spam)
   const debouncedMarkAsRead = useCallback((conversationId) => {
-    // Skip if already marked as read recently
-    if (readConversationsRef.current.has(conversationId)) {
-      return;
-    }
+    if (!conversationId) return;
 
-    // Clear any existing timeout
+    // Clear any existing timeout to debounce rapid calls
     if (markReadTimeoutRef.current) {
       clearTimeout(markReadTimeoutRef.current);
     }
 
     // Debounce the API call by 500ms
     markReadTimeoutRef.current = setTimeout(() => {
+      // Skip if already marked as read very recently (within last 2 seconds)
+      if (readConversationsRef.current.has(conversationId)) {
+        return;
+      }
+      
       // Add to read set to prevent duplicates
       readConversationsRef.current.add(conversationId);
       
+      console.log('📖 Marking conversation as read:', conversationId);
       conversationAPI.markConversationAsRead(conversationId)
         .then(() => {
+          console.log('📖 Successfully marked conversation as read:', conversationId);
           if (refreshUnreadCount) refreshUnreadCount();
           
           // Set unread to 0 for this conversation in the sidebar
@@ -239,17 +620,17 @@ export default function MessagesPage() {
             }))
           );
           
-          // Remove from set after 5 seconds to allow re-marking if needed
+          // Remove from set after 3 seconds to allow re-marking if needed
           setTimeout(() => {
             readConversationsRef.current.delete(conversationId);
-          }, 5000);
+          }, 3000);
         })
         .catch(error => {
           console.error('Error marking conversation as read:', error);
           // Remove from set on error so it can be retried
           readConversationsRef.current.delete(conversationId);
         });
-    }, 500);
+    }, 300); // Reduced debounce time for more responsive feeling
   }, [refreshUnreadCount, setAllConversations]);
   
   useEffect(() => {
@@ -266,6 +647,27 @@ export default function MessagesPage() {
   useEffect(() => {
     allConversationsRef.current = allConversations;
   }, [allConversations]);
+  
+  // Persist pinned conversations to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinnedConversations', JSON.stringify(pinnedConversations));
+    } catch (error) {
+      console.error('Error saving pinned conversations to localStorage:', error);
+    }
+  }, [pinnedConversations]);
+  
+  // Persist avatar messages to localStorage
+  useEffect(() => {
+    try {
+      // Convert Map to object for JSON serialization
+      const avatarMessagesObj = Object.fromEntries(avatarMessages);
+      localStorage.setItem('avatarMessages', JSON.stringify(avatarMessagesObj));
+    } catch (error) {
+      console.error('Error saving avatar messages to localStorage:', error);
+    }
+  }, [avatarMessages]);
+  
   // Search functionality
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
@@ -279,6 +681,7 @@ export default function MessagesPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [messageOffset, setMessageOffset] = useState(0);
+  
   const [draftMessages, setDraftMessages] = useState(() => {
     try {
       const saved = localStorage.getItem('draftMessages');
@@ -314,6 +717,10 @@ export default function MessagesPage() {
           
           const oldUnread = convItem.unread || 0;
           const newUnread = incrementUnread ? oldUnread + 1 : oldUnread;
+          
+          if (incrementUnread) {
+            console.log(`📬 Incrementing unread count for ${convItem.name || convId}: ${oldUnread} → ${newUnread}`);
+          }
 
           const updatedConv = {
             ...convItem,
@@ -326,12 +733,8 @@ export default function MessagesPage() {
             _lastUpdated: Date.now()
           };
 
-          // Re-sort all items by most recent activity after updating
-          const allItemsUpdated = [updatedConv, ...newItems].sort((a, b) => {
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
-          });
+          // Re-sort all items by most recent activity after updating (keeping avatar at top)
+          const allItemsUpdated = sortConversationsWithAvatarTop([updatedConv, ...newItems]);
 
           newSections[sectionIndex] = {
             ...section,
@@ -387,12 +790,8 @@ export default function MessagesPage() {
       };
       
       
-      // Add to top and re-sort by most recent activity (same logic as moveConversationToTop)
-      const allItemsUpdated = [conversationToAdd, ...section.items].sort((a, b) => {
-        const dateA = new Date(a.lastMessageAt || a.createdAt);
-        const dateB = new Date(b.lastMessageAt || b.createdAt);
-        return dateB - dateA;
-      });
+      // Add to top and re-sort by most recent activity (keeping avatar at top)
+      const allItemsUpdated = sortConversationsWithAvatarTop([conversationToAdd, ...section.items]);
       
       newSections[sectionIndex] = {
         ...section,
@@ -412,12 +811,44 @@ export default function MessagesPage() {
     // Track window focus
     const onFocus = () => (windowFocused.current = true);
     const onBlur = () => (windowFocused.current = false);
+    
+    // Handle visibility change to refresh conversations when page becomes visible
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        // Only refresh if page was hidden for more than 30 seconds
+        const hiddenTime = Date.now() - (document.lastVisibilityChange || 0);
+        if (hiddenTime > 30000) {
+          console.log('🔄 Page visible after long absence, refreshing conversations');
+          setTimeout(() => {
+            fetchConversations(true); // Force refresh after long absence
+          }, 1000);
+        }
+      } else {
+        document.lastVisibilityChange = Date.now();
+      }
+    };
+    
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    
     return () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
+  }, [fetchConversations]);
+
+  // Capture URL conversation parameter immediately on mount for notification navigation
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const conversationId = urlParams.get('conversation');
+    if (conversationId) {
+      console.log('📱 Notification navigation: Found conversation ID in URL:', conversationId);
+      setPendingConversationId(conversationId);
+      // Clear URL parameter to prevent it from interfering with navigation
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   // Fetch conversations on mount (REST)
@@ -433,25 +864,50 @@ export default function MessagesPage() {
     }
   }, [isMobile]);
 
-  // Add useEffect to auto-select conversation from URL param
+  // Handle pending conversation selection from notifications
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const conversationId = urlParams.get('conversation');
+    // Check for pending conversation ID first (from notification navigation)
+    const conversationId = pendingConversationId || new URLSearchParams(window.location.search).get('conversation');
+    
     if (conversationId && allConversations.length > 0) {
       const allItems = allConversations.flatMap(section => section.items);
       const target = allItems.find(c => c._id === conversationId);
       if (target) {
+        console.log('📱 Selecting conversation from notification/URL:', conversationId);
+        
+        // Clear cache for conversations with unread messages or accessed via URL to ensure fresh data
+        if ((target.unread && target.unread > 0) || pendingConversationId) {
+          console.log('📱 Clearing cache for fresh message loading - unread:', target.unread, 'fromURL:', !!pendingConversationId);
+          setMessagesCache(prev => ({
+            ...prev,
+            [conversationId]: []
+          }));
+        }
+        
         setSelected(target);
         if (isMobile) setSidebarOpen(false);
         
-        // Don't clear cache when navigating from notification - this causes message loss
-        // Instead, let the normal message loading logic merge cached and fresh messages
-        console.log('📨 Navigating from notification to:', conversationId);
+        // Mark conversation as read when navigating from notification
+        if (target.unread > 0) {
+          setAllConversations(prev =>
+            prev.map(section => ({
+              ...section,
+              items: section.items.map(conversation => 
+                conversation._id === target._id 
+                  ? { ...conversation, unread: 0 }
+                  : conversation
+              )
+            }))
+          );
+          debouncedMarkAsRead(target._id);
+        }
         
+        // Clear pending conversation ID and URL param
+        setPendingConversationId(null);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
-  }, [allConversations, isMobile]);
+  }, [allConversations, isMobile, debouncedMarkAsRead, pendingConversationId]);
 
   // Initialize message queue and status services
   useEffect(() => {
@@ -559,18 +1015,37 @@ export default function MessagesPage() {
       
       if (messageToRetry) {
         try {
+          console.log('Retrying message:', tempId);
+          
+          // Remove from failed queue if it's there
+          messageQueue.removeFromQueues(tempId);
+          
+          // Add to retry queue with reset attempt count
           if (messageQueue && typeof messageQueue.addToRetryQueue === 'function') {
             messageQueue.addToRetryQueue(messageToRetry, 0); // Reset retry count
           }
+          
+          // Update message status
           if (messageStatus && typeof messageStatus.setMessageStatus === 'function') {
             messageStatus.setMessageStatus(tempId, MESSAGE_STATUS.SENDING);
           }
+          
+          // Update UI to show sending state
+          setMessages(prev => prev.map(msg => 
+            msg.tempId === tempId 
+              ? { ...msg, failed: false, sending: true, pending: false }
+              : msg
+          ));
+          
+          // Process the queues
           if (messageQueue && typeof messageQueue.processQueues === 'function') {
             messageQueue.processQueues();
           }
         } catch (error) {
           console.error('Error retrying message:', error);
         }
+      } else {
+        console.log('Message not found in queue for retry:', tempId);
       }
     };
 
@@ -578,95 +1053,6 @@ export default function MessagesPage() {
       delete window.retryMessage;
     };
   }, [selected]);
-
-  const fetchConversations = async () => {
-    try {
-      const res = await conversationAPI.getConversations();
-      const conversations = res.data.conversations || res.data || [];
-      
-      // Sort conversations by lastMessageAt within each type
-      const sortByLastMessage = (a, b) => {
-        const dateA = new Date(a.lastMessageAt || a.createdAt);
-        const dateB = new Date(b.lastMessageAt || b.createdAt);
-        return dateB - dateA;
-      };
-      
-      // Remove duplicates from API data
-      const deduplicateConversations = (conversations) => {
-        const idMap = new Map();
-        const nameMap = new Map();
-        
-        return conversations.filter((conv) => {
-          // Remove ID duplicates
-          if (idMap.has(conv._id)) {
-            return false;
-          }
-          idMap.set(conv._id, true);
-          
-          // Remove name duplicates for communities
-          if (conv.type === 'community' && conv.name) {
-            if (nameMap.has(conv.name)) {
-              return false;
-            }
-            nameMap.set(conv.name, true);
-          }
-          
-          return true;
-        });
-      };
-      
-      const dmConversations = deduplicateConversations(conversations.filter(c => c.type === 'dm')).sort(sortByLastMessage);
-      const groupConversations = deduplicateConversations(conversations.filter(c => c.type === 'group')).sort(sortByLastMessage);
-      const communityConversations = deduplicateConversations(conversations.filter(c => c.type === 'community')).sort(sortByLastMessage);
-      
-      // Combine all conversations into a single unified list, sorted by most recent
-      const allConversationsUnified = [...dmConversations, ...groupConversations, ...communityConversations]
-        .sort(sortByLastMessage);
-      
-      // Use a single section for all conversations
-      const unifiedSection = [
-        { section: 'All Conversations', icon: MessageCircle, items: allConversationsUnified }
-      ];
-      
-      setAllConversations(unifiedSection);
-
-      // Prefetch the first few messages for a subset of conversations to improve perceived loading times.
-      // We limit the number of conversations prefetched per section to avoid overwhelming the server.
-      const PREFETCH_CONVERSATIONS_PER_SECTION = 3;
-      const PREFETCH_MESSAGES_LIMIT = 10;
-      const conversationsToPrefetch = conversations.slice(0, PREFETCH_CONVERSATIONS_PER_SECTION);
-      
-      // FIXED: Smart prefetch that never overwrites real-time cached messages
-      conversationsToPrefetch.forEach(conv => {
-        if (!conv || !conv._id) return;
-        // Only prefetch if NO cache exists at all (empty or undefined)
-        const existingCache = messagesCache[conv._id];
-        if (!existingCache || existingCache.length === 0) {
-          messageAPI.getMessages(conv._id, { limit: PREFETCH_MESSAGES_LIMIT })
-            .then(res => {
-              const msgs = res.data?.messages || res.data || [];
-              // Only update cache if it's still empty (avoid overwriting real-time messages)
-              setMessagesCache(prev => {
-                if (prev[conv._id] && prev[conv._id].length > 0) {
-                  return prev;
-                }
-                return { ...prev, [conv._id]: msgs };
-              });
-            })
-            .catch(err => {
-              console.warn(`Prefetch messages for conversation ${conv._id} failed:`, err);
-            });
-        }
-      });
-      
-      // Auto-select only on very first load when no conversation ever selected
-      if (conversations.length > 0 && !selected && !selectedRef.current && allConversations.length === 0) {
-        handleSelect(conversations[0]);
-      }
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-    }
-  };
 
   // WHATSAPP-STYLE: Instant Conversation Loading  
   useEffect(() => {
@@ -681,17 +1067,51 @@ export default function MessagesPage() {
     
     const convId = selected._id;
     
+    // CRITICAL: Check for avatar conversations FIRST before doing any message clearing/loading
+    // Avatar conversations use their own storage system and should skip the regular message loading flow
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: useEffect detected avatar conversation, skipping regular message loading flow');
+      setMessageOffset(0);
+      setHasMoreMessages(false); // Avatar conversations don't use pagination
+      setLoadingMore(false);
+      // Reset conversation switch flag immediately
+      setTimeout(() => {
+        setIsConversationSwitch(false);
+      }, 50);
+      return; // Exit early - avatar messages are handled by handleSelect function
+    }
+    
     // Always fetch fresh messages from server, but show cached ones immediately for better UX
-    const cachedMessages = messagesCache[convId] || [];
+    // Use ref to get the most current cache (important for navigation from notifications)
+    const cachedMessages = messagesCacheRef.current[convId] || [];
     
-    // Set loading state initially
-    setMessagesLoading(true);
-    
-    // Show cached messages immediately for better UX, but only if we have them
+    // Immediately set the correct messages for this conversation (no delay, no flicker)
     if (cachedMessages.length > 0) {
-      setMessages(cachedMessages);
+      // Validate that cached messages belong to this conversation
+      const validMessages = cachedMessages.filter(msg => 
+        msg.conversationId === convId || msg.conversation === convId
+      );
       
-      // Initialize reactions state from cached messages
+      if (validMessages.length > 0) {
+        // Show cached messages instantly for WhatsApp-like experience
+        setMessages(validMessages);
+        setMessagesLoading(false);
+      } else {
+        // Invalid cache - show loading
+        setMessages([]);
+        setMessagesLoading(true);
+        console.log('⚠️ Invalid cached messages, showing loading for conversation:', convId);
+      }
+      
+      // Set up unread indicators and reactions from cache
+      const unreadCount = selected.unread || 0;
+      if (unreadCount > 0 && cachedMessages.length >= unreadCount) {
+        const unreadStart = cachedMessages.length - unreadCount;
+        setUnreadStartIndex(unreadStart);
+      } else {
+        setUnreadStartIndex(null);
+      }
+      
       const cachedReactions = {};
       cachedMessages.forEach(msg => {
         if (msg.reactions && msg.reactions.length > 0) {
@@ -699,29 +1119,83 @@ export default function MessagesPage() {
         }
       });
       setReactions(cachedReactions);
-      setMessagesLoading(false);
+      
+      // Reset conversation switch flag immediately after showing cached messages
+      setTimeout(() => {
+        setIsConversationSwitch(false);
+      }, 50);
     } else {
+      // No cache - show loading state
       setMessages([]);
+      setMessagesLoading(true);
       setReactions({});
+      console.log('⏳ No cached messages, showing loading for conversation:', convId);
     }
     
-    // Always fetch from server to ensure we have latest messages
+    // Always fetch from server in background to ensure we have latest messages
+    // Note: Avatar conversations are already handled at the beginning of this useEffect
+    
     messageAPI.getMessages(convId, { limit: 50 })
       .then(res => {
-        const serverMessages = res.data.messages || [];
+        // SAFETY CHECK: Only process if this is still the selected conversation
+        if (selected?._id !== convId) {
+          console.log('🚫 Ignoring server response for old conversation:', convId, 'current:', selected?._id);
+          return;
+        }
+
+        // Double check with selectedRef to ensure we haven't switched conversations during the async operation
+        if (selectedRef.current?._id !== convId) {
+          console.log('🚫 Ignoring server response - conversation changed during fetch:', convId, 'current:', selectedRef.current?._id);
+          return;
+        }
+        
+        const serverMessages = (res.data.messages || []).reverse(); // Reverse since API now returns newest first
+        
+        // Validate server messages belong to this conversation
+        const validServerMessages = serverMessages.filter(msg => 
+          msg.conversation === convId || msg.conversationId === convId
+        );
         
         // Only merge if we have cached messages that might contain newer real-time messages
         // Otherwise, just use server messages directly to avoid potential duplication
         let finalMessages;
         if (cachedMessages.length > 0) {
-          finalMessages = mergeMessages(serverMessages, cachedMessages);
+          finalMessages = mergeMessages(validServerMessages, cachedMessages);
         } else {
-          finalMessages = serverMessages;
+          finalMessages = validServerMessages;
         }
         
-        setMessages(finalMessages);
+        // Final validation before setting messages
+        const validFinalMessages = finalMessages.filter(msg => 
+          msg.conversationId === convId || msg.conversation === convId
+        );
+        
+        setMessages(validFinalMessages);
+        
+        // Force a state update to ensure messages are applied even with React batching
+        setTimeout(() => {
+          if (selectedRef.current?._id === convId) {
+            setMessages(prevMessages => {
+              if (prevMessages.length !== validFinalMessages.length) {
+                console.log('🔧 Force-updating messages state - was:', prevMessages.length, 'should be:', validFinalMessages.length);
+                return validFinalMessages;
+              }
+              return prevMessages;
+            });
+          }
+        }, 0);
+        
         setMessageOffset(finalMessages.length);
         setHasMoreMessages(serverMessages.length === 50);
+        
+        // Recalculate unread indicator position for server messages
+        const unreadCount = selected.unread || 0;
+        if (unreadCount > 0 && finalMessages.length >= unreadCount) {
+          const unreadStart = finalMessages.length - unreadCount;
+          setUnreadStartIndex(unreadStart);
+        } else {
+          setUnreadStartIndex(null);
+        }
         
         // Initialize reactions state from loaded messages
         const initialReactions = {};
@@ -739,6 +1213,11 @@ export default function MessagesPage() {
         }));
         
         chatSocket.joinConversation(convId);
+        
+        // Reset conversation switch flag after messages are loaded
+        setTimeout(() => {
+          setIsConversationSwitch(false);
+        }, 100); // Small delay to ensure scroll happens first
       })
       .catch(error => {
         console.error('Failed to load messages:', error);
@@ -747,6 +1226,11 @@ export default function MessagesPage() {
           setMessages([]);
         }
         chatSocket.joinConversation(convId);
+        
+        // Reset flag even on error
+        setTimeout(() => {
+          setIsConversationSwitch(false);
+        }, 100);
       })
       .finally(() => {
         setMessagesLoading(false);
@@ -757,6 +1241,10 @@ export default function MessagesPage() {
       chatSocket.leaveConversation(convId);
     };
   }, [selected?._id]); // Only re-run when conversation ID changes, not when selected object changes
+
+  // Debug: Track messages state changes
+  useEffect(() => {
+  }, [messages, selected?._id]);
 
   // REMOVED: Complex cache-sync logic - WhatsApp approach handles this directly in the message handler
 
@@ -770,9 +1258,11 @@ export default function MessagesPage() {
       const isCurrentConversation = selectedRef.current?._id === conversationId;
       
       console.log(`📨 Received chat:new message:`, msg._id);
+      console.log(`📨 Message details - From: ${msg.senderName || msg.senderId}, isMyMessage: ${isMyMessage}, currentConv: ${isCurrentConversation}`);
+      console.log(`📨 Will increment unread: ${!isMyMessage && !isCurrentConversation}`);
       
       
-      // 1. Update message cache
+      // 1. ALWAYS Update message cache (regardless of current conversation)
       setMessagesCache(prev => {
         const convMessages = prev[conversationId] || [];
         
@@ -785,30 +1275,46 @@ export default function MessagesPage() {
           return false;
         });
         if (isDuplicate) {
-          console.log('Skipping duplicate message by _id:', msg._id);
           return prev;
         }
         
-        // For my own messages, remove optimistic duplicates (messages with tempId that match the real message)
+        // ALWAYS remove optimistic duplicates from cache (whether current conversation or not)
         let cleanMessages = convMessages;
-        if (isMyMessage && msg.tempId) {
-          // Remove optimistic messages that match this server message
+        if (isMyMessage) {
+          
+          // Find and remove ALL potential duplicates of this message
           cleanMessages = convMessages.filter(m => {
             // Remove if tempIds match (this optimistic message is being replaced)
-            if (m.tempId === msg.tempId) {
-              console.log('Removing optimistic message:', m.tempId, 'for real message:', msg._id);
+            if (msg.tempId && m.tempId === msg.tempId) {
               return false;
             }
+            
             // Remove if it's a pending/sending message from this user with same tempId
-            if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-              console.log('Removing pending message:', m.tempId, 'for real message:', msg._id);
+            if (msg.tempId && m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
               return false;
             }
+            
+            // Critical: Remove ANY temp message from same user with same text (regardless of timestamp)
+            // This handles the case where server message doesn't have tempId
+            if (m.senderId === user.id && m.text === msg.text && 
+                (m._id?.startsWith('temp-') || m.tempId || m.pending || m.sending)) {
+              return false;
+            }
+            
+            // Remove ANY message from same user with same text and recent timestamp (within 5 minutes)
+            if (m.senderId === user.id && m.text === msg.text) {
+              const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
+              if (timeDiff < 300000) { // 5 minutes window to catch all edge cases
+                return false;
+              }
+            }
+            
             return true;
           });
+          
         }
         
-        console.log('Adding real message to cache:', msg._id, msg.tempId);
+        
         const newCache = [...cleanMessages, { ...msg, conversationId }];
         // Limit cache size per conversation to prevent localStorage overflow
         const MAX_CACHED_MESSAGES = 50;
@@ -825,35 +1331,61 @@ export default function MessagesPage() {
       // 2. Update current conversation view if active
       if (isCurrentConversation) {
         setMessages(prev => {
-          // Skip if message already exists (by _id) - but don't skip if this is a server message replacing an optimistic one
-          const isDuplicate = prev.some(m => {
-            // Skip if we already have this exact server message (by _id)
-            if (m._id && msg._id && m._id === msg._id) {
-              return true;
+          
+          // Enhanced deduplication logic
+          let filtered = prev;
+          const initialCount = filtered.length;
+          
+          // First, remove any duplicates by _id (exact matches)
+          if (msg._id) {
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(m => m._id !== msg._id);
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed duplicate by _id:', msg._id, `(${beforeCount} → ${filtered.length})`);
             }
-            return false;
-          });
-          if (isDuplicate) {
-            console.log('Skipping duplicate message in current view by _id:', msg._id);
-            return prev;
           }
           
-          // For my messages, remove optimistic versions
-          let filtered = prev;
-          if (isMyMessage && msg.tempId) {
-            filtered = prev.filter(m => {
-              // Remove if tempIds match (this optimistic message is being replaced)
-              if (m.tempId === msg.tempId) {
-                console.log('Removing optimistic message from current view:', m.tempId, 'for real message:', msg._id);
-                return false;
-              }
-              // Remove if it's a pending/sending message from this user with same tempId
-              if (m.senderId === user.id && (m.pending || m.sending) && m.tempId === msg.tempId) {
-                console.log('Removing pending message from current view:', m.tempId, 'for real message:', msg._id);
+          // Second, remove optimistic messages that this server message replaces
+          if (msg.tempId) {
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(m => {
+              // Remove optimistic message with matching tempId
+              if (m.tempId === msg.tempId && (!m._id || m._id.startsWith('temp-'))) {
+                console.log('🗑️ Removing optimistic message by tempId:', m.tempId, 'for real message:', msg._id);
                 return false;
               }
               return true;
             });
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed optimistic messages by tempId:', msg.tempId, `(${beforeCount} → ${filtered.length})`);
+            }
+          }
+          
+          // Third, for sent messages, remove ALL temp/optimistic messages with same content (aggressive cleanup)
+          if (isMyMessage) {
+            const beforeCount = filtered.length;
+            filtered = filtered.filter(m => {
+              // Remove ANY temp message from same user with same text (regardless of timestamp or tempId)
+              if (m.senderId === user.id && m.text === msg.text && 
+                  (m._id?.startsWith('temp-') || m.tempId || m.pending || m.sending)) {
+                console.log('🗑️ Removing temp/optimistic by content:', m._id || m.tempId, '→', msg._id);
+                return false;
+              }
+              
+              // Remove ANY message from same user with same text and recent timestamp (within 5 minutes)
+              if (m.senderId === user.id && m.text === msg.text) {
+                const timeDiff = Math.abs(new Date(m.createdAt || m.timestamp) - new Date(msg.createdAt));
+                if (timeDiff < 300000) { // 5 minutes window
+                  console.log('🗑️ Removing similar by content + time:', m._id || m.tempId, 'timeDiff:', timeDiff + 'ms', '→', msg._id);
+                  return false;
+                }
+              }
+              
+              return true;
+            });
+            if (filtered.length < beforeCount) {
+              console.log('🗑️ Removed', beforeCount - filtered.length, 'temp/similar messages for:', msg._id);
+            }
           }
           
           const newMessage = { 
@@ -864,7 +1396,6 @@ export default function MessagesPage() {
             sending: false
           };
           const newMessages = [...filtered, newMessage];
-          console.log('Adding real message to current view:', msg._id, msg.tempId, 'Total messages:', newMessages.length);
           return newMessages;
         });
         
@@ -921,9 +1452,39 @@ export default function MessagesPage() {
         }
       }
     });
-    // Delete message
+    // Delete message - Enhanced with cache consistency and duplicate handling
     chatSocket.on('chat:delete', ({ messageId }) => {
-      setMessages(prev => prev.filter(m => m._id !== messageId));
+      console.log('🗑️ Received delete notification for message:', messageId);
+      
+      // Update current messages (with duplicate check)
+      setMessages(prev => {
+        const hasMessage = prev.some(m => m._id === messageId);
+        if (!hasMessage) {
+          console.log('🗑️ Message already deleted from current messages');
+          return prev;
+        }
+        return prev.filter(m => m._id !== messageId);
+      });
+      
+      // Also update messages cache for consistency
+      setMessagesCache(prevCache => {
+        const updatedCache = { ...prevCache };
+        Object.keys(updatedCache).forEach(convId => {
+          const hasMessage = updatedCache[convId].some(m => m._id === messageId);
+          if (hasMessage) {
+            updatedCache[convId] = updatedCache[convId].filter(m => m._id !== messageId);
+            console.log('🗑️ Removed message from cache for conversation:', convId);
+          }
+        });
+        return updatedCache;
+      });
+      
+      // Update the ref for consistency
+      Object.keys(messagesCacheRef.current).forEach(convId => {
+        if (messagesCacheRef.current[convId]?.some(m => m._id === messageId)) {
+          messagesCacheRef.current[convId] = messagesCacheRef.current[convId].filter(m => m._id !== messageId);
+        }
+      });
     });
     // React to message
     chatSocket.on('chat:react', ({ messageId, emoji, userId }) => {
@@ -977,7 +1538,6 @@ export default function MessagesPage() {
       
       // If current user was added to the group, they should see it in their conversation list
       if (isCurrentUser) {
-        console.log('🔥 [MEMBER-ADDED] ✅ Current user was added to group - refreshing conversation list');
         
         // Refresh conversations to get the new group with updated members
         fetchConversations(true);
@@ -998,7 +1558,6 @@ export default function MessagesPage() {
       } else {
         // For other users, just update the current conversation if they're viewing it
         if (selected && selected._id === conversationId) {
-          console.log('🔥 [MEMBER-ADDED] ✅ Updating current conversation with new member');
           handleConversationUpdated();
         }
         
@@ -1080,7 +1639,6 @@ export default function MessagesPage() {
       } else {
         // For other users, update the current conversation if they're viewing it
         if (selected && selected._id === conversationId) {
-          console.log('🔥 [MEMBER-REMOVED] ✅ Updating current conversation - member removed');
           handleConversationUpdated();
         }
         
@@ -1130,7 +1688,6 @@ export default function MessagesPage() {
       
       // Always show conversation if user should see it (creator will have it from API, others get it from socket)
       if (shouldShowConversation) {
-        console.log('🔥 [CONVERSATION-CREATED] ✅ Adding to sidebar now!');
         
         // Use the same approach as chat:new messages - simple and effective!
         addConversationToTop(newConversation);
@@ -1231,23 +1788,18 @@ export default function MessagesPage() {
         }
       });
       
-      // Use debounced function to mark conversation as read (only if it has unread messages)
-      const selectedConv = allConversations.find(section => 
-        section.items?.find(conv => conv._id === selected._id)
-      )?.items?.find(conv => conv._id === selected._id);
-      
-      if (selectedConv && selectedConv.unread > 0) {
-        debouncedMarkAsRead(selected._id);
-      }
+      // Only mark as read when user has actually interacted with the conversation
+      // Don't auto-mark as read just for selecting - wait for user interaction
+      // This prevents premature read marking that destroys unread indicators
     }
-  }, [selected, messages, user.id, chatSocket, debouncedMarkAsRead, allConversations]);
+  }, [selected, user.id, chatSocket]); // Removed messages and allConversations to prevent aggressive read marking
 
   // Memoize conversation filtering to avoid expensive recalculations on each render.
   const filteredConversations = useMemo(() => {
     return allConversations.map(section => {
       const filteredItems = section.items.filter(conv => {
         try {
-          const displayName = getConversationDisplayName(conv, user?.id);
+          const displayName = getConversationDisplayName(conv, user?._id || user?.id);
           
           const memberNames = Array.isArray(conv.members)
             ? conv.members.map(m => {
@@ -1276,20 +1828,95 @@ export default function MessagesPage() {
         items: filteredItems,
       };
     });
-  }, [allConversations, search, user?.id, forceUpdate]);
+  }, [allConversations, search, user?._id, user?.id, forceUpdate]);
 
   const handleSelect = (conv) => {
     if (!conv || !conv._id) {
       return;
     }
+    
+    
+    // Clear cache for conversations with unread messages to ensure fresh data
+    if (conv.unread && conv.unread > 0) {
+      console.log('📱 Clearing cache for conversation with unread messages:', conv.unread);
+      setMessagesCache(prev => ({
+        ...prev,
+        [conv._id]: []
+      }));
+    }
+    
+    // CRITICAL: Clear messages immediately and show loading when user clicks
+    setMessages([]);
+    setMessagesLoading(true);
+    
+    // For avatar conversations, load saved messages or create welcome message
+    if (isAvatarConversation && isAvatarConversation(conv)) {
+      const savedMessages = avatarMessages.get(conv._id) || [];
+      console.log('🤖 MessagesPage: Loading avatar conversation:', {
+        conversationId: conv._id,
+        savedMessagesCount: savedMessages.length,
+        avatarMessagesMapSize: avatarMessages.size,
+        allKeys: Array.from(avatarMessages.keys())
+      });
+      
+      if (savedMessages.length > 0) {
+        // Load saved conversation history
+        console.log('🤖 MessagesPage: Loading saved avatar conversation:', conv._id, savedMessages.length, 'messages');
+        setMessages(savedMessages);
+        setMessagesLoading(false);
+      } else {
+        // Create initial welcome message for new avatar conversations
+        const welcomeMessage = {
+          _id: `welcome_${Date.now()}`,
+          conversationId: conv._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Hi! I\'m your AI Avatar assistant. Ask me anything about TipTop!\n\nI can help you:\n✨ Find specific meeting transcripts\n🎥 Locate video segments\n📝 Answer questions about your content\n\nJust type your question and I\'ll search through all historical meetings to find relevant information!',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isWelcome: true,
+          status: 'sent'
+        };
+        
+        const initialMessages = [welcomeMessage];
+        setMessages(initialMessages);
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          newMap.set(conv._id, initialMessages);
+          return newMap;
+        });
+        setMessagesLoading(false);
+      }
+    }
+    
+    // Mark as conversation switch for instant scrolling
+    setIsConversationSwitch(true);
     setSelected(conv);
     setReplyTo(null);
     setShowEmojiPicker(false);
     if (isMobile) setSidebarOpen(false);
     
-    // Use debounced function to mark conversation as read (prevents 429 errors)
+    // Only mark as read if conversation has messages and user will see them
+    // This preserves unread indicators until user actually views content
     if (conv.unread > 0) {
+      // Immediately update UI to remove unread indicator for instant feedback
+      setAllConversations(prev =>
+        prev.map(section => ({
+          ...section,
+          items: section.items.map(conversation => 
+            conversation._id === conv._id 
+              ? { ...conversation, unread: 0 }
+              : conversation
+          )
+        }))
+      );
+      
+      // Mark as read on server in background (no delay needed for UI)
       debouncedMarkAsRead(conv._id);
+      
+      // Clear unread indicator since conversation is now read
+      setUnreadStartIndex(null);
     }
   };
 
@@ -1360,6 +1987,10 @@ export default function MessagesPage() {
   // Send a new message. This version implements an "optimistic" update so the message
   // Enhanced handleSend with optimistic UI and loading states
   const handleSend = async () => {
+    console.log('🤖 MessagesPage: handleSend called, input:', input.trim());
+    console.log('🤖 MessagesPage: selected conversation:', selected?._id, selected?.name);
+    console.log('🤖 MessagesPage: isAvatarConversation check:', isAvatarConversation && isAvatarConversation(selected));
+    
     // Check if a conversation is selected and has an _id
     if (!selected || !selected._id) {
       return;
@@ -1375,6 +2006,246 @@ export default function MessagesPage() {
       return;
     }
 
+    // Special handling for avatar conversations - act like a chatbot
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Handling avatar conversation message (chatbot mode)');
+      setIsSending(true);
+      
+      try {
+        // Clear input immediately for better UX
+        const messageText = input.trim();
+        setInput('');
+        setReplyTo(null);
+        
+        // Create user message and add it immediately to the chat
+        const userId = user?._id || user?.id;
+        const userMessage = {
+          _id: `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          conversationId: selected._id,
+          senderId: userId,
+          senderName: user?.fullName || user?.username || 'You',
+          text: messageText,
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: false,
+          status: 'sent',
+          // Explicitly set sending-related properties to false
+          sending: false,
+          pending: false,
+          // Don't set tempId to avoid message status system tracking
+          tempId: null,
+          // Mark as avatar conversation user message to bypass normal processing
+          isAvatarConversationMessage: true
+        };
+        
+        console.log('🤖 MessagesPage: Created user message for avatar conversation:', userMessage);
+        
+        // Add user message immediately to the chat
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, userMessage];
+          // Save to avatar messages storage
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
+          return newMessages;
+        });
+        
+        // Add typing indicator for avatar
+        const typingMessage = {
+          _id: `typing_${Date.now()}`,
+          conversationId: selected._id,
+          senderId: 'avatar_system_user',
+          senderName: 'Avatar',
+          text: 'Thinking...',
+          createdAt: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
+          isAvatarMessage: true,
+          isTyping: true,
+          status: 'typing'
+        };
+        
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, typingMessage];
+          // Save to avatar messages storage (including typing indicator temporarily)
+          setAvatarMessages(prev => {
+            const newMap = new Map(prev);
+            newMap.set(selected._id, newMessages);
+            return newMap;
+          });
+          return newMessages;
+        });
+        
+        // Process avatar response asynchronously using direct API calls (like MeetingPage)
+        console.log('🤖 MessagesPage: Processing avatar query:', messageText);
+        
+        try {
+          // Direct API call to bot service (no conversation management needed)
+          const { success, data, error } = await BotService.getBotReply(messageText);
+          
+          if (success && data) {
+            console.log('🤖 MessagesPage: Got bot reply:', data);
+            
+            // Parse bot response and format for AvatarMessageBubble display
+            let botText = '';
+            let clips = [];
+            
+            try {
+              if (data.reply) {
+                // Try to parse structured response
+                const outer = JSON.parse(data.reply);
+                const entries = Array.isArray(outer) && Array.isArray(outer[0]) ? outer[0] : [];
+                
+                if (entries.length > 0) {
+                  clips = entries.map(entry => {
+                    // Construct video URL same way as MeetingPage
+                    let videoUrl = 'Video URL not available';
+                    if (entry.title && entry.videodetails?.snippetstarttimesecs !== undefined && entry.videodetails?.snippetendtimesecs !== undefined) {
+                      try {
+                        videoUrl = `https://clavisds02.feeltiptop.com/360TeamCalls/downloads/` +
+                          entry.title.slice(0,4) + '/' + entry.title.slice(5,7) + '/' + entry.title + '/' + entry.title + '.mp4' +
+                          `#t=${entry.videodetails.snippetstarttimesecs},${entry.videodetails.snippetendtimesecs}`;
+                      } catch (urlError) {
+                        console.log('🤖 MessagesPage: Error constructing video URL:', urlError);
+                        videoUrl = 'Error generating video URL';
+                      }
+                    }
+                    
+                    return {
+                      title: entry.title || 'Untitled',
+                      snippet: entry.snippet || 'No description available',
+                      videodetails: entry.videodetails || {},
+                      videoUrl: videoUrl,
+                      originalEntry: entry
+                    };
+                  });
+                  
+                  // Format response text for AvatarMessageBubble parsing
+                  let responseText = `I found ${clips.length} relevant video${clips.length > 1 ? 's' : ''} for your query:\n\n`;
+                  
+                  clips.forEach((clip, index) => {
+                    responseText += `Title: ${clip.title}\n`;
+                    responseText += `Segment Text: ${clip.snippet}\n`;
+                    responseText += `Video Link: ${clip.videoUrl}\n`;
+                    if (index < clips.length - 1) responseText += '\n';
+                  });
+                  
+                  botText = responseText;
+                } else {
+                  // Fallback to raw reply
+                  botText = data.reply;
+                }
+              } else {
+                botText = 'I received your message but couldn\'t generate a response.';
+              }
+            } catch (parseError) {
+              // If JSON parsing fails, use raw response
+              botText = data.reply || 'I received your message but couldn\'t generate a response.';
+              console.log('🤖 MessagesPage: Using raw response due to parse error:', parseError);
+            }
+            
+            // Remove typing indicator and add bot response
+            setMessages(prevMessages => {
+              const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+              
+              const avatarMessage = {
+                _id: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                conversationId: selected._id,
+                senderId: 'avatar_system_user',
+                senderName: 'Avatar',
+                text: botText,
+                clips: clips, // Include parsed clips for potential future use
+                createdAt: new Date().toISOString(),
+                timestamp: new Date().toISOString(),
+                isAvatarMessage: true,
+                status: 'sent'
+              };
+              
+              const newMessages = [...withoutTyping, avatarMessage];
+              setAvatarMessages(prev => {
+                const newMap = new Map(prev);
+                newMap.set(selected._id, newMessages);
+                return newMap;
+              });
+              return newMessages;
+            });
+            
+            // Update conversation's last message for sidebar
+            setAllConversations(prevSections => {
+              const updatedSections = prevSections.map(section => ({
+                ...section,
+                items: section.items.map(conv => {
+                  if (conv._id === selected._id) {
+                    return {
+                      ...conv,
+                      lastMessage: {
+                        text: botText.length > 50 ? botText.substring(0, 50) + '...' : botText,
+                        senderId: 'avatar_system_user',
+                        senderName: 'Avatar',
+                        timestamp: new Date().toISOString()
+                      },
+                      lastMessageAt: new Date().toISOString()
+                    };
+                  }
+                  return conv;
+                })
+              })).map(section => ({
+                ...section,
+                items: sortConversationsWithAvatarTop(section.items)
+              }));
+              return updatedSections;
+            });
+            
+          } else {
+            throw new Error(error || 'Bot service returned no data');
+          }
+          
+        } catch (processingError) {
+          console.error('🤖 MessagesPage: Error processing avatar query:', processingError);
+          
+          // Remove typing indicator and add error message
+          setMessages(prevMessages => {
+            const withoutTyping = prevMessages.filter(msg => msg._id !== typingMessage._id);
+            
+            const errorMessage = {
+              _id: `avatar_error_${Date.now()}`,
+              conversationId: selected._id,
+              senderId: 'avatar_system_user',
+              senderName: 'Avatar',
+              text: 'Sorry, I encountered an error while processing your request. Please try again.',
+              createdAt: new Date().toISOString(),
+              timestamp: new Date().toISOString(),
+              isAvatarMessage: true,
+              status: 'error'
+            };
+            
+            const newMessages = [...withoutTyping, errorMessage];
+            setAvatarMessages(prev => {
+              const newMap = new Map(prev);
+              newMap.set(selected._id, newMessages);
+              return newMap;
+            });
+            return newMessages;
+          });
+        }
+        
+      } catch (error) {
+        console.error('🤖 MessagesPage: Error in avatar chat handling:', error);
+        setNotification({
+          message: 'Failed to send message to avatar. Please try again.'
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } finally {
+        setIsSending(false);
+      }
+      
+      console.log('🤖 MessagesPage: Exiting early after avatar conversation handling');
+      return; // Exit early, don't continue with normal message sending
+    }
+
+    console.log('🤖 MessagesPage: Starting normal message sending process');
+    console.log('🤖 MessagesPage: This should NOT happen for avatar conversations!');
     setIsSending(true);
     setUploadProgress(0);
 
@@ -1384,9 +2255,10 @@ export default function MessagesPage() {
       // Handle file upload with progress tracking
       if (uploadFile) {
         try {
-          const res = await messageAPI.uploadMessageFile(uploadFile);
+          const res = await messageAPI.uploadMessageFile(uploadFile, (progress) => {
+            setUploadProgress(progress);
+          });
           fileMeta = res.data;
-          setUploadProgress(100);
         } catch (uploadError) {
           console.error('File upload failed:', uploadError);
           setNotification({
@@ -1408,7 +2280,11 @@ export default function MessagesPage() {
         senderName: user?.fullName || user?.username || '',
         text: input.trim(),
         file: fileMeta,
-        replyTo: replyTo ? replyTo._id : undefined,
+        replyTo: replyTo ? {
+          _id: replyTo._id,
+          text: replyTo.text,
+          file: replyTo.file
+        } : undefined,
         createdAt: new Date().toISOString(),
         pending: true,
         sending: true, // Mark as currently sending
@@ -1438,7 +2314,12 @@ export default function MessagesPage() {
       // Optimistically move conversation to top
       moveConversationToTop(
         selected._id,
-        input.trim() || (uploadFile ? 'Sent a file' : ''),
+        {
+          text: input.trim() || (uploadFile ? undefined : ''),
+          file: uploadFile ? { name: uploadFile.name } : undefined,
+          createdAt: new Date().toISOString(),
+          senderName: 'You'
+        },
         new Date().toISOString()
       );
       
@@ -1505,8 +2386,159 @@ export default function MessagesPage() {
     setEditInput('');
   };
 
+  const handleAvatarResponse = async (avatarResponse) => {
+    try {
+      console.log('🤖 MessagesPage: Handling avatar response:', avatarResponse);
+      
+      if (avatarResponse && selected) {
+        // Add the avatar response message to the current conversation
+        const avatarMessage = {
+          ...avatarResponse,
+          tempId: `avatar_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          conversationId: selected._id,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Add avatar message to messages state
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages, avatarMessage];
+          console.log('🤖 MessagesPage: Updated messages with avatar response');
+          return newMessages;
+        });
+        
+        // Update conversation's last message
+        setAllConversations(prevSections => {
+          const updatedSections = prevSections.map(section => ({
+            ...section,
+            items: section.items.map(conv => {
+              if (conv._id === selected._id) {
+                return {
+                  ...conv,
+                  lastMessage: {
+                    text: avatarMessage.text.substring(0, 100) + '...',
+                    senderId: avatarMessage.senderId,
+                    senderName: 'Avatar',
+                    timestamp: avatarMessage.timestamp
+                  },
+                  lastMessageAt: avatarMessage.timestamp
+                };
+              }
+              return conv;
+            })
+          })).map(section => ({
+            ...section,
+            items: sortConversationsWithAvatarTop(section.items)
+          }));
+          return updatedSections;
+        });
+      }
+    } catch (error) {
+      console.error('🤖 MessagesPage: Error handling avatar response:', error);
+    }
+  };
+
   const handleDelete = async (msgId) => {
-    chatSocket.deleteMessage({ messageId: msgId });
+    console.log('🗑️ Deleting message:', msgId);
+    
+    // Find the message to delete for potential rollback
+    const messageToDelete = messages.find(m => m._id === msgId);
+    if (!messageToDelete) {
+      console.error('Message to delete not found:', msgId);
+      return;
+    }
+    
+    // Check if this is an avatar conversation
+    const isAvatarConv = isAvatarConversation && isAvatarConversation(selected);
+    
+    try {
+      // Optimistically remove message from UI immediately
+      setMessages(prev => {
+        const filtered = prev.filter(m => m._id !== msgId);
+        console.log('🗑️ Optimistically removed message from UI');
+        return filtered;
+      });
+      
+      // Handle avatar conversation messages differently
+      if (isAvatarConv) {
+        console.log('🤖 Deleting from avatar conversation - updating avatarMessages storage');
+        // Update avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const filteredMessages = conversationMessages.filter(m => m._id !== msgId);
+          newMap.set(selected._id, filteredMessages);
+          console.log('🤖 Updated avatarMessages storage');
+          return newMap;
+        });
+      } else {
+        // Regular conversation - update messages cache
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = updatedCache[selected._id].filter(m => m._id !== msgId);
+            console.log('🗑️ Updated messages cache');
+          }
+          return updatedCache;
+        });
+        
+        // Update the ref for consistency
+        messagesCacheRef.current = {
+          ...messagesCacheRef.current,
+          [selected?._id]: messagesCacheRef.current[selected?._id]?.filter(m => m._id !== msgId) || []
+        };
+        
+        // Try to delete via socket for regular conversations
+        if (chatSocket?.connected) {
+          chatSocket.deleteMessage({ messageId: msgId });
+          console.log('🗑️ Sent delete request via socket');
+        } else {
+          console.warn('🗑️ Socket not connected, attempting REST API fallback');
+          // Fallback to REST API
+          await messageAPI.deleteMessage(msgId);
+          console.log('🗑️ Successfully deleted via REST API');
+        }
+      }
+      
+    } catch (error) {
+      console.error('🗑️ Failed to delete message:', error);
+      
+      // Rollback: restore the message in UI
+      setMessages(prev => {
+        // Insert message back in correct position (sorted by createdAt)
+        const restored = [...prev, messageToDelete];
+        return restored.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      });
+      
+      // Rollback based on conversation type
+      if (isAvatarConv) {
+        // Rollback: restore in avatar messages storage
+        setAvatarMessages(prev => {
+          const newMap = new Map(prev);
+          const conversationMessages = newMap.get(selected._id) || [];
+          const restored = [...conversationMessages, messageToDelete]
+            .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          newMap.set(selected._id, restored);
+          return newMap;
+        });
+      } else {
+        // Rollback: restore in cache for regular conversations
+        setMessagesCache(prevCache => {
+          const updatedCache = { ...prevCache };
+          if (updatedCache[selected?._id]) {
+            updatedCache[selected._id] = [...updatedCache[selected._id], messageToDelete]
+              .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+          }
+          return updatedCache;
+        });
+      }
+      
+      // Show error notification
+      setNotification({
+        message: 'Failed to delete message. Please try again.',
+        type: 'error'
+      });
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   const handleStar = (convId) => {
@@ -1515,6 +2547,15 @@ export default function MessagesPage() {
   };
 
   const handlePin = (convId) => {
+    // Don't allow pinning avatar conversations
+    const targetConv = allConversations[0]?.items?.find(c => c._id === convId);
+    if (targetConv && (targetConv.conversationType === 'ai_avatar' || 
+                       targetConv.settings?.isAvatarConversation ||
+                       targetConv._id?.startsWith('avatar_conversation_'))) {
+      console.log('🤖 MessagesPage: Cannot pin avatar conversation - already at top');
+      return;
+    }
+    
     setAllConversations(prev => {
       const newSections = [...prev];
       const sectionIndex = 0; // Unified structure
@@ -1524,21 +2565,27 @@ export default function MessagesPage() {
         const convIndex = items.findIndex(c => c._id === convId);
         
         if (convIndex !== -1) {
+          const currentlyPinned = items[convIndex].isPinned;
+          const newPinnedState = !currentlyPinned;
+          
           items[convIndex] = {
             ...items[convIndex],
-            isPinned: !items[convIndex].isPinned
+            isPinned: newPinnedState
           };
           
-          // Sort so pinned conversations appear at the top
-          const sortedItems = items.sort((a, b) => {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            
-            // Within pinned/unpinned groups, sort by last message time
-            const dateA = new Date(a.lastMessageAt || a.createdAt);
-            const dateB = new Date(b.lastMessageAt || b.createdAt);
-            return dateB - dateA;
+          // Update the pinned conversations list for persistence
+          setPinnedConversations(prevPinned => {
+            if (newPinnedState) {
+              // Add to pinned list if not already there
+              return prevPinned.includes(convId) ? prevPinned : [...prevPinned, convId];
+            } else {
+              // Remove from pinned list
+              return prevPinned.filter(id => id !== convId);
+            }
           });
+          
+          // Sort with proper hierarchy: Avatar → Pinned → Regular
+          const sortedItems = sortConversationsWithAvatarTop(items);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
@@ -1793,6 +2840,12 @@ export default function MessagesPage() {
   const handleLoadMoreMessages = async () => {
     if (!selected?._id || loadingMore || !hasMoreMessages) return;
     
+    // Don't load more messages for avatar conversations - they're client-side only
+    if (isAvatarConversation && isAvatarConversation(selected)) {
+      console.log('🤖 MessagesPage: Skipping handleLoadMoreMessages for avatar conversation');
+      return;
+    }
+    
     setLoadingMore(true);
     
     try {
@@ -1801,7 +2854,7 @@ export default function MessagesPage() {
         skip: messageOffset
       });
       
-      const olderMessages = response.data.messages || [];
+      const olderMessages = (response.data.messages || []).reverse(); // Reverse since API now returns newest first
       
       if (olderMessages.length > 0) {
         // Use mergeMessages to properly deduplicate and merge older messages
@@ -1883,8 +2936,8 @@ export default function MessagesPage() {
             _forceRender: Math.random()
           };
           
-          // Add to the top of the unified list (most recent first)
-          const updatedItems = [newConversationWithTimestamp, ...cleanedItems];
+          // Add to the top of the unified list (keeping avatar conversation at top)
+          const updatedItems = sortConversationsWithAvatarTop([newConversationWithTimestamp, ...cleanedItems]);
           
           newSections[sectionIndex] = {
             ...newSections[sectionIndex],
@@ -2003,13 +3056,8 @@ export default function MessagesPage() {
           );
           
           if (existingIndex === -1) {
-            // Add to top and re-sort by most recent activity
-            const updatedItems = [newConversation, ...newSections[sectionIndex].items]
-              .sort((a, b) => {
-                const dateA = new Date(a.lastMessageAt || a.createdAt);
-                const dateB = new Date(b.lastMessageAt || b.createdAt);
-                return dateB - dateA;
-              });
+            // Add to top and re-sort by most recent activity (keeping avatar at top)
+            const updatedItems = sortConversationsWithAvatarTop([newConversation, ...newSections[sectionIndex].items]);
             
             newSections[sectionIndex] = {
               ...newSections[sectionIndex],
@@ -2220,13 +3268,11 @@ export default function MessagesPage() {
         selected,
         user,
         clearCache: () => {
-          console.log('🧹 Clearing all app cache...');
           localStorage.removeItem('messagesCache');
           localStorage.removeItem('chat_notifications');
           localStorage.removeItem('unread_count');
           localStorage.removeItem('chatSearchHistory');
           sessionStorage.removeItem('app_errors');
-          console.log('✅ Cache cleared! Please refresh the page.');
           window.location.reload();
         }
       };
@@ -2290,7 +3336,7 @@ export default function MessagesPage() {
                   onDismissDeleted={() => handleDismissDeletedConversation(conv._id)}
                   starred={starred.includes(conv._id)}
                   getInitials={getInitials}
-                  currentUserId={user?.id}
+                  currentUserId={user?._id || user?.id}
                   typing={typing[conv._id] || {}}
                   draftMessage={draftMessages[conv._id]}
                   canDelete={
@@ -2331,15 +3377,19 @@ export default function MessagesPage() {
             <div className="border-b border-gray-100 px-3 md:px-6 py-2 md:py-4 bg-gradient-to-r from-gray-50 to-blue-50">
               <div className="flex items-center justify-between">
                 <div 
-                  className="flex items-center space-x-2 md:space-x-4 cursor-pointer hover:bg-white/50 p-1 md:p-3 rounded-xl transition-all duration-200"
-                  onClick={() => setShowDetailsModal(true)}
+                  className={`flex items-center space-x-2 md:space-x-4 p-1 md:p-3 rounded-xl transition-all duration-200 ${
+                    isAvatarConversation && isAvatarConversation(selected) 
+                      ? '' 
+                      : 'cursor-pointer hover:bg-white/50'
+                  }`}
+                  onClick={() => !(isAvatarConversation && isAvatarConversation(selected)) && setShowDetailsModal(true)}
                 >
                   <div className="relative">
                     {selected.avatar ? (
                       <img src={selected.avatar} alt={selected.name || 'Conversation'} className="h-8 w-8 md:h-12 md:w-12 rounded-full object-cover shadow-lg" />
                     ) : (
                       <div className="h-8 w-8 md:h-12 md:w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm md:text-lg shadow-lg">
-                        {getInitials(getConversationDisplayName(selected, user?.id))}
+                        {getInitials(getConversationDisplayName(selected, user?._id || user?.id))}
                       </div>
                     )}
                     {selected.status && (
@@ -2347,7 +3397,7 @@ export default function MessagesPage() {
                     )}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?.id)}</h2>
+                    <h2 className="text-sm md:text-lg font-bold text-gray-900 truncate">{getConversationDisplayName(selected, user?._id || user?.id)}</h2>
                     {selected && (selected.type === 'group' || selected.type === 'community') && (
                       <p className="text-xs text-gray-600">
                         {selected.members?.length || 0} members
@@ -2367,7 +3417,7 @@ export default function MessagesPage() {
                   >
                     <Search className="h-4 w-4 md:h-5 md:w-5" />
                   </button>
-                  {selected && (
+                  {selected && !(isAvatarConversation && isAvatarConversation(selected)) && (
                     <button 
                       onClick={() => setShowSettingsModal(true)} 
                       className="p-2 rounded-xl hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700" 
@@ -2430,9 +3480,12 @@ export default function MessagesPage() {
           {selected && (
             <ChatWindow
               loading={messagesLoading}
-              messages={messages}
+              messages={messages.filter(msg => 
+                msg.conversationId === selected._id || 
+                msg.conversation === selected._id
+              )}
               currentUserId={user?.id}
-              conversationType={selected.type}
+              conversationType={selected.conversationType || selected.type}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onReply={handleReply}
@@ -2449,6 +3502,7 @@ export default function MessagesPage() {
               typing={selected && typing[selected._id] ? typing[selected._id] : {}}
               messageStatus={chatSocket.messageStatus}
               onlineUsers={Array.from(chatSocket.onlineUsers.values())}
+              unreadStartIndex={unreadStartIndex}
               shouldAutoScroll={!editMsgId && !replyTo && !showSearch && !showEmojiPicker && !reactionInProgress && showEmojiPicker !== 'input'}
               searchResults={searchResults}
               currentSearchResult={currentSearchResult}
@@ -2460,6 +3514,7 @@ export default function MessagesPage() {
               onLoadMore={handleLoadMoreMessages}
               hasMoreMessages={hasMoreMessages}
               loadingMore={loadingMore}
+              isConversationSwitch={isConversationSwitch}
             />
           )}
 
@@ -2477,6 +3532,9 @@ export default function MessagesPage() {
               members={selected?.members || []}
               isSending={isSending}
               uploadProgress={uploadProgress}
+              conversation={selected}
+              onAvatarQuery={handleAvatarResponse}
+              isAvatarInitialized={isInitialized}
             />
           )}
 

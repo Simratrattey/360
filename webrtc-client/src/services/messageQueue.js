@@ -3,6 +3,7 @@ class MessageQueueService {
   constructor() {
     this.retryQueue = [];
     this.offlineQueue = [];
+    this.failedQueue = []; // Keep track of permanently failed messages for manual retry
     this.maxRetries = 3;
     this.baseRetryDelay = 1000; // 1 second
     this.isOnline = navigator.onLine;
@@ -21,6 +22,7 @@ class MessageQueueService {
     try {
       const persistedRetryQueue = localStorage.getItem('messageRetryQueue');
       const persistedOfflineQueue = localStorage.getItem('messageOfflineQueue');
+      const persistedFailedQueue = localStorage.getItem('messageFailedQueue');
       
       if (persistedRetryQueue) {
         this.retryQueue = JSON.parse(persistedRetryQueue);
@@ -28,6 +30,10 @@ class MessageQueueService {
       
       if (persistedOfflineQueue) {
         this.offlineQueue = JSON.parse(persistedOfflineQueue);
+      }
+      
+      if (persistedFailedQueue) {
+        this.failedQueue = JSON.parse(persistedFailedQueue);
       }
       
     } catch (error) {
@@ -42,6 +48,7 @@ class MessageQueueService {
     try {
       localStorage.setItem('messageRetryQueue', JSON.stringify(this.retryQueue));
       localStorage.setItem('messageOfflineQueue', JSON.stringify(this.offlineQueue));
+      localStorage.setItem('messageFailedQueue', JSON.stringify(this.failedQueue));
     } catch (error) {
       console.error('Error persisting queues:', error);
     }
@@ -124,12 +131,15 @@ class MessageQueueService {
   removeFromQueues(tempId) {
     const initialRetryLength = this.retryQueue.length;
     const initialOfflineLength = this.offlineQueue.length;
-
+    const initialFailedLength = this.failedQueue.length;
 
     this.retryQueue = this.retryQueue.filter(item => item.tempId !== tempId);
     this.offlineQueue = this.offlineQueue.filter(item => item.tempId !== tempId);
+    this.failedQueue = this.failedQueue.filter(item => item.tempId !== tempId);
 
-    if (this.retryQueue.length !== initialRetryLength || this.offlineQueue.length !== initialOfflineLength) {
+    if (this.retryQueue.length !== initialRetryLength || 
+        this.offlineQueue.length !== initialOfflineLength ||
+        this.failedQueue.length !== initialFailedLength) {
       this.persistQueues();
       
       this.notifyListeners({
@@ -220,8 +230,9 @@ class MessageQueueService {
           // Add back with incremented attempt
           this.addToRetryQueue(item, item.attempt + 1);
         } else {
-          // Max retries reached - notify failure
+          // Max retries reached - move to failed queue for manual retry
           console.error('Max retries reached for message:', item.tempId);
+          this.failedQueue.push({ ...item, failedAt: new Date().toISOString() });
           this.notifyListeners({
             type: 'messageRetryFailed',
             tempId: item.tempId,
@@ -264,7 +275,8 @@ class MessageQueueService {
   getQueuedMessages(conversationId) {
     return [
       ...this.retryQueue.filter(item => item.conversationId === conversationId),
-      ...this.offlineQueue.filter(item => item.conversationId === conversationId)
+      ...this.offlineQueue.filter(item => item.conversationId === conversationId),
+      ...this.failedQueue.filter(item => item.conversationId === conversationId)
     ];
   }
 
@@ -272,6 +284,7 @@ class MessageQueueService {
   clearQueues() {
     this.retryQueue = [];
     this.offlineQueue = [];
+    this.failedQueue = [];
     this.persistQueues();
   }
 }

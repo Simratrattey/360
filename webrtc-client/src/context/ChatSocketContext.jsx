@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext'; // Reuse socket from SocketContext
+import { useCurrentConversation } from './CurrentConversationContext';
 import { messageStatus as messageStatusService, markAsDelivered, markAsRead } from '../services/messageStatus';
 
 const ChatSocketContext = createContext();
@@ -8,6 +9,7 @@ const ChatSocketContext = createContext();
 export function ChatSocketProvider({ children }) {
   const { user } = useAuth();
   const socketContext = useSocket(); // Get socket from SocketContext
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const [connected, setConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Map());
   const [legacyMessageStatus, setLegacyMessageStatus] = useState(new Map());
@@ -19,11 +21,9 @@ export function ChatSocketProvider({ children }) {
   useEffect(() => {
     if (!user || !socket) return;
     
-    console.log('🔔 ChatSocket reusing socket from SocketContext:', socket.id);
     const s = socket; // Use existing socket
 
     s.on('connect', () => {
-      console.log('🔔 Chat socket connected - User ID:', user?.id, 'Socket ID:', s.id);
       setConnected(true);
       // Get online users when connected
       s.emit('getOnlineUsers');
@@ -35,7 +35,6 @@ export function ChatSocketProvider({ children }) {
         if (s.connected) {
           s.emit('heartbeat');
         } else {
-          console.log('🔔 Socket disconnected, stopping heartbeat');
           clearInterval(heartbeat);
         }
       }, 30000); // Send heartbeat every 30 seconds
@@ -45,7 +44,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('disconnect', (reason) => {
-      console.log('🔔 Chat socket disconnected - User ID:', user?.id, 'Reason:', reason);
       setConnected(false);
       
       // Clear heartbeat interval
@@ -61,7 +59,6 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('reconnect', (attemptNumber) => {
-      console.log('🔔 Chat socket reconnected - User ID:', user?.id, 'Attempt:', attemptNumber);
       setConnected(true);
       // Refresh online users after reconnection
       s.emit('getOnlineUsers');
@@ -75,7 +72,6 @@ export function ChatSocketProvider({ children }) {
 
     // Online status events
     s.on('user:online', ({ userId, user }) => {
-      console.log('User came online:', user?.username);
       setOnlineUsers(prev => new Map(prev).set(userId, user));
     });
 
@@ -89,35 +85,13 @@ export function ChatSocketProvider({ children }) {
     });
 
     s.on('onlineUsers', (users) => {
-      console.log('Received online users:', users.length);
       const userMap = new Map();
       users.forEach(user => userMap.set(user.id, user));
       setOnlineUsers(userMap);
     });
 
-    // Debug: Add specific event listeners for debugging
-    s.on('chat:new', (message) => {
-      // Show browser notification if message is not from current user
-      if (
-        window.Notification &&
-        Notification.permission === 'granted' &&
-        user &&
-        (
-          (message.senderId && message.senderId !== user.id) ||
-          (typeof message.sender === 'string' && message.sender !== user.id) ||
-          (typeof message.sender === 'object' && message.sender && message.sender._id !== user.id)
-        )
-      ) {
-        const title = message.senderName || (message.sender && message.sender.fullName) || 'New Message';
-        const body = message.text || (message.file ? 'Sent a file' : 'New message');
-        try {
-          new Notification(title, { body });
-          console.log('[Notification Debug] Notification shown:', title, body);
-        } catch (e) {
-          console.error('[Notification Debug] Notification error:', e);
-        }
-      }
-    });
+    // Note: chat:new events are handled exclusively by MessagesPage component
+    // to avoid conflicts and ensure proper message processing and deduplication
 
     // Message delivery status events
     s.on('chat:delivered', ({ messageId, recipients }) => {
@@ -183,7 +157,6 @@ export function ChatSocketProvider({ children }) {
     return () => {
       if (s) {
         // Remove only chat-specific event listeners, not all listeners
-        s.off('chat:new');
         s.off('chat:delivered');
         s.off('chat:read');
         s.off('user:online');
@@ -244,7 +217,6 @@ export function ChatSocketProvider({ children }) {
   const joinConversation = (conversationId) => {
     if (socket && conversationId) {
       try {
-        console.log('Joining conversation:', conversationId);
         socket.emit('joinConversation', conversationId);
       } catch (error) {
         console.error('Error joining conversation:', error);
@@ -255,7 +227,6 @@ export function ChatSocketProvider({ children }) {
   const leaveConversation = (conversationId) => {
     if (socket && conversationId) {
       try {
-        console.log('Leaving conversation:', conversationId);
         socket.emit('leaveConversation', conversationId);
       } catch (error) {
         console.error('Error leaving conversation:', error);
@@ -271,12 +242,10 @@ export function ChatSocketProvider({ children }) {
       }
 
       try {
-        console.log('Sending message:', data);
         
         // Set up one-time listeners for this message
         const successHandler = (response) => {
           if (response.tempId === data.tempId) {
-            console.log('Message sent successfully:', response);
             resolve(response);
             // Clean up listeners
             socket.off('chat:sent', successHandler);

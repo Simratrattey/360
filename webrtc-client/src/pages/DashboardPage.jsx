@@ -20,37 +20,36 @@ import { openMeetingWindow, generateRoomId } from '../utils/meetingWindow';
 import { AuthContext } from '../context/AuthContext';
 import ScheduleMeetingModal from '../components/ScheduleMeetingModal.jsx';
 import CreateMeetingModal from '../components/CreateMeetingModal.jsx';
+import MeetingDetailsModal from '../components/MeetingDetailsModal.jsx';
 import API from '../api/client.js';
 import * as conversationAPI from '../api/conversationService';
 import { useChatSocket } from '../context/ChatSocketContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useCurrentConversation } from '../context/CurrentConversationContext';
 import { useSocket } from '../context/SocketContext';
 
-const stats = [
-  { name: 'Total Meetings', value: '24', icon: Video, change: '+12%', changeType: 'positive' },
-  { name: 'Active Contacts', value: '156', icon: Users, change: '+8%', changeType: 'positive' },
-  { name: 'Hours This Week', value: '18.5', icon: Clock, change: '+5%', changeType: 'positive' },
-  { name: 'Upcoming', value: '3', icon: Calendar, change: '0%', changeType: 'neutral' },
-];
-
-const recentMeetings = [
-  { id: 1, title: 'Team Standup', participants: 8, duration: '30m', date: '2 hours ago', status: 'completed' },
-  { id: 2, title: 'Client Presentation', participants: 12, duration: '1h 15m', date: 'Yesterday', status: 'completed' },
-  { id: 3, title: 'Project Review', participants: 5, duration: '45m', date: '2 days ago', status: 'completed' },
-  { id: 4, title: 'Weekly Sync', participants: 15, duration: '1h', date: '3 days ago', status: 'completed' },
-];
 
 export default function DashboardPage() {
   const { user } = useContext(AuthContext);
   const chatSocket = useChatSocket();
   const { sfuSocket } = useSocket() || {};
+  const { currentConversationId, isOnMessagesPage } = useCurrentConversation();
   const navigate = useNavigate();
-  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications } = useNotifications();
+  const { unreadCount: globalUnreadCount, notifications: generalNotifications, markAsRead, refreshNotifications, clearNotificationsForConversation } = useNotifications();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   // Using only global notifications to avoid duplicates
   const [scheduling, setScheduling] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  
+  // Dashboard data state
+  const [stats, setStats] = useState([]);
+  const [recentMeetings, setRecentMeetings] = useState([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  
+  // Meeting details modal state
+  const [selectedMeetingId, setSelectedMeetingId] = useState(null);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   
   // Join request system
   const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
@@ -68,13 +67,106 @@ export default function DashboardPage() {
       });
   };
 
+  const loadDashboardData = async () => {
+    try {
+      setDashboardLoading(true);
+      
+      // Make parallel requests for better performance
+      const [statsResponse, meetingsResponse] = await Promise.all([
+        API.get('/dashboard/stats').catch(err => {
+          console.error('Error loading stats:', err);
+          return { data: { success: false } };
+        }),
+        API.get('/dashboard/recent-meetings').catch(err => {
+          console.error('Error loading meetings:', err);
+          return { data: { success: false } };
+        })
+      ]);
+      
+      // Handle stats response
+      if (statsResponse.data.success) {
+        setStats(statsResponse.data.stats);
+      } else {
+        console.warn('Stats API failed, using fallback');
+        setStats([
+          { name: 'Total Meetings', value: '0', icon: 'Video', change: '0%', changeType: 'neutral' },
+          { name: 'Active Contacts', value: '0', icon: 'Users', change: '0%', changeType: 'neutral' },
+          { name: 'Hours This Week', value: '0', icon: 'Clock', change: '0%', changeType: 'neutral' },
+          { name: 'Upcoming', value: '0', icon: 'Calendar', change: '0%', changeType: 'neutral' },
+        ]);
+      }
+      
+      // Handle meetings response
+      if (meetingsResponse.data.success) {
+        setRecentMeetings(meetingsResponse.data.meetings);
+      } else {
+        console.warn('Recent meetings API failed, using empty array');
+        setRecentMeetings([]);
+      }
+      
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      // Set fallback data on error
+      setStats([
+        { name: 'Total Meetings', value: '0', icon: 'Video', change: '0%', changeType: 'neutral' },
+        { name: 'Active Contacts', value: '0', icon: 'Users', change: '0%', changeType: 'neutral' },
+        { name: 'Hours This Week', value: '0', icon: 'Clock', change: '0%', changeType: 'neutral' },
+        { name: 'Upcoming', value: '0', icon: 'Calendar', change: '0%', changeType: 'neutral' },
+      ]);
+      setRecentMeetings([]);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Fetch active rooms
+    // Initial fetch
     loadRooms();
-  }, []);
+    loadDashboardData();
+    // Real-time updates via socket events
+    if (sfuSocket) {
+      const handleOpened = () => loadRooms();
+      const handleClosed = () => loadRooms();
+      sfuSocket.on('roomOpened', handleOpened);
+      sfuSocket.on('roomClosed', handleClosed);
+      return () => {
+        sfuSocket.off('roomOpened', handleOpened);
+        sfuSocket.off('roomClosed', handleClosed);
+      };
+    }
+  }, [sfuSocket]);
 
   // Fetch unread message notifications
 
+
+  // Real-time dashboard refresh for meeting changes
+  useEffect(() => {
+    if (!sfuSocket) {
+      console.log('[Dashboard] sfuSocket not available yet');
+      return;
+    }
+    
+    console.log('[Dashboard] Setting up dashboard:refresh listener on sfuSocket');
+    
+    const handleDashboardRefresh = (data) => {
+      console.log('🔄 Dashboard received refresh event:', data);
+      // Refresh dashboard stats when a meeting involving this user is scheduled/updated
+      console.log('[Dashboard] Calling loadDashboardData() due to refresh event');
+      loadDashboardData();
+      
+      // Optionally show a notification
+      if (data.reason === 'meeting_scheduled' && data.organizerName) {
+        console.log(`📅 Meeting "${data.meetingTitle}" scheduled by ${data.organizerName}, refreshing dashboard`);
+      }
+    };
+    
+    sfuSocket.on('dashboard:refresh', handleDashboardRefresh);
+    
+    return () => {
+      console.log('[Dashboard] Cleaning up dashboard:refresh listener');
+      sfuSocket.off('dashboard:refresh', handleDashboardRefresh);
+    };
+  }, [sfuSocket]);
 
   // Real-time conversation creation/deletion updates for dashboard
   useEffect(() => {
@@ -260,6 +352,16 @@ export default function DashboardPage() {
     return notification.id;
   };
 
+  const openMeetingDetails = (meetingId) => {
+    setSelectedMeetingId(meetingId);
+    setIsMeetingModalOpen(true);
+  };
+  
+  const closeMeetingDetails = () => {
+    setSelectedMeetingId(null);
+    setIsMeetingModalOpen(false);
+  };
+
   const requestJoinMeeting = (roomId) => {
     if (!sfuSocket || !user) {
       addJoinRequestNotification('error', 'Unable to send join request. Please try again.');
@@ -304,23 +406,25 @@ export default function DashboardPage() {
         <div className="absolute right-0 bottom-0 w-64 h-64 bg-gradient-to-br from-purple-400/30 to-blue-400/10 rounded-full blur-2xl opacity-40" />
       </div>
       {/* Welcome Section */}
-      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-8 flex items-center justify-between bg-white/70 shadow-2xl rounded-2xl border border-white/30">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
-            <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
-            Welcome back, {user?.fullName || user?.username}!
-          </h1>
-          <p className="text-secondary-700 mt-2 text-lg">Here's what's happening with your meetings today.</p>
+      <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }} className="card glass-effect p-6 sm:p-8 bg-white/70 shadow-2xl rounded-2xl border border-white/30">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 w-full">
+          <div className="min-w-0">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-primary-800 flex items-center gap-2">
+              <Sparkles className="h-7 w-7 text-blue-400 animate-bounce" />
+              Welcome back, {user?.fullName || user?.username}!
+            </h1>
+            <p className="text-secondary-700 mt-2 text-lg">Here's what's happening with your meetings today.</p>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.07 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={createNewMeeting}
+            className="btn-primary flex items-center justify-center space-x-2 w-full sm:w-auto px-5 sm:px-6 py-3 text-base sm:text-lg rounded-xl shadow-lg"
+          >
+            <Plus className="h-5 w-5" />
+            <span>New Meeting</span>
+          </motion.button>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.07 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={createNewMeeting}
-          className="btn-primary flex items-center space-x-2 px-6 py-3 text-lg rounded-xl shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          <span>New Meeting</span>
-        </motion.button>
       </motion.div>
 
       {/* Notifications Section */}
@@ -331,32 +435,66 @@ export default function DashboardPage() {
             Notifications
           </h2>
         </div>
-        {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).length > 0 ? (
+        {(() => {
+          // Filter unread notifications, excluding message notifications for currently selected conversation
+          const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+            .filter(notif => !notif.read)
+            .filter(notif => {
+              // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+              // Don't hide notifications just because user was previously on messages page
+              if (notif.type === 'message' && 
+                  isOnMessagesPage && 
+                  currentConversationId === notif.data?.conversationId &&
+                  window.location.pathname === '/messages') {
+                console.log('🔍 Hiding notification for current conversation:', notif.data?.conversationId);
+                return false;
+              }
+              return true;
+            });
+          
+          return unreadNotifications.length > 0;
+        })() ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
             
             {/* General notifications (group/conversation events) */}
-            {(Array.isArray(generalNotifications) ? generalNotifications.filter(notif => !notif.read) : []).map((notif, idx) => (
+            {(() => {
+              // Filter unread notifications, excluding message notifications for currently selected conversation
+              const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
+                .filter(notif => !notif.read)
+                .filter(notif => {
+                  // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+                  if (notif.type === 'message' && 
+                      isOnMessagesPage && 
+                      currentConversationId === notif.data?.conversationId &&
+                      window.location.pathname === '/messages') {
+                    return false;
+                  }
+                  return true;
+                });
+              
+              return filteredNotifications;
+            })().map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: idx * 0.07, duration: 0.5 }}
                 className="flex items-center gap-4 p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:scale-105 transition-transform cursor-pointer"
-                onClick={async () => {
-                  // Mark notification as read
-                  if (markAsRead && notif._id) {
-                    await markAsRead(notif._id);
-                    // Refresh notifications to ensure UI is in sync with server
-                    if (refreshNotifications) {
-                      refreshNotifications();
-                    }
-                  }
-                  // Navigate based on notification type
+                onClick={() => {
+                  // Navigate immediately for instant response
                   if (notif.type === 'conversation_created' || notif.type === 'community_created' || notif.type === 'conversation_deleted') {
                     navigate('/messages');
                   } else if (notif.type === 'message' && notif.data?.conversationId) {
                     // Navigate to specific conversation for message notifications
+                    // Notifications will be cleared when the conversation is actually opened in MessagesPage
                     navigate(`/messages?conversation=${notif.data.conversationId}`);
+                  }
+                  
+                  // Mark notification as read in background (non-blocking)
+                  if (markAsRead && notif._id) {
+                    markAsRead(notif._id).catch(err => {
+                      console.error('Error marking notification as read:', err);
+                    });
                   }
                 }}
               >
@@ -366,14 +504,25 @@ export default function DashboardPage() {
                       ? 'from-green-500 to-emerald-500' 
                       : notif.type === 'conversation_deleted' 
                       ? 'from-red-500 to-pink-500'
+                      : notif.type === 'message'
+                      ? 'from-purple-500 to-blue-500'
                       : 'from-blue-500 to-cyan-500'
                   } flex items-center justify-center text-white font-bold text-lg shadow-lg`}>
                     {notif.type === 'conversation_created' || notif.type === 'community_created' ? '🎉' : 
-                     notif.type === 'conversation_deleted' ? '🗑️' : '🔔'}
+                     notif.type === 'conversation_deleted' ? '🗑️' : 
+                     notif.type === 'message' ? '💬' : '🔔'}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-secondary-800 truncate">{notif.title}</p>
+                  {/* Show conversation name for group/community notifications */}
+                  {(notif.type === 'conversation_created' || notif.type === 'community_created') && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-blue-600 truncate">"{notif.data.conversationName}"</p>
+                  )}
+                  {/* Show conversation context for message notifications */}
+                  {notif.type === 'message' && notif.data?.conversationType && notif.data?.conversationType !== 'dm' && notif.data?.conversationName && (
+                    <p className="text-sm font-medium text-green-600 truncate">in "{notif.data.conversationName}"</p>
+                  )}
                   <p className="text-sm text-secondary-600 truncate">{notif.message}</p>
                   <p className="text-xs text-secondary-400 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</p>
                 </div>
@@ -387,29 +536,51 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {stats.map((stat, index) => (
-          <motion.div
-            key={stat.name}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.12, duration: 0.6 }}
-            className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
-          >
-            <div>
-              <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
-              <p className="text-3xl font-extrabold text-primary-800">{stat.value}</p>
-              <p className={`text-xs mt-1 ${
-                stat.changeType === 'positive' ? 'text-green-600' : 
-                stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
-              }`}>
-                {stat.change} from last month
-              </p>
+        {dashboardLoading ? (
+          // Loading skeleton
+          [1, 2, 3, 4].map((index) => (
+            <div key={index} className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 animate-pulse">
+              <div className="flex-1">
+                <div className="h-4 bg-secondary-300 rounded w-3/4 mb-2"></div>
+                <div className="h-8 bg-secondary-300 rounded w-1/2 mb-1"></div>
+                <div className="h-3 bg-secondary-300 rounded w-2/3"></div>
+              </div>
+              <div className="h-14 w-14 bg-secondary-300 rounded-xl"></div>
             </div>
-            <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
-              <stat.icon className="h-7 w-7 text-white" />
-            </div>
-          </motion.div>
-        ))}
+          ))
+        ) : (
+          stats.map((stat, index) => {
+            // Map icon names to actual icon components
+            const IconComponent = stat.icon === 'Video' ? Video :
+                                stat.icon === 'Users' ? Users :
+                                stat.icon === 'Clock' ? Clock :
+                                stat.icon === 'Calendar' ? Calendar : Video;
+            
+            return (
+              <motion.div
+                key={stat.name}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.12, duration: 0.6 }}
+                className="glass-effect bg-white/70 shadow-xl rounded-2xl p-6 flex items-center justify-between border border-white/30 hover:scale-105 hover:shadow-2xl transition-transform duration-200"
+              >
+                <div>
+                  <p className="text-base font-semibold text-secondary-700 mb-1">{stat.name}</p>
+                  <p className="text-3xl font-extrabold text-primary-800">{stat.value}</p>
+                  <p className={`text-xs mt-1 ${
+                    stat.changeType === 'positive' ? 'text-green-600' : 
+                    stat.changeType === 'negative' ? 'text-red-600' : 'text-secondary-500'
+                  }`}>
+                    {stat.change} from last month
+                  </p>
+                </div>
+                <div className="h-14 w-14 bg-gradient-to-br from-blue-400 to-purple-400 rounded-xl flex items-center justify-center shadow-lg">
+                  <IconComponent className="h-7 w-7 text-white" />
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -435,7 +606,7 @@ export default function DashboardPage() {
                 <motion.div
                   key={room.roomId}
                   whileHover={{ scale: 1.03 }}
-                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
+                  className="p-4 bg-white/60 rounded-xl hover:bg-blue-50/60 transition-colors cursor-pointer border border-white/20 shadow"
                   onClick={() => {
                     if (room.visibility === 'approval' && !approvedRooms.has(room.roomId)) {
                       requestJoinMeeting(room.roomId);
@@ -444,27 +615,29 @@ export default function DashboardPage() {
                     }
                   }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-primary-800 truncate">{room.name}</p>
-                      {room.isRecording && (
-                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
-                      )}
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-bold text-primary-800 truncate min-w-0">{room.name}</p>
+                        {room.isRecording && (
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Recording in progress"></div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-secondary-600 whitespace-nowrap">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</span>
+                        <span className="text-[10px] sm:text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          {room.visibility === 'public' ? 'Public' : 'Approval Required'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-secondary-600">{room.participantCount} participant{room.participantCount !== 1 ? 's' : ''}</p>
-                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
-                        {room.visibility === 'public' ? 'Public' : 'Approval Required'}
-                      </span>
-                    </div>
+                    <button className={`ml-auto shrink-0 text-sm py-1 px-3 sm:px-4 rounded-lg shadow transition-colors ${
+                      room.visibility === 'approval' && !approvedRooms.has(room.roomId)
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'btn-primary'
+                    }`}>
+                      {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
+                    </button>
                   </div>
-                  <button className={`text-sm py-1 px-4 rounded-lg shadow transition-colors ${
-                    room.visibility === 'approval' && !approvedRooms.has(room.roomId)
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                      : 'btn-primary'
-                  }`}>
-                    {room.visibility === 'approval' && !approvedRooms.has(room.roomId) ? 'Request' : 'Join'}
-                  </button>
                 </motion.div>
               ))}
             </div>
@@ -488,29 +661,60 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold text-primary-800">Recent Meetings</h2>
             <TrendingUp className="h-6 w-6 text-blue-400" />
           </div>
-          <div className="space-y-3">
-            {recentMeetings.map((meeting) => (
-              <div key={meeting.id} className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow">
-                <div className="flex items-center space-x-3">
-                  <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
-                    <Video className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-primary-800">{meeting.title}</p>
-                    <p className="text-sm text-secondary-600">
-                      {meeting.participants} participants • {meeting.duration}
-                    </p>
+          {dashboardLoading ? (
+            // Loading skeleton
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="animate-pulse p-4 bg-white/60 rounded-xl border border-white/20">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-secondary-300 rounded-lg"></div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-secondary-300 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-secondary-300 rounded w-1/2"></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-3 bg-secondary-300 rounded w-16 mb-1"></div>
+                      <div className="h-4 bg-secondary-300 rounded w-12"></div>
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-secondary-500">{meeting.date}</p>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    {meeting.status}
-                  </span>
+              ))}
+            </div>
+          ) : recentMeetings.length > 0 ? (
+            <div className="space-y-3">
+              {recentMeetings.map((meeting, index) => (
+                <div 
+                  key={meeting.id || index} 
+                  className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-white/20 shadow hover:bg-white/80 transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+                  onClick={() => openMeetingDetails(meeting.id)}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 bg-gradient-to-br from-blue-400 to-purple-400 rounded-lg flex items-center justify-center shadow-lg">
+                      <Video className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-primary-800">{meeting.title}</p>
+                      <p className="text-sm text-secondary-600">
+                        {meeting.participants} participants • {meeting.duration}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-secondary-500">{meeting.date}</p>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {meeting.status}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Video className="h-12 w-12 text-secondary-400 mx-auto mb-3" />
+              <p className="text-secondary-600">No recent meetings</p>
+              <p className="text-sm text-secondary-500">Start a meeting to see your history here</p>
+            </div>
+          )}
         </motion.div>
       </div>
 
@@ -635,6 +839,13 @@ export default function DashboardPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Meeting Details Modal */}
+      <MeetingDetailsModal
+        isOpen={isMeetingModalOpen}
+        onClose={closeMeetingDetails}
+        meetingId={selectedMeetingId}
+      />
     </div>
   );
 } 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Paperclip, Smile, X, Send, AlertCircle, Loader2, Camera, Image as ImageIcon, FileText } from 'lucide-react';
-import { validateFile, formatFileSize, getFileIcon } from '../../api/messageService';
+import { validateFile, formatFileSize, getFileIcon, isAvatarConversation } from '../../api/messageService';
+import { useAvatarConversation } from '../../hooks/useAvatarConversation';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 
@@ -16,6 +17,8 @@ export default function ChatInput({
   members = [],
   isSending = false,
   uploadProgress = 0,
+  conversation = null, // Add conversation prop for avatar detection
+  onAvatarQuery = null, // Add avatar query handler prop
 }) {
   const typingTimeoutRef = useRef(null);
   const [fileError, setFileError] = useState(null);
@@ -25,6 +28,11 @@ export default function ChatInput({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const attachmentMenuRef = useRef(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const chatInputRef = useRef(null);
+  
+  // Avatar conversation state (simplified - just for conversation detection)
+  const { isAvatarConversation: checkIsAvatarConversation } = useAvatarConversation();
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -68,7 +76,7 @@ export default function ChatInput({
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     // Stop typing when sending
     if (onTyping) {
       onTyping(false);
@@ -76,7 +84,15 @@ export default function ChatInput({
         clearTimeout(typingTimeoutRef.current);
       }
     }
-    onSend();
+
+    // For avatar conversations, just send the regular message
+    // MessagesPage will handle the avatar response processing automatically
+    if (checkIsAvatarConversation && checkIsAvatarConversation(conversation) && input.trim()) {
+      onSend();
+    } else {
+      // Regular message sending for non-avatar conversations
+      onSend();
+    }
   };
 
 
@@ -210,8 +226,88 @@ export default function ChatInput({
     }
   };
 
+  // Drag and drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragOver to false if we're leaving the chat input container
+    if (!chatInputRef.current?.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      const file = files[0]; // Take first file for now
+      handleFileSelect(file);
+    }
+  };
+
+  // Clipboard paste handler
+  const handlePaste = (e) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) {
+        handleFileSelect(file);
+      }
+    }
+  };
+
+  const handleFileSelect = (file) => {
+    try {
+      validateFile(file);
+      setFileError(null);
+      onFileChange({ target: { files: [file] } });
+    } catch (error) {
+      setFileError(error.message);
+      setTimeout(() => setFileError(null), 5000);
+    }
+  };
+
   return (
-    <div className="p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm">
+    <div 
+      ref={chatInputRef}
+      className={`p-3 sm:p-6 border-t border-gray-100 bg-white/80 backdrop-blur-sm relative ${
+        isDragOver ? 'ring-2 ring-blue-400 bg-blue-50/50' : ''
+      }`}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 bg-blue-500/20 border-2 border-dashed border-blue-400 rounded-lg flex items-center justify-center z-10 backdrop-blur-sm">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-2 bg-blue-500 rounded-full flex items-center justify-center">
+              <Paperclip className="h-8 w-8 text-white" />
+            </div>
+            <p className="text-blue-700 font-medium text-lg">Drop files here</p>
+            <p className="text-blue-600 text-sm">Release to upload</p>
+          </div>
+        </div>
+      )}
+
       {/* File error message */}
       {fileError && (
         <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
@@ -281,8 +377,8 @@ export default function ChatInput({
 
       {/* Input area */}
       <div className="flex items-end space-x-2 sm:space-x-3 relative">
-        {/* Enhanced attachment menu */}
-        <div className="relative" ref={attachmentMenuRef}>
+        {/* Enhanced attachment menu - TEMPORARILY COMMENTED OUT */}
+        {/* <div className="relative" ref={attachmentMenuRef}>
           <button
             onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
             disabled={isSending}
@@ -297,7 +393,7 @@ export default function ChatInput({
           </button>
           
           {/* Attachment menu */}
-          {showAttachmentMenu && (
+          {/* {showAttachmentMenu && (
             <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-2 min-w-[180px] z-50">
               <button
                 onClick={() => handleAttachmentSelect('image')}
@@ -331,8 +427,8 @@ export default function ChatInput({
                 <span>Any File</span>
               </button>
             </div>
-          )}
-        </div>
+          )} */}
+        {/* </div> */}
 
         {/* Text input */}
         <div className="flex-1 relative">
@@ -347,6 +443,7 @@ export default function ChatInput({
                 handleSend();
               }
             }}
+            onPaste={handlePaste}
             placeholder="Type a message..."
             rows={1}
             className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-10 sm:pr-12 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white resize-none shadow-sm text-sm sm:text-base"
@@ -399,10 +496,20 @@ export default function ChatInput({
         <button
           onClick={handleSend}
           disabled={(!input.trim() && !uploadFile) || isSending}
-          className="p-2 sm:p-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative"
+          className={`p-2 sm:p-3 rounded-xl text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none relative ${
+            isAvatarConversation(conversation)
+              ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
+              : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
+          } ${
+            isSending
+              ? 'from-gray-300 to-gray-400 cursor-not-allowed'
+              : ''
+          }`}
         >
           {isSending ? (
-            <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+            <div className="flex items-center space-x-1">
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+            </div>
           ) : (
             <Send className="h-4 w-4 sm:h-5 sm:w-5" />
           )}
