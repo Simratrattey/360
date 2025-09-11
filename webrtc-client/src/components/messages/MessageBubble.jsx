@@ -422,26 +422,122 @@ function MessageBubble({
 
     // If the file type can be previewed, show an appropriate preview based on type
     if (canPreviewFile) {
-      // Enhanced WhatsApp/Slack-style image preview with progressive loading
+      // Enhanced WhatsApp/Slack-style image preview with robust loading
       if (isImage) {
-        // Simple image URL construction with retry logic
-        const getImageSrc = () => {
-          if (imgRetryCount === 0) {
-            // First attempt: Use constructed file URL with auth token
-            return constructFileUrl(msg.file, true);
-          } else if (imgRetryCount === 1) {
-            // Second attempt: Try without auth token
-            return constructFileUrl(msg.file, false);
-          } else {
-            // Third attempt: Direct URL construction
+        const [imageBlob, setImageBlob] = useState(null);
+        const [imageUrl, setImageUrl] = useState(null);
+        const [imageStatus, setImageStatus] = useState('loading'); // loading, loaded, error
+        
+        useEffect(() => {
+          let isCancelled = false;
+          
+          const loadImage = async () => {
+            console.log('[Image Loading] Starting image load for:', msg.file.name);
+            setImageStatus('loading');
+            setImgLoading(true);
+            setImgError(false);
+            
             const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
             const filename = msg.file.url || msg.file.name;
             const cleanFilename = filename.split('/').pop().split('?')[0];
-            return `${baseUrl}/uploads/messages/${cleanFilename}`;
-          }
-        };
+            const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+            
+            // Try different authentication methods
+            const authMethods = [
+              // Method 1: Bearer token in headers
+              async () => {
+                const token = localStorage.getItem('token');
+                console.log('[Image Loading] Method 1: Bearer token in headers');
+                return await fetch(directUrl, {
+                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  mode: 'cors',
+                  credentials: 'include'
+                });
+              },
+              // Method 2: Token as query parameter
+              async () => {
+                const token = localStorage.getItem('token');
+                const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                console.log('[Image Loading] Method 2: Token as query param');
+                return await fetch(urlWithToken, {
+                  mode: 'cors',
+                  credentials: 'include'
+                });
+              },
+              // Method 3: No authentication
+              async () => {
+                console.log('[Image Loading] Method 3: No authentication');
+                return await fetch(directUrl, {
+                  mode: 'cors'
+                });
+              }
+            ];
+            
+            for (let i = 0; i < authMethods.length && !isCancelled; i++) {
+              try {
+                console.log(`[Image Loading] Trying method ${i + 1}/${authMethods.length}`);
+                const response = await authMethods[i]();
+                
+                console.log(`[Image Loading] Method ${i + 1} response:`, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: Object.fromEntries(response.headers.entries()),
+                  url: response.url
+                });
+                
+                if (response.ok) {
+                  const contentType = response.headers.get('content-type');
+                  console.log('[Image Loading] Content-Type:', contentType);
+                  
+                  // Check if response is actually an image
+                  if (contentType && contentType.startsWith('image/')) {
+                    const blob = await response.blob();
+                    console.log('[Image Loading] Successfully loaded blob:', blob.size, 'bytes');
+                    
+                    if (!isCancelled) {
+                      const blobUrl = URL.createObjectURL(blob);
+                      setImageBlob(blob);
+                      setImageUrl(blobUrl);
+                      setImageStatus('loaded');
+                      setImgLoading(false);
+                      setImgError(false);
+                      return; // Success!
+                    }
+                  } else {
+                    console.warn('[Image Loading] Response is not an image, content-type:', contentType);
+                    // Try to read as text to see what we got
+                    const text = await response.text();
+                    console.warn('[Image Loading] Response text preview:', text.substring(0, 200));
+                  }
+                } else {
+                  console.warn(`[Image Loading] Method ${i + 1} failed:`, response.status, response.statusText);
+                }
+              } catch (error) {
+                console.error(`[Image Loading] Method ${i + 1} error:`, error);
+              }
+            }
+            
+            // All methods failed
+            if (!isCancelled) {
+              console.error('[Image Loading] All methods failed');
+              setImageStatus('error');
+              setImgLoading(false);
+              setImgError(true);
+            }
+          };
+          
+          loadImage();
+          
+          // Cleanup function
+          return () => {
+            isCancelled = true;
+            if (imageUrl) {
+              URL.revokeObjectURL(imageUrl);
+            }
+          };
+        }, [msg.file, imgRetryCount]);
         
-        const imageSrc = getImageSrc();
+        const imageSrc = imageUrl;
         
         return (
           <div className="relative group">
@@ -640,58 +736,173 @@ function MessageBubble({
           </div>
         );
       }
-      // Enhanced PDF preview with simple URL construction
+      // Enhanced PDF preview with robust loading
       if (msg.file.type === 'application/pdf') {
-        const [pdfError, setPdfError] = useState(false);
+        const [pdfBlob, setPdfBlob] = useState(null);
+        const [pdfUrl, setPdfUrl] = useState(null);
+        const [pdfStatus, setPdfStatus] = useState('loading'); // loading, loaded, error
         
-        // Try different PDF URL approaches
-        const getPdfUrl = () => {
-          // First try with token as query parameter
-          const urlWithToken = constructFileUrl(msg.file, true);
-          return urlWithToken;
-        };
+        useEffect(() => {
+          let isCancelled = false;
+          
+          const loadPDF = async () => {
+            console.log('[PDF Loading] Starting PDF load for:', msg.file.name);
+            setPdfStatus('loading');
+            
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+            const filename = msg.file.url || msg.file.name;
+            const cleanFilename = filename.split('/').pop().split('?')[0];
+            const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+            
+            // Try different authentication methods
+            const authMethods = [
+              // Method 1: Bearer token in headers
+              async () => {
+                const token = localStorage.getItem('token');
+                console.log('[PDF Loading] Method 1: Bearer token in headers');
+                return await fetch(directUrl, {
+                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  mode: 'cors',
+                  credentials: 'include'
+                });
+              },
+              // Method 2: Token as query parameter
+              async () => {
+                const token = localStorage.getItem('token');
+                const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                console.log('[PDF Loading] Method 2: Token as query param');
+                return await fetch(urlWithToken, {
+                  mode: 'cors',
+                  credentials: 'include'
+                });
+              },
+              // Method 3: No authentication
+              async () => {
+                console.log('[PDF Loading] Method 3: No authentication');
+                return await fetch(directUrl, {
+                  mode: 'cors'
+                });
+              }
+            ];
+            
+            for (let i = 0; i < authMethods.length && !isCancelled; i++) {
+              try {
+                console.log(`[PDF Loading] Trying method ${i + 1}/${authMethods.length}`);
+                const response = await authMethods[i]();
+                
+                console.log(`[PDF Loading] Method ${i + 1} response:`, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: Object.fromEntries(response.headers.entries()),
+                  url: response.url
+                });
+                
+                if (response.ok) {
+                  const contentType = response.headers.get('content-type');
+                  console.log('[PDF Loading] Content-Type:', contentType);
+                  
+                  // Check if response is actually a PDF
+                  if (contentType && contentType.includes('application/pdf')) {
+                    const blob = await response.blob();
+                    console.log('[PDF Loading] Successfully loaded blob:', blob.size, 'bytes');
+                    
+                    if (!isCancelled) {
+                      const blobUrl = URL.createObjectURL(blob);
+                      setPdfBlob(blob);
+                      setPdfUrl(blobUrl);
+                      setPdfStatus('loaded');
+                      return; // Success!
+                    }
+                  } else {
+                    console.warn('[PDF Loading] Response is not a PDF, content-type:', contentType);
+                    // Try to read as text to see what we got
+                    const text = await response.text();
+                    console.warn('[PDF Loading] Response text preview:', text.substring(0, 200));
+                  }
+                } else {
+                  console.warn(`[PDF Loading] Method ${i + 1} failed:`, response.status, response.statusText);
+                }
+              } catch (error) {
+                console.error(`[PDF Loading] Method ${i + 1} error:`, error);
+              }
+            }
+            
+            // All methods failed
+            if (!isCancelled) {
+              console.error('[PDF Loading] All methods failed');
+              setPdfStatus('error');
+            }
+          };
+          
+          loadPDF();
+          
+          // Cleanup function
+          return () => {
+            isCancelled = true;
+            if (pdfUrl) {
+              URL.revokeObjectURL(pdfUrl);
+            }
+          };
+        }, [msg.file]);
         
-        const pdfPreviewUrl = `${getPdfUrl()}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+        const pdfPreviewUrl = pdfUrl ? `${pdfUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH` : null;
         
-        console.log('[PDF Preview] Using URL:', pdfPreviewUrl);
+        console.log('[PDF Preview] Blob URL generated:', pdfPreviewUrl);
         
         return (
           <div className="flex flex-col space-y-2">
             <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden group">
-              {/* PDF Preview iframe */}
-              <iframe
-                src={pdfPreviewUrl}
-                title={`${msg.file.name} - Page 1`}
-                className="w-full h-full"
-                style={{ border: 'none' }}
-                onError={() => {
-                  console.warn('PDF iframe failed to load');
-                  setPdfError(true);
-                }}
-                onLoad={() => {
-                  console.log('PDF iframe loaded successfully');
-                  setPdfError(false);
-                }}
-              />
+              {/* Loading state */}
+              {pdfStatus === 'loading' && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-600">Loading PDF...</p>
+                  </div>
+                </div>
+              )}
               
-              {/* Error fallback */}
-              {pdfError && (
+              {/* Error state */}
+              {pdfStatus === 'error' && (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
                   <div className="text-center">
                     <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-600">PDF Preview Unavailable</p>
+                    <p className="text-xs text-gray-500 mt-1">Server may not be serving files properly</p>
                     <button
-                      onClick={() => window.open(constructFileUrl(msg.file, true), '_blank')}
+                      onClick={() => {
+                        const token = localStorage.getItem('token');
+                        const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
+                        const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                        window.open(urlWithToken, '_blank');
+                      }}
                       className="mt-2 text-blue-600 hover:text-blue-800 text-sm underline"
                     >
-                      Open PDF
+                      Try Opening Directly
                     </button>
                   </div>
                 </div>
               )}
               
+              {/* PDF Preview iframe - only show when loaded */}
+              {pdfStatus === 'loaded' && pdfPreviewUrl && (
+                <iframe
+                  src={pdfPreviewUrl}
+                  title={`${msg.file.name} - Page 1`}
+                  className="w-full h-full"
+                  style={{ border: 'none' }}
+                  onError={() => {
+                    console.warn('PDF iframe failed to load blob URL');
+                    setPdfStatus('error');
+                  }}
+                  onLoad={() => {
+                    console.log('PDF iframe with blob URL loaded successfully');
+                  }}
+                />
+              )}
+              
               {/* Overlay for first page indicator */}
-              {!pdfError && (
+              {pdfStatus === 'loaded' && (
                 <div className="absolute top-2 left-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md">
                   Page 1 Preview
                 </div>
@@ -699,7 +910,22 @@ function MessageBubble({
               
               {/* Download button overlay */}
               <button
-                onClick={() => handleDownload(fileUrl, msg.file.name)}
+                onClick={() => {
+                  if (pdfBlob) {
+                    // Download from blob if available
+                    const url = URL.createObjectURL(pdfBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = msg.file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } else {
+                    // Fallback to normal download
+                    handleDownload(fileUrl, msg.file.name);
+                  }
+                }}
                 className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                 title="Download PDF"
               >
@@ -709,7 +935,17 @@ function MessageBubble({
               {/* Click overlay to open full PDF */}
               <div 
                 className="absolute inset-0 cursor-pointer bg-transparent hover:bg-blue-500 hover:bg-opacity-10 transition-colors duration-200"
-                onClick={() => window.open(constructFileUrl(msg.file, true), '_blank')}
+                onClick={() => {
+                  if (pdfUrl) {
+                    window.open(pdfUrl, '_blank');
+                  } else {
+                    // Fallback to constructed URL
+                    const token = localStorage.getItem('token');
+                    const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
+                    const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                    window.open(urlWithToken, '_blank');
+                  }
+                }}
                 title="Click to view full PDF"
               />
             </div>
@@ -718,6 +954,9 @@ function MessageBubble({
               <span className="text-red-500">{fileIcon}</span>
               <span className="truncate flex-1 font-medium">{msg.file.name}</span>
               <span className="text-xs bg-gray-100 px-2 py-1 rounded">{fileSize}</span>
+              {pdfStatus === 'loaded' && (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">✓ Loaded</span>
+              )}
             </div>
           </div>
         );
