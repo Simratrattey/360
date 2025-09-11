@@ -424,8 +424,20 @@ const sendNotificationToUser = (userId, notification) => {
 // Keep the old function for backward compatibility
 const sendNotification = sendNotificationToUser;
 
-// Make sendNotification available to routes
+// Function to send dashboard refresh events
+const sendDashboardRefresh = (userId, data) => {
+  const userSocket = onlineUsers.get(userId);
+  if (userSocket) {
+    console.log(`🔄 Sending dashboard refresh to user ${userId} via socket ${userSocket.socketId}`);
+    io.to(userSocket.socketId).emit('dashboard:refresh', data);
+  } else {
+    console.log(`🔄 User ${userId} not online, dashboard refresh will happen on next login`);
+  }
+};
+
+// Make functions available to routes
 app.locals.sendNotification = sendNotification;
+app.locals.sendDashboardRefresh = sendDashboardRefresh;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
 

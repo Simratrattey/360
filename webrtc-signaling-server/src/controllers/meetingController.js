@@ -82,6 +82,15 @@ export const createMeeting = async (req, res, next) => {
           if (req.app.locals.sendNotification) {
             req.app.locals.sendNotification(participantId, notification);
           }
+          
+          // Send dashboard refresh event to participant
+          if (req.app.locals.sendDashboardRefresh) {
+            req.app.locals.sendDashboardRefresh(participantId, {
+              reason: 'meeting_scheduled',
+              meetingId: meeting._id,
+              organizerName
+            });
+          }
         }
       }
     } catch (notificationError) {
@@ -194,7 +203,23 @@ export const deleteMeeting = async (req, res, next) => {
         dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
         dashboardCache.delete(`recent-meetings-${participantIdStr}`);
         console.log(`[Dashboard] Invalidated cache for participant ${participantIdStr} (meeting deleted)`);
+        
+        // Send dashboard refresh event to participant
+        if (req.app.locals.sendDashboardRefresh) {
+          req.app.locals.sendDashboardRefresh(participantIdStr, {
+            reason: 'meeting_cancelled',
+            meetingTitle: m.title
+          });
+        }
       }
+    }
+    
+    // Send dashboard refresh to organizer too
+    if (req.app.locals.sendDashboardRefresh) {
+      req.app.locals.sendDashboardRefresh(organizerId, {
+        reason: 'meeting_cancelled',
+        meetingTitle: m.title
+      });
     }
     
     await m.deleteOne();
@@ -214,6 +239,14 @@ export const leaveMeeting = async (req, res, next) => {
     const leavingUserId = req.user.id.toString();
     dashboardCache.delete(`dashboard-stats-${leavingUserId}`);
     dashboardCache.delete(`recent-meetings-${leavingUserId}`);
+    
+    // Send dashboard refresh to leaving participant
+    if (req.app.locals.sendDashboardRefresh) {
+      req.app.locals.sendDashboardRefresh(leavingUserId, {
+        reason: 'meeting_left',
+        meetingTitle: m.title
+      });
+    }
     
     // remove this user
     m.participants = m.participants.filter(
@@ -247,7 +280,23 @@ export const leaveMeeting = async (req, res, next) => {
       if (participantIdStr !== organizerId && participantIdStr !== leavingUserId) {
         dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
         dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        
+        // Send dashboard refresh to remaining participants
+        if (req.app.locals.sendDashboardRefresh) {
+          req.app.locals.sendDashboardRefresh(participantIdStr, {
+            reason: 'meeting_participant_left',
+            meetingTitle: m.title
+          });
+        }
       }
+    }
+    
+    // Send dashboard refresh to organizer
+    if (req.app.locals.sendDashboardRefresh && organizerId !== leavingUserId) {
+      req.app.locals.sendDashboardRefresh(organizerId, {
+        reason: 'meeting_participant_left',
+        meetingTitle: m.title
+      });
     }
     
     await m.save();
@@ -282,6 +331,29 @@ export const joinMeeting = async (req, res, next) => {
         if (participantIdStr !== newParticipantId && participantIdStr !== organizerId) {
           dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
           dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+          
+          // Send dashboard refresh to existing participants
+          if (req.app.locals.sendDashboardRefresh) {
+            req.app.locals.sendDashboardRefresh(participantIdStr, {
+              reason: 'meeting_participant_joined',
+              meetingTitle: m.title
+            });
+          }
+        }
+      }
+      
+      // Send dashboard refresh to new participant and organizer
+      if (req.app.locals.sendDashboardRefresh) {
+        req.app.locals.sendDashboardRefresh(newParticipantId, {
+          reason: 'meeting_joined',
+          meetingTitle: m.title
+        });
+        
+        if (organizerId !== newParticipantId) {
+          req.app.locals.sendDashboardRefresh(organizerId, {
+            reason: 'meeting_participant_joined',
+            meetingTitle: m.title
+          });
         }
       }
       

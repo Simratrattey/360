@@ -143,6 +143,17 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!chatSocket || !chatSocket.socket) return;
     
+    const handleDashboardRefresh = (data) => {
+      console.log('🔄 Dashboard received refresh event:', data);
+      // Refresh dashboard stats when a meeting involving this user is scheduled/updated
+      loadDashboardData();
+      
+      // Optionally show a notification
+      if (data.reason === 'meeting_scheduled' && data.organizerName) {
+        console.log(`📅 Meeting scheduled by ${data.organizerName}, refreshing dashboard`);
+      }
+    };
+    
     const handleConversationCreated = (data) => {
       console.log('📢 Dashboard received conversation:created event:', data);
       // Only show if the creator is NOT the current user (others created it)
@@ -281,12 +292,14 @@ export default function DashboardPage() {
       }
     };
 
+    chatSocket.on('dashboard:refresh', handleDashboardRefresh);
     chatSocket.on('conversation:created', handleConversationCreated);
     chatSocket.on('conversation:deleted', handleConversationDeleted);
     chatSocket.on('conversation:memberAdded', handleMemberAdded);
     chatSocket.on('conversation:memberRemoved', handleMemberRemoved);
     
     return () => {
+      chatSocket.off('dashboard:refresh', handleDashboardRefresh);
       chatSocket.off('conversation:created', handleConversationCreated);
       chatSocket.off('conversation:deleted', handleConversationDeleted);
       chatSocket.off('conversation:memberAdded', handleMemberAdded);
