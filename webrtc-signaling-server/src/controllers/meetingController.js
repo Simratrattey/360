@@ -89,10 +89,20 @@ export const createMeeting = async (req, res, next) => {
       // Don't fail the meeting creation if notifications fail
     }
 
-    // Invalidate dashboard cache for the organizer
+    // Invalidate dashboard cache for the organizer and all participants
     const organizerId = req.user.id;
     dashboardCache.delete(`dashboard-stats-${organizerId}`);
     dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    // Also invalidate cache for all participants so they see the updated upcoming count
+    for (const participantId of participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId.toString()) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        console.log(`[Dashboard] Invalidated cache for participant ${participantIdStr}`);
+      }
+    }
     
     res.status(201).json(meeting);
   } catch (err) {
@@ -172,6 +182,21 @@ export const deleteMeeting = async (req, res, next) => {
     if (!m) return res.status(404).json({ message: 'Meeting not found' });
     if (m.organizer.toString() !== req.user.id)
       return res.status(403).json({ message: 'Not authorized' });
+    
+    // Invalidate dashboard cache for organizer and all participants before deletion
+    const organizerId = m.organizer.toString();
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    for (const participantId of m.participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        console.log(`[Dashboard] Invalidated cache for participant ${participantIdStr} (meeting deleted)`);
+      }
+    }
+    
     await m.deleteOne();
     return res.sendStatus(204);
   } catch (err) {
@@ -184,15 +209,47 @@ export const leaveMeeting = async (req, res, next) => {
   try {
     const m = await Meeting.findById(req.params.id);
     if (!m) return res.status(404).json({ message: 'Meeting not found' });
+    
+    // Invalidate cache for the leaving participant
+    const leavingUserId = req.user.id.toString();
+    dashboardCache.delete(`dashboard-stats-${leavingUserId}`);
+    dashboardCache.delete(`recent-meetings-${leavingUserId}`);
+    
     // remove this user
     m.participants = m.participants.filter(
       pid => pid.toString() !== req.user.id
     );
+    
     // if fewer than 2 remain, delete entire meeting
     if (m.participants.length < 2) {
+      // Invalidate cache for remaining participants and organizer before deletion
+      const organizerId = m.organizer.toString();
+      dashboardCache.delete(`dashboard-stats-${organizerId}`);
+      dashboardCache.delete(`recent-meetings-${organizerId}`);
+      
+      for (const participantId of m.participants) {
+        const participantIdStr = participantId.toString();
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+      }
+      
       await m.deleteOne();
       return res.sendStatus(204);
     }
+    
+    // Invalidate cache for organizer and remaining participants
+    const organizerId = m.organizer.toString();
+    dashboardCache.delete(`dashboard-stats-${organizerId}`);
+    dashboardCache.delete(`recent-meetings-${organizerId}`);
+    
+    for (const participantId of m.participants) {
+      const participantIdStr = participantId.toString();
+      if (participantIdStr !== organizerId && participantIdStr !== leavingUserId) {
+        dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+        dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+      }
+    }
+    
     await m.save();
     // re-populate for response
     await m.populate('organizer', 'fullName email');
@@ -209,6 +266,25 @@ export const joinMeeting = async (req, res, next) => {
     if (!m) return res.status(404).end();
     if (!m.participants.includes(req.user.id)) {
       m.participants.push(req.user.id);
+      
+      // Invalidate cache for the new participant and organizer
+      const newParticipantId = req.user.id.toString();
+      const organizerId = m.organizer.toString();
+      
+      dashboardCache.delete(`dashboard-stats-${newParticipantId}`);
+      dashboardCache.delete(`recent-meetings-${newParticipantId}`);
+      dashboardCache.delete(`dashboard-stats-${organizerId}`);
+      dashboardCache.delete(`recent-meetings-${organizerId}`);
+      
+      // Also invalidate cache for existing participants
+      for (const participantId of m.participants) {
+        const participantIdStr = participantId.toString();
+        if (participantIdStr !== newParticipantId && participantIdStr !== organizerId) {
+          dashboardCache.delete(`dashboard-stats-${participantIdStr}`);
+          dashboardCache.delete(`recent-meetings-${participantIdStr}`);
+        }
+      }
+      
       await m.save();
     }
     await m.populate('participants', 'fullName email');
