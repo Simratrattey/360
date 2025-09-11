@@ -126,7 +126,6 @@ export default function MeetingPage() {
   const [hostTransferNotification, setHostTransferNotification] = useState(null);
   
   // Invite system
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   
@@ -146,6 +145,9 @@ export default function MeetingPage() {
         console.warn('[MeetingPage] Failed to parse meeting info:', error);
       }
     }
+
+    // Generate invite link when component mounts
+    generateInviteLink();
   }, [roomId]);
 
   useEffect(() => {
@@ -2101,12 +2103,11 @@ To convert to MP4:
     }
   };
 
-  // Generate and copy invite link
+  // Generate invite link
   const generateInviteLink = () => {
     const baseUrl = window.location.origin;
     const meetingUrl = `${baseUrl}/meeting/${roomId}`;
     setInviteLink(meetingUrl);
-    setShowInviteModal(true);
   };
 
   const copyInviteLink = async () => {
@@ -2375,6 +2376,12 @@ To convert to MP4:
         isHost={roomSettings?.isHost}
         onApproveJoinRequest={approveJoinRequest}
         onDenyJoinRequest={denyJoinRequest}
+        participantMap={participantMap}
+        inviteLink={inviteLink}
+        onCopyInviteLink={() => {
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
+        }}
       />
       
       
@@ -2982,93 +2989,6 @@ To convert to MP4:
         </div>
       </div>
 
-      {/* Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <Share2 className="h-6 w-6 text-blue-600" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">Invite to Meeting</h2>
-              </div>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Meeting Link
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={inviteLink}
-                    readOnly
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
-                  />
-                  <button
-                    onClick={copyInviteLink}
-                    className={`px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
-                      copySuccess 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {copySuccess ? '✓ Copied!' : 'Copy'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Share2 className="w-4 h-4 text-blue-600" />
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-sm font-medium text-blue-900 mb-1">
-                      Share this link
-                    </h3>
-                    <p className="text-sm text-blue-700">
-                      Anyone with this link can join the meeting.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={copyInviteLink}
-                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors ${
-                    copySuccess 
-                      ? 'bg-green-600 text-white' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {copySuccess ? '✓ Link Copied!' : 'Copy Link'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users, CircleDot, Check, X } from 'lucide-react';
+import { Clock, Users, CircleDot, Check, X, ChevronDown, Share2, Copy } from 'lucide-react';
 
 export default function MeetingStatsBar({ 
   participantCount, 
@@ -11,9 +11,14 @@ export default function MeetingStatsBar({
   onToggleJoinRequests,
   isHost,
   onApproveJoinRequest,
-  onDenyJoinRequest
+  onDenyJoinRequest,
+  participantMap = {},
+  inviteLink = '',
+  onCopyInviteLink
 }) {
   const [duration, setDuration] = useState('0:00');
+  const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   
   // Debug logging for participant count
   useEffect(() => {
@@ -51,6 +56,23 @@ export default function MeetingStatsBar({
     return () => clearInterval(interval);
   }, [meetingStartTime]);
 
+  const handleCopyInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopySuccess(true);
+      if (onCopyInviteLink) onCopyInviteLink();
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+    }
+  };
+
+  // Get participant list from participantMap
+  const participants = Object.entries(participantMap).map(([peerId, name]) => ({
+    id: peerId,
+    name: name || 'Unknown'
+  }));
+
   return (
     <div className="bg-black bg-opacity-80 text-white px-4 py-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
       {/* Meeting Duration */}
@@ -68,11 +90,18 @@ export default function MeetingStatsBar({
       <div className="flex items-center space-x-4 text-sm relative">
         <div className="relative">
           <div 
-            className={`participants-badge flex items-center space-x-2 ${isHost && joinRequests.length > 0 ? 'cursor-pointer hover:bg-gray-700 rounded px-2 py-1' : ''}`}
-            onClick={isHost && joinRequests.length > 0 ? onToggleJoinRequests : undefined}
+            className="participants-badge flex items-center space-x-2 cursor-pointer hover:bg-gray-700 rounded px-2 py-1"
+            onClick={() => {
+              if (isHost && joinRequests.length > 0 && !showParticipantsDropdown) {
+                onToggleJoinRequests();
+              } else {
+                setShowParticipantsDropdown(!showParticipantsDropdown);
+              }
+            }}
           >
             <Users size={16} className="text-blue-400" />
             <span>{participantCount || 0}</span>
+            <ChevronDown size={14} className={`text-gray-400 transition-transform ${showParticipantsDropdown ? 'rotate-180' : ''}`} />
             {/* Red badge for pending join requests */}
             {isHost && joinRequests.length > 0 && (
               <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1">
@@ -116,6 +145,76 @@ export default function MeetingStatsBar({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Participants Dropdown */}
+          {showParticipantsDropdown && (
+            <div className="participants-dropdown absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
+              {/* Header */}
+              <div className="p-3 border-b border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900">Participants ({participantCount})</h3>
+              </div>
+
+              {/* Participants List */}
+              <div className="max-h-64 overflow-y-auto">
+                {participants.map((participant, index) => (
+                  <div key={participant.id || index} className="p-3 border-b border-gray-100 last:border-b-0">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                        {participant.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {participant.id === 'local' ? 'You' : 'Participant'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Invite Section */}
+              {inviteLink && (
+                <div className="p-3 border-t border-gray-200 bg-blue-50">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Share2 size={16} className="text-blue-600" />
+                    <span className="text-sm font-semibold text-gray-900">Invite Others</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={inviteLink}
+                      readOnly
+                      className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600"
+                    />
+                    <button
+                      onClick={handleCopyInviteLink}
+                      className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                        copySuccess 
+                          ? 'bg-green-600 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {copySuccess ? (
+                        <div className="flex items-center space-x-1">
+                          <Check size={12} />
+                          <span>Copied!</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1">
+                          <Copy size={12} />
+                          <span>Copy</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Anyone with this link can join the meeting.
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
