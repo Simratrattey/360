@@ -70,6 +70,8 @@ export default function MeetingPage() {
   const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [meetingJoinedAt, setMeetingJoinedAt] = useState(null);
   const [lateJoinerSummary, setLateJoinerSummary] = useState(null); // AI summary for late joiners
+  const [showSummaryButton, setShowSummaryButton] = useState(false); // Show summary button for 3rd+ participants
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false); // Loading state for summary
   const [sourceLanguage, setSourceLanguage] = useState('auto'); // Source language for recognition
   const [targetLanguage, setTargetLanguage] = useState('en'); // Target language for translation
   
@@ -193,6 +195,25 @@ export default function MeetingPage() {
   // FFmpeg state for video conversion
   const [ffmpeg, setFfmpeg] = useState(null);
   const [isConverting, setIsConverting] = useState(false);
+
+  const handleGenerateSummary = async () => {
+    setIsLoadingSummary(true);
+    try {
+      console.log('🤖 Generating late joiner summary...');
+      const summary = await transcriptAPI.generateLateJoinerSummary(roomId, meetingJoinedAt);
+      if (summary) {
+        setLateJoinerSummary(summary);
+        setShowSummaryButton(false); // Hide button after generating summary
+        console.log('✅ Late joiner summary generated');
+      } else {
+        console.log('ℹ️ No late joiner summary available');
+      }
+    } catch (error) {
+      console.error('❌ Failed to generate late joiner summary:', error);
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
 
   const handleAvatarQuery = async () => {
     if (!avatarQuery) return;
@@ -456,18 +477,9 @@ export default function MeetingPage() {
           console.log(`📋 Loaded ${preJoinHistory.length} pre-join transcript entries (${history.length} total available)`);
           setPermanentSubtitleHistory(preJoinHistory);
           
-          // Generate AI summary for late joiners
-          console.log('🤖 Generating late joiner summary...');
-          transcriptAPI.generateLateJoinerSummary(roomId, meetingJoinedAt).then((summary) => {
-            if (summary) {
-              setLateJoinerSummary(summary);
-              console.log('✅ Late joiner summary generated');
-            } else {
-              console.log('ℹ️ No late joiner summary available');
-            }
-          }).catch((error) => {
-            console.error('❌ Failed to generate late joiner summary:', error);
-          });
+          // Show summary button if there are any pre-join transcripts
+          console.log('📋 Pre-join transcripts found, showing summary button');
+          setShowSummaryButton(true);
         } else if (history.length > 0) {
           console.log(`📋 No pre-join transcripts (${history.length} total exist, but all after join time)`);
         }
@@ -2971,6 +2983,29 @@ To convert to MP4:
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Late Joiner Summary Button */}
+              {showSummaryButton && (
+                <div className="bg-blue-900/20 rounded-xl p-4 border border-blue-600/30 mb-4 text-center">
+                  <div className="mb-3">
+                    <span className="text-blue-300 text-sm">Get a quick summary of what happened before you joined</span>
+                  </div>
+                  <button
+                    onClick={handleGenerateSummary}
+                    disabled={isLoadingSummary}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center mx-auto min-w-[140px]"
+                  >
+                    {isLoadingSummary ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      'Get Summary'
+                    )}
+                  </button>
+                </div>
+              )}
+              
               {/* Late Joiner Summary */}
               {lateJoinerSummary && (
                 <div className="bg-blue-900/30 rounded-xl p-4 border border-blue-600/50 mb-4">
