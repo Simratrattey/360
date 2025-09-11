@@ -395,327 +395,39 @@ function MessageBubble({
 
     const fileIcon = getFileIcon(msg.file.category || 'other', msg.file.type);
     const fileSize = formatFileSize(msg.file.size || 0);
-    
-    // Fix file URL construction for persistent storage
     const fileUrl = constructFileUrl(msg.file);
     
-    // Determine preview capability and URL for this file
-    const previewUrl = getPreviewUrl(msg.file);
-    const canPreviewFile = canPreview(msg.file.category || 'other', msg.file.type);
-
-
-    // If we don't have a valid URL, show error state
-    if (!fileUrl) {
-      console.warn('No valid file URL constructed for file:', msg.file);
-      return (
-        <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-          <div className="flex items-center space-x-3">
-            <div className="text-2xl">{fileIcon}</div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-              <p className="text-xs text-red-500">File URL not available</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // If the file type can be previewed, show an appropriate preview based on type
-    if (canPreviewFile) {
-      // Fallback image preview system (while server issues are resolved)
-      if (isImage) {
-        console.log('[Image Fallback] Using fallback preview for:', msg.file.name);
-        
-        // Get file extension for icon
-        const getImageIcon = (fileName) => {
-          const ext = fileName.split('.').pop().toLowerCase();
-          const iconMap = {
-            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🎭',
-            'svg': '🎨', 'webp': '🖼️', 'bmp': '🖼️', 'tiff': '🖼️'
-          };
-          return iconMap[ext] || '🖼️';
-        };
-        
-        const imageIcon = getImageIcon(msg.file.name);
-        const fileSize = formatFileSize(msg.file.size);
-        
-        // Try to get preview from message data if available
-        let previewUrl = null;
-        if (msg.file.preview) {
-          previewUrl = msg.file.preview;
-        } else if (msg.file.base64) {
-          previewUrl = `data:${msg.file.type};base64,${msg.file.base64}`;
-        }
-        
-        return (
-          <div className="relative group">
-            <div className="relative overflow-hidden rounded-lg bg-gray-100 min-h-[120px] max-w-sm">
-              
-              {/* If we have a preview URL, show the image */}
-              {previewUrl ? (
-                <>
-                  <img
-                    src={previewUrl}
-                    alt={msg.file.name}
-                    className="w-full h-auto max-h-80 object-cover transition-all duration-300 cursor-pointer hover:brightness-110"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Try to open file URL
-                      const token = localStorage.getItem('token');
-                      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-                      const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
-                      const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                      window.open(urlWithToken, '_blank');
-                    }}
-                    title="Click to view full size"
-                    loading="lazy"
-                  />
-                  
-                  {/* Download button overlay */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const token = localStorage.getItem('token');
-                        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-                        const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
-                        const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-                        const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                        
-                        // Create download link
-                        const a = document.createElement('a');
-                        a.href = urlWithToken;
-                        a.download = msg.file.name;
-                        a.target = '_blank';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                      }}
-                      className="p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
-                      title="Download image"
-                    >
-                      <Download size={16} />
-                    </button>
-                  </div>
-                </>
-              ) : (
-                /* Attractive fallback when no preview is available */
-                <div className="flex items-center justify-between p-4 bg-gradient-to-br from-blue-50 to-purple-50 min-h-[120px] border-2 border-dashed border-blue-200">
-                  <div className="flex items-center space-x-3 flex-1">
-                    <div className="text-4xl animate-pulse">{imageIcon}</div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{msg.file.name}</p>
-                      <p className="text-xs text-gray-600 mt-1">📏 {fileSize}</p>
-                      <p className="text-xs text-blue-600 mt-1 font-medium">Image File</p>
-                      <p className="text-xs text-gray-500 mt-1">Click to view/download</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const token = localStorage.getItem('token');
-                      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-                      const cleanFilename = msg.file.url.split('/').pop().split('?')[0];
-                      const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                      window.open(urlWithToken, '_blank');
-                    }}
-                    className="p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-                    title="View/Download image"
-                  >
-                    <Download size={20} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-      // Enhanced video preview
-      if (isVideo) {
-        return (
-          <div className="relative group">
-            <div className="relative overflow-hidden rounded-lg bg-gray-100">
-              <video
-                src={previewUrl}
-                controls
-                className="max-w-full max-h-80 rounded-lg"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-                preload="metadata"
-              />
-            </div>
-            
-            {/* Download button overlay - only show on hover */}
-            <button
-              onClick={() => handleDownload(fileUrl, msg.file.name)}
-              className="absolute bottom-3 right-3 p-2 bg-black bg-opacity-60 hover:bg-opacity-80 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200"
-              title="Download video"
-            >
-              <Download size={16} />
-            </button>
-            
-            {/* File info overlay */}
-            <div className="absolute top-3 left-3 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              {fileSize}
-            </div>
-            
-            {/* File details below video */}
-            <div className="mt-2 flex items-center space-x-2 text-sm text-gray-600">
-              <span className="text-lg">{fileIcon}</span>
-              <span className="truncate flex-1 font-medium">{msg.file.name}</span>
-            </div>
-          </div>
-        );
-      }
-      // Audio preview
-      if (isAudio) {
-        return (
-          <div className="flex flex-col space-y-2 p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <div className="text-2xl text-blue-500">{fileIcon}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-                <p className="text-xs text-gray-500">{fileSize}</p>
-              </div>
-            </div>
-            <audio
-              src={previewUrl}
-              controls
-              className="w-full mt-1"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
-            <button
-              onClick={() => handleDownload(fileUrl, msg.file.name)}
-              className="self-end px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm mt-2"
-            >
-              Download
-            </button>
-          </div>
-        );
-      }
-      // Fallback PDF preview system (while server issues are resolved)
-      if (msg.file.type === 'application/pdf') {
-        console.log('[PDF Fallback] Using fallback preview for:', msg.file.name);
-        
-        const fileSize = formatFileSize(msg.file.size);
-        const fileIcon = '📕';
-        
-        // Simple, reliable PDF preview card
-        return (
-          <div className="flex flex-col space-y-2">
-            <div className="relative w-full h-48 bg-gradient-to-br from-red-50 to-red-100 rounded-lg border border-red-200 overflow-hidden group flex items-center justify-center">
-              {/* PDF Icon and Info */}
-              <div className="text-center p-6">
-                <div className="text-6xl mb-4 text-red-500">{fileIcon}</div>
-                <div className="text-lg font-semibold text-gray-800 mb-1 truncate max-w-xs">{msg.file.name}</div>
-                <div className="text-sm text-gray-600 mb-3">{fileSize}</div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => {
-                      const token = localStorage.getItem('token');
-                      const directUrl = `${import.meta.env.VITE_API_URL}/uploads/messages/${msg.file.url.split('/').pop().split('?')[0]}`;
-                      const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                      window.open(urlWithToken, '_blank');
-                    }}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <span>📖</span>
-                    <span>View PDF</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      downloadFile(constructFileUrl(msg.file), msg.file.name, msg.file.type);
-                    }}
-                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <Download size={16} />
-                    <span>Download</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            {/* File info below the preview */}
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span className="text-red-500">{fileIcon}</span>
-              <span className="truncate flex-1 font-medium">{msg.file.name}</span>
-              <span className="text-xs bg-gray-100 px-2 py-1 rounded">{fileSize}</span>
-              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">PDF Document</span>
-            </div>
-          </div>
-        );
-      }
-      
-      // Text and other document preview via iframe
-      if (
-        msg.file.type.startsWith('text/') ||
-        msg.file.type === 'application/json' ||
-        msg.file.type === 'application/xml'
-      ) {
-        return (
-          <div className="flex flex-col space-y-2">
-            <div className="relative w-full h-64 bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <iframe
-                src={previewUrl}
-                title={msg.file.name}
-                className="w-full h-full"
-                style={{ border: 'none' }}
-              />
-              <button
-                onClick={() => handleDownload(fileUrl, msg.file.name)}
-                className="absolute top-2 right-2 p-2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white rounded-full"
-                title="Download"
-              >
-                <Download size={16} />
-              </button>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-gray-600">
-              <span>{fileIcon}</span>
-              <span className="truncate flex-1">{msg.file.name}</span>
-              <span className="text-xs">{fileSize}</span>
-            </div>
-          </div>
-        );
-      }
-    }
-    
-    // Fallback for non-previewable files
+    // Unified file display - no previews, just clean file card
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-        <div className="flex items-center space-x-3">
-          <div className="text-2xl">{fileIcon}</div>
-          <div className="min-w-0">
+      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 max-w-sm">
+        <div className="flex items-center space-x-3 flex-1 min-w-0">
+          <div className="text-2xl flex-shrink-0">{fileIcon}</div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-            <p className="text-xs text-gray-500">{fileSize} • {msg.file.type || 'File'}</p>
+            <p className="text-xs text-gray-500">{fileSize}</p>
           </div>
         </div>
         <button
-          onClick={() => handleDownload(fileUrl, msg.file.name)}
-          className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm"
+          onClick={() => {
+            if (fileUrl) {
+              downloadFile(fileUrl, msg.file.name, msg.file.type);
+            } else {
+              // Fallback download method
+              const token = localStorage.getItem('token');
+              const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+              const cleanFilename = msg.file.url?.split('/').pop()?.split('?')[0] || msg.file.name;
+              const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+              const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+              window.open(urlWithToken, '_blank');
+            }
+          }}
+          className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm flex-shrink-0 transition-colors duration-200 flex items-center space-x-1"
         >
-          Download
+          <Download size={14} />
+          <span>Download</span>
         </button>
       </div>
     );
-  };
-
-  // Helper function to handle reaction clicks
-  const handleReactionClick = (emoji, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!currentUserId || !onEmoji) return;
-    
-    // Let the backend handle the toggle logic
-    onEmoji(emoji, messageId);
-    
-    // Close emoji picker
-    setShowEmojiPicker(false);
   };
 
   // Helper function to group reactions by emoji (memoized for performance)
