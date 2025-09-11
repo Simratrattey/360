@@ -442,43 +442,83 @@ function MessageBubble({
             const cleanFilename = filename.split('/').pop().split('?')[0];
             const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
             
-            // Try different authentication methods
-            const authMethods = [
-              // Method 1: Bearer token in headers
-              async () => {
-                const token = localStorage.getItem('token');
-                console.log('[Image Loading] Method 1: Bearer token in headers');
-                return await fetch(directUrl, {
+            // Try different file serving endpoints and authentication methods
+            const token = localStorage.getItem('token');
+            
+            const endpoints = [
+              // Method 1: API endpoint with Bearer token
+              {
+                name: 'API endpoint with Bearer token',
+                url: `${baseUrl}/api/files/${cleanFilename}`,
+                options: {
                   headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                   mode: 'cors',
                   credentials: 'include'
-                });
+                }
               },
-              // Method 2: Token as query parameter
-              async () => {
-                const token = localStorage.getItem('token');
-                const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                console.log('[Image Loading] Method 2: Token as query param');
-                return await fetch(urlWithToken, {
+              // Method 2: API endpoint with query token
+              {
+                name: 'API endpoint with query token',
+                url: `${baseUrl}/api/files/${cleanFilename}${token ? `?token=${encodeURIComponent(token)}` : ''}`,
+                options: {
                   mode: 'cors',
                   credentials: 'include'
-                });
+                }
               },
-              // Method 3: No authentication
-              async () => {
-                console.log('[Image Loading] Method 3: No authentication');
-                return await fetch(directUrl, {
+              // Method 3: Direct uploads path with Bearer token
+              {
+                name: 'Direct uploads with Bearer token',
+                url: directUrl,
+                options: {
+                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  mode: 'cors',
+                  credentials: 'include'
+                }
+              },
+              // Method 4: Direct uploads path with query token
+              {
+                name: 'Direct uploads with query token',
+                url: token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl,
+                options: {
+                  mode: 'cors',
+                  credentials: 'include'
+                }
+              },
+              // Method 5: Static files endpoint
+              {
+                name: 'Static files endpoint',
+                url: `${baseUrl}/static/uploads/messages/${cleanFilename}`,
+                options: {
                   mode: 'cors'
-                });
+                }
+              },
+              // Method 6: Public files endpoint
+              {
+                name: 'Public files endpoint',
+                url: `${baseUrl}/public/uploads/messages/${cleanFilename}`,
+                options: {
+                  mode: 'cors'
+                }
+              },
+              // Method 7: Files endpoint (common Express.js pattern)
+              {
+                name: 'Files endpoint',
+                url: `${baseUrl}/files/messages/${cleanFilename}`,
+                options: {
+                  mode: 'cors'
+                }
               }
             ];
             
-            for (let i = 0; i < authMethods.length && !isCancelled; i++) {
+            for (let i = 0; i < endpoints.length && !isCancelled; i++) {
               try {
-                console.log(`[Image Loading] Trying method ${i + 1}/${authMethods.length}`);
-                const response = await authMethods[i]();
+                const endpoint = endpoints[i];
+                console.log(`[Image Loading] Trying ${i + 1}/${endpoints.length}: ${endpoint.name}`);
+                console.log(`[Image Loading] URL: ${endpoint.url}`);
                 
-                console.log(`[Image Loading] Method ${i + 1} response:`, {
+                const response = await fetch(endpoint.url, endpoint.options);
+                
+                console.log(`[Image Loading] ${endpoint.name} response:`, {
                   status: response.status,
                   statusText: response.statusText,
                   headers: Object.fromEntries(response.headers.entries()),
@@ -487,12 +527,12 @@ function MessageBubble({
                 
                 if (response.ok) {
                   const contentType = response.headers.get('content-type');
-                  console.log('[Image Loading] Content-Type:', contentType);
+                  console.log(`[Image Loading] Content-Type: ${contentType}`);
                   
-                  // Check if response is actually an image
+                  // Check if response is actually an image (and not HTML)
                   if (contentType && contentType.startsWith('image/')) {
                     const blob = await response.blob();
-                    console.log('[Image Loading] Successfully loaded blob:', blob.size, 'bytes');
+                    console.log(`[Image Loading] ✅ SUCCESS with ${endpoint.name}! Blob size:`, blob.size, 'bytes');
                     
                     if (!isCancelled) {
                       const blobUrl = URL.createObjectURL(blob);
@@ -504,22 +544,35 @@ function MessageBubble({
                       return; // Success!
                     }
                   } else {
-                    console.warn('[Image Loading] Response is not an image, content-type:', contentType);
-                    // Try to read as text to see what we got
-                    const text = await response.text();
-                    console.warn('[Image Loading] Response text preview:', text.substring(0, 200));
+                    console.warn(`[Image Loading] ❌ ${endpoint.name} returned wrong content-type:`, contentType);
+                    // Check if it's HTML (SPA routing issue)
+                    if (contentType && contentType.includes('text/html')) {
+                      const text = await response.text();
+                      console.warn('[Image Loading] Server returned HTML (SPA routing issue):', text.substring(0, 100));
+                    }
                   }
                 } else {
-                  console.warn(`[Image Loading] Method ${i + 1} failed:`, response.status, response.statusText);
+                  console.warn(`[Image Loading] ❌ ${endpoint.name} failed:`, response.status, response.statusText);
                 }
               } catch (error) {
-                console.error(`[Image Loading] Method ${i + 1} error:`, error);
+                console.error(`[Image Loading] ❌ ${endpoints[i].name} error:`, error);
               }
             }
             
-            // All methods failed
+            // All methods failed - show comprehensive error information
             if (!isCancelled) {
-              console.error('[Image Loading] All methods failed');
+              console.error('🚨 [Image Loading] All methods failed!');
+              console.error('🔧 [Image Loading] Server Diagnosis:');
+              console.error('   - Server is returning HTML instead of image files');
+              console.error('   - This indicates SPA routing is catching file requests');
+              console.error('   - Possible solutions:');
+              console.error('     1. Configure nginx/Apache to serve /uploads/* as static files');
+              console.error('     2. Add Express.js static middleware for /uploads path');
+              console.error('     3. Create /api/files/* endpoint that serves files directly');
+              console.error('     4. Whitelist /uploads/* in SPA routing configuration');
+              console.error('   - File attempting to load:', cleanFilename);
+              console.error('   - All attempted URLs returned text/html content-type');
+              
               setImageStatus('error');
               setImgLoading(false);
               setImgError(true);
@@ -754,43 +807,83 @@ function MessageBubble({
             const cleanFilename = filename.split('/').pop().split('?')[0];
             const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
             
-            // Try different authentication methods
-            const authMethods = [
-              // Method 1: Bearer token in headers
-              async () => {
-                const token = localStorage.getItem('token');
-                console.log('[PDF Loading] Method 1: Bearer token in headers');
-                return await fetch(directUrl, {
+            // Try different file serving endpoints and authentication methods
+            const token = localStorage.getItem('token');
+            
+            const endpoints = [
+              // Method 1: API endpoint with Bearer token
+              {
+                name: 'API endpoint with Bearer token',
+                url: `${baseUrl}/api/files/${cleanFilename}`,
+                options: {
                   headers: token ? { 'Authorization': `Bearer ${token}` } : {},
                   mode: 'cors',
                   credentials: 'include'
-                });
+                }
               },
-              // Method 2: Token as query parameter
-              async () => {
-                const token = localStorage.getItem('token');
-                const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-                console.log('[PDF Loading] Method 2: Token as query param');
-                return await fetch(urlWithToken, {
+              // Method 2: API endpoint with query token
+              {
+                name: 'API endpoint with query token',
+                url: `${baseUrl}/api/files/${cleanFilename}${token ? `?token=${encodeURIComponent(token)}` : ''}`,
+                options: {
                   mode: 'cors',
                   credentials: 'include'
-                });
+                }
               },
-              // Method 3: No authentication
-              async () => {
-                console.log('[PDF Loading] Method 3: No authentication');
-                return await fetch(directUrl, {
+              // Method 3: Direct uploads path with Bearer token
+              {
+                name: 'Direct uploads with Bearer token',
+                url: directUrl,
+                options: {
+                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                  mode: 'cors',
+                  credentials: 'include'
+                }
+              },
+              // Method 4: Direct uploads path with query token
+              {
+                name: 'Direct uploads with query token',
+                url: token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl,
+                options: {
+                  mode: 'cors',
+                  credentials: 'include'
+                }
+              },
+              // Method 5: Static files endpoint
+              {
+                name: 'Static files endpoint',
+                url: `${baseUrl}/static/uploads/messages/${cleanFilename}`,
+                options: {
                   mode: 'cors'
-                });
+                }
+              },
+              // Method 6: Public files endpoint
+              {
+                name: 'Public files endpoint',
+                url: `${baseUrl}/public/uploads/messages/${cleanFilename}`,
+                options: {
+                  mode: 'cors'
+                }
+              },
+              // Method 7: Files endpoint (common Express.js pattern)
+              {
+                name: 'Files endpoint',
+                url: `${baseUrl}/files/messages/${cleanFilename}`,
+                options: {
+                  mode: 'cors'
+                }
               }
             ];
             
-            for (let i = 0; i < authMethods.length && !isCancelled; i++) {
+            for (let i = 0; i < endpoints.length && !isCancelled; i++) {
               try {
-                console.log(`[PDF Loading] Trying method ${i + 1}/${authMethods.length}`);
-                const response = await authMethods[i]();
+                const endpoint = endpoints[i];
+                console.log(`[PDF Loading] Trying ${i + 1}/${endpoints.length}: ${endpoint.name}`);
+                console.log(`[PDF Loading] URL: ${endpoint.url}`);
                 
-                console.log(`[PDF Loading] Method ${i + 1} response:`, {
+                const response = await fetch(endpoint.url, endpoint.options);
+                
+                console.log(`[PDF Loading] ${endpoint.name} response:`, {
                   status: response.status,
                   statusText: response.statusText,
                   headers: Object.fromEntries(response.headers.entries()),
@@ -799,12 +892,12 @@ function MessageBubble({
                 
                 if (response.ok) {
                   const contentType = response.headers.get('content-type');
-                  console.log('[PDF Loading] Content-Type:', contentType);
+                  console.log(`[PDF Loading] Content-Type: ${contentType}`);
                   
-                  // Check if response is actually a PDF
+                  // Check if response is actually a PDF (and not HTML)
                   if (contentType && contentType.includes('application/pdf')) {
                     const blob = await response.blob();
-                    console.log('[PDF Loading] Successfully loaded blob:', blob.size, 'bytes');
+                    console.log(`[PDF Loading] ✅ SUCCESS with ${endpoint.name}! Blob size:`, blob.size, 'bytes');
                     
                     if (!isCancelled) {
                       const blobUrl = URL.createObjectURL(blob);
@@ -814,22 +907,35 @@ function MessageBubble({
                       return; // Success!
                     }
                   } else {
-                    console.warn('[PDF Loading] Response is not a PDF, content-type:', contentType);
-                    // Try to read as text to see what we got
-                    const text = await response.text();
-                    console.warn('[PDF Loading] Response text preview:', text.substring(0, 200));
+                    console.warn(`[PDF Loading] ❌ ${endpoint.name} returned wrong content-type:`, contentType);
+                    // Check if it's HTML (SPA routing issue)
+                    if (contentType && contentType.includes('text/html')) {
+                      const text = await response.text();
+                      console.warn('[PDF Loading] Server returned HTML (SPA routing issue):', text.substring(0, 100));
+                    }
                   }
                 } else {
-                  console.warn(`[PDF Loading] Method ${i + 1} failed:`, response.status, response.statusText);
+                  console.warn(`[PDF Loading] ❌ ${endpoint.name} failed:`, response.status, response.statusText);
                 }
               } catch (error) {
-                console.error(`[PDF Loading] Method ${i + 1} error:`, error);
+                console.error(`[PDF Loading] ❌ ${endpoints[i].name} error:`, error);
               }
             }
             
-            // All methods failed
+            // All methods failed - show comprehensive error information
             if (!isCancelled) {
-              console.error('[PDF Loading] All methods failed');
+              console.error('🚨 [PDF Loading] All methods failed!');
+              console.error('🔧 [PDF Loading] Server Diagnosis:');
+              console.error('   - Server is returning HTML instead of PDF files');
+              console.error('   - This indicates SPA routing is catching file requests');
+              console.error('   - Possible solutions:');
+              console.error('     1. Configure nginx/Apache to serve /uploads/* as static files');
+              console.error('     2. Add Express.js static middleware for /uploads path');
+              console.error('     3. Create /api/files/* endpoint that serves files directly');
+              console.error('     4. Whitelist /uploads/* in SPA routing configuration');
+              console.error('   - File attempting to load:', cleanFilename);
+              console.error('   - All attempted URLs returned text/html content-type');
+              
               setPdfStatus('error');
             }
           };
