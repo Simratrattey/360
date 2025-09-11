@@ -72,6 +72,8 @@ export default function MeetingPage() {
   const [lateJoinerSummary, setLateJoinerSummary] = useState(null); // AI summary for late joiners
   const [showSummaryButton, setShowSummaryButton] = useState(false); // Show summary button for 3rd+ participants
   const [isLoadingSummary, setIsLoadingSummary] = useState(false); // Loading state for summary
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false); // Show scroll to bottom button
+  const [newMessagesCount, setNewMessagesCount] = useState(0); // Count of new messages while scrolled up
   
   // Audio context and elements for multilingual audio output
   const [audioContext, setAudioContext] = useState(null);
@@ -196,6 +198,21 @@ export default function MeetingPage() {
       console.error('❌ Failed to generate late joiner summary:', error);
     } finally {
       setIsLoadingSummary(false);
+    }
+  };
+
+  const scrollToBottomOfTranscript = () => {
+    try {
+      if (transcriptEndRef.current) {
+        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      } else if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        el.scrollTop = el.scrollHeight;
+      }
+      setNewMessagesCount(0);
+      setShowScrollToBottom(false);
+    } catch (error) {
+      console.error('Error scrolling to bottom:', error);
     }
   };
 
@@ -1982,18 +1999,60 @@ To convert to MP4:
     };
   }, []);
 
-  // Auto-scroll transcript panel to the latest entry when open
+  // Auto-scroll transcript panel to the latest entry when open (only if user is near bottom)
   useEffect(() => {
     if (!isHistoryPanelOpen) return;
+    
     try {
-      if (transcriptEndRef.current) {
-        transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      } else if (transcriptScrollRef.current) {
+      if (transcriptScrollRef.current) {
         const el = transcriptScrollRef.current;
-        el.scrollTop = el.scrollHeight;
+        // Check if user is near the bottom (within 100px)
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        
+        // Only auto-scroll if user is near the bottom or if panel was just opened
+        if (isNearBottom || permanentSubtitleHistory.length <= 1) {
+          if (transcriptEndRef.current) {
+            transcriptEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          } else {
+            el.scrollTop = el.scrollHeight;
+          }
+          // Reset new messages count when user is at bottom
+          setNewMessagesCount(0);
+          setShowScrollToBottom(false);
+        } else {
+          // User is scrolled up, increment new messages count
+          setNewMessagesCount(prev => prev + 1);
+          setShowScrollToBottom(true);
+        }
       }
     } catch {}
   }, [permanentSubtitleHistory, isHistoryPanelOpen]);
+
+  // Handle manual scroll to detect when user reaches bottom
+  useEffect(() => {
+    if (!isHistoryPanelOpen || !transcriptScrollRef.current) return;
+    
+    const handleScroll = () => {
+      if (transcriptScrollRef.current) {
+        const el = transcriptScrollRef.current;
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        
+        if (isNearBottom && showScrollToBottom) {
+          setNewMessagesCount(0);
+          setShowScrollToBottom(false);
+        }
+      }
+    };
+    
+    const scrollElement = transcriptScrollRef.current;
+    scrollElement.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      if (scrollElement) {
+        scrollElement.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [isHistoryPanelOpen, showScrollToBottom]);
 
   // Multilingual processing removed - using AssemblyAI only
 
@@ -2942,6 +3001,21 @@ To convert to MP4:
 
         {/* Panel Footer with stats */}
         <div className="sticky bottom-0 left-0 right-0 bg-gray-800/95 border-t border-gray-700 p-3">
+          {/* Scroll to bottom button */}
+          {showScrollToBottom && (
+            <div className="flex justify-center mb-2">
+              <button
+                onClick={scrollToBottomOfTranscript}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs transition-colors shadow-lg"
+              >
+                <span>{newMessagesCount} new message{newMessagesCount !== 1 ? 's' : ''}</span>
+                <svg width="16" height="16" fill="currentColor" className="bi bi-arrow-down" viewBox="0 0 16 16">
+                  <path fillRule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                </svg>
+              </button>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>{permanentSubtitleHistory.length} transcript entries</span>
             <div className="flex space-x-4">
