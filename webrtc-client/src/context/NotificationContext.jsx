@@ -57,6 +57,71 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user?.id]);
 
+  // Declare functions early to avoid hoisting issues
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
+      // Try to fetch from server first
+      try {
+        const data = await notificationService.getNotifications();
+        setNotifications(data);
+        // Update cache
+        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data));
+      } catch (err) {
+        console.error('Error fetching notifications from server:', err);
+        // If offline, we'll use the cached version
+        if (!isOnline) {
+          const cached = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+          if (cached) {
+            setNotifications(JSON.parse(cached));
+            setError('Using cached notifications - offline mode');
+          } else {
+            throw new Error('No cached notifications available');
+          }
+        } else {
+          throw err;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+      setError('Failed to load notifications');
+    } finally {
+      setLoading(false);
+    }
+  }, [isOnline, user?.id]);
+
+  const loadUnreadCount = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      setError(null);
+      const STORAGE_KEYS = getStorageKeys(user.id);
+      
+      const count = await notificationService.getUnreadCount();
+      setUnreadCount(count);
+      // Update cache
+      localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, count.toString());
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+      if (!isOnline) {
+        const STORAGE_KEYS = getStorageKeys(user.id);
+        const cached = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
+        if (cached) {
+          setUnreadCount(parseInt(cached, 10));
+          setError('Using cached unread count - offline mode');
+        }
+      } else {
+        setError('Failed to load unread count');
+      }
+    }
+  }, [isOnline, user?.id]);
+
   // Load notifications from server when user changes
   useEffect(() => {
     if (user) {
@@ -349,72 +414,6 @@ export const NotificationProvider = ({ children }) => {
     const cleanup = setupListeners();
     return cleanup;
   }, [socket, user, setupListeners]);
-
-  const loadNotifications = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const STORAGE_KEYS = getStorageKeys(user.id);
-      
-      // Try to fetch from server first
-      try {
-        const data = await notificationService.getNotifications();
-        setNotifications(data);
-        // Update cache
-        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(data));
-      } catch (err) {
-        console.error('Error fetching notifications from server:', err);
-        // If offline, we'll use the cached version
-        if (!isOnline) {
-          const cached = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-          if (cached) {
-            setNotifications(JSON.parse(cached));
-            setError('Using cached notifications - offline mode');
-          } else {
-            throw new Error('No cached notifications available');
-          }
-        } else {
-          throw err;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-      setError('Failed to load notifications');
-    } finally {
-      setLoading(false);
-    }
-  }, [isOnline, user?.id]);
-
-  const loadUnreadCount = useCallback(async () => {
-    if (!user?.id) return;
-    
-    try {
-      setError(null);
-      const STORAGE_KEYS = getStorageKeys(user.id);
-      
-      const count = await notificationService.getUnreadCount();
-      setUnreadCount(count);
-      // Update cache
-      localStorage.setItem(STORAGE_KEYS.UNREAD_COUNT, count.toString());
-    } catch (error) {
-      console.error('Error loading unread count:', error);
-      if (!isOnline) {
-        const STORAGE_KEYS = getStorageKeys(user.id);
-        const cached = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
-        if (cached) {
-          setUnreadCount(parseInt(cached, 10));
-          setError('Using cached unread count - offline mode');
-        }
-      } else {
-        setError('Failed to load unread count');
-      }
-    }
-  }, [isOnline, user?.id]);
-
-
 
   const markAllAsRead = async () => {
     if (!user?.id) return;
