@@ -1,20 +1,33 @@
+import { StreamingTranscriber } from 'assemblyai';
 import API from './client';
 
-// Simple AssemblyAI realtime client wrapper
+// Official AssemblyAI realtime client using their JavaScript SDK
 export class AssemblyRealtimeClient {
-  constructor({ sampleRate = 16000, onPartial, onFinal, onError, onClose }) {
+  constructor({ 
+    sampleRate = 16000, 
+    onPartial, 
+    onFinal, 
+    onError, 
+    onClose,
+    speakerDiarization = false,
+    endOfTurnSilence = 700 // ms
+  }) {
     this.sampleRate = sampleRate;
     this.onPartial = onPartial;
     this.onFinal = onFinal;
     this.onError = onError;
     this.onClose = onClose;
-    this.ws = null;
+    this.speakerDiarization = speakerDiarization;
+    this.endOfTurnSilence = endOfTurnSilence;
+    this.transcriber = null;
+    this.isConnected = false;
+    this.sessionId = null;
   }
 
   async connect() {
     try {
-      console.log('🔑 Requesting AssemblyAI token...');
-      const { data } = await API.post('/stt/token');
+      console.log('🔑 Requesting AssemblyAI token (1 hour expiry)...');
+      const { data } = await API.post('/stt/token', { expires_in_seconds: 3600 });
       const token = data?.token;
       
       if (!token) {
@@ -22,83 +35,92 @@ export class AssemblyRealtimeClient {
         throw new Error('No AssemblyAI token received from server');
       }
       
-      console.log('✅ Token received, length:', token.length);
-      const url = `wss://streaming.assemblyai.com/v3/ws?sample_rate=${this.sampleRate}&token=${token}`;
-      console.log('🔗 Connecting to AssemblyAI WebSocket with token...');
-
-      return new Promise((resolve, reject) => {
-        const ws = new WebSocket(url);
-        this.ws = ws;
-        
-        ws.onopen = () => {
-          console.log('✅ AssemblyAI WebSocket connected successfully');
-          resolve();
-        };
-        
-        ws.onerror = (e) => {
-          console.error('❌ AssemblyAI WebSocket error:', e);
-          this.onError && this.onError(e);
-          reject(e);
-        };
-        
-        ws.onclose = (event) => {
-          console.log('🔌 AssemblyAI WebSocket closed:', {
-            code: event.code,
-            reason: event.reason,
-            wasClean: event.wasClean
-          });
-          this.onClose && this.onClose();
-        };
-        
-        ws.onmessage = (msg) => {
-          try {
-            const evt = JSON.parse(msg.data);
-            
-            if (evt.type === 'Begin') {
-              console.log('🎬 AssemblyAI session started:', evt.id);
-            } else if (evt.type === 'Turn') {
-              if (evt.end_of_turn) {
-                // Final transcript - only log if there's actual text
-                if (evt.transcript?.trim()) {
-                  console.log('📨 AssemblyAI Final:', evt.transcript);
-                }
-                this.onFinal && this.onFinal({ text: evt.transcript });
-              } else {
-                // Partial transcript - don't log to reduce noise
-                this.onPartial && this.onPartial({ text: evt.transcript });
-              }
-            } else if (evt.type === 'Termination') {
-              console.log('🏁 AssemblyAI session terminated');
-            } else if (evt.type === 'Error') {
-              console.error('❌ AssemblyAI error:', evt);
-              this.onError && this.onError(new Error(evt.error || 'AssemblyAI error'));
-            } else {
-              console.log('🤔 Unknown AssemblyAI message type:', evt.type, evt);
-            }
-          } catch (err) {
-            console.error('❌ Error parsing AssemblyAI message:', err, msg.data);
-            this.onError && this.onError(err);
-          }
-        };
+      console.log('✅ Token received, setting up official AssemblyAI SDK transcriber');
+      
+      // Create official AssemblyAI StreamingTranscriber instance
+      this.transcriber = new StreamingTranscriber({
+        token,
+        sampleRate: this.sampleRate,
+        ...(this.speakerDiarization && { speaker_labels: true }),
+        ...(this.endOfTurnSilence !== 700 && { end_utterance_silence_threshold: this.endOfTurnSilence })
       });
+
+      // Set up event handlers following official SDK pattern
+      this.transcriber.on('open', ({ id, expires_at }) => {
+        this.sessionId = id;
+        this.isConnected = true;
+        console.log('🎬 Official AssemblyAI session started:', { id, expires_at });
+      });
+
+      this.transcriber.on('turn', (evt) => {
+        const { text, is_final, speaker } = evt;
+        
+        if (is_final) {
+          // Final transcript - only log if there's actual text
+          if (text?.trim()) {
+            const speakerInfo = speaker ? ` (Speaker ${speaker})` : '';
+            console.log(`📨 AssemblyAI Final${speakerInfo}:`, text);
+          }
+          this.onFinal && this.onFinal({ 
+            text, 
+            speaker,
+            confidence: evt.confidence 
+          });
+        } else {
+          // Partial transcript - don't log to reduce noise
+          this.onPartial && this.onPartial({ 
+            text, 
+            speaker,
+            confidence: evt.confidence 
+          });
+        }
+      });
+
+      this.transcriber.on('close', (code, reason) => {
+        console.log('🔌 AssemblyAI session closed:', { code, reason, sessionId: this.sessionId });
+        this.isConnected = false;
+        this.onClose && this.onClose({ code, reason });
+      });
+
+      this.transcriber.on('error', (error) => {
+        console.error('❌ AssemblyAI error:', error);
+        this.onError && this.onError(error);
+      });
+
+      // Connect using official SDK
+      console.log('🔗 Connecting with official AssemblyAI SDK...');
+      await this.transcriber.connect();
+      console.log('✅ Official AssemblyAI SDK connected successfully');
+      
     } catch (error) {
       console.error('❌ AssemblyAI connect error:', error);
       throw error;
     }
   }
 
-  // Send Int16Array PCM frame (mono, sampleRate)
+  // Send Int16Array PCM frame (mono, sampleRate) using official SDK
   sendPcmFrame(int16) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.transcriber || !this.isConnected) return;
     
-    // Send raw binary data directly (not base64)
-    this.ws.send(int16.buffer);
-    
-    // Removed repetitive audio frame logging - too verbose
+    try {
+      // Use official SDK's send method for audio data
+      this.transcriber.sendAudio(int16);
+    } catch (error) {
+      console.warn('Error sending audio to AssemblyAI:', error);
+    }
   }
 
-  close() {
-    try { this.ws && this.ws.close(); } catch {}
+  async close() {
+    try { 
+      if (this.transcriber && this.isConnected) {
+        console.log(`🔌 Closing official AssemblyAI session ${this.sessionId}`);
+        await this.transcriber.close();
+      }
+      this.isConnected = false;
+      this.sessionId = null;
+    } catch (error) {
+      console.warn('Error closing AssemblyAI client:', error);
+    }
   }
 }
 

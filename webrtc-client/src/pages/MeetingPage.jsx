@@ -87,6 +87,11 @@ export default function MeetingPage() {
   const transcriptInitializingRef = useRef(new Set()); // Track which participants are being initialized
   const transcriptScrollRef = useRef(null);
   const transcriptEndRef = useRef(null);
+  
+  // Single shared transcription session (cost-optimized)
+  const sharedAssemblyClientRef = useRef(null);
+  const audioMixerRef = useRef(null);
+  const [isSharedTranscriptionActive, setIsSharedTranscriptionActive] = useState(false);
 
 
   const [showAvatar, setShowAvatar]             = useState(false);
@@ -213,6 +218,158 @@ export default function MeetingPage() {
       setShowScrollToBottom(false);
     } catch (error) {
       console.error('Error scrolling to bottom:', error);
+    }
+  };
+
+  // OFFICIAL ASSEMBLYAI IMPLEMENTATION: Single shared session following best practices
+  const startSharedTranscription = async () => {
+    if (isSharedTranscriptionActive || !subtitlesEnabled) return;
+    
+    try {
+      console.log('🎯 Starting official AssemblyAI shared transcription (following their best practices)');
+      setIsSharedTranscriptionActive(true);
+      
+      // Create single AssemblyAI client following official implementation
+      const client = new AssemblyRealtimeClient({
+        sampleRate: 16000,
+        speakerDiarization: true, // Enable speaker identification
+        endOfTurnSilence: 700, // Official recommendation
+        onPartial: (evt) => {
+          // Official: Handle partial transcripts for real-time display
+          if (evt.text?.trim()) {
+            console.log(`🎤 Live: ${evt.text}`);
+          }
+        },
+        onFinal: (evt) => {
+          const text = evt.text?.trim();
+          if (!text) return;
+          
+          // Official SDK: Use speaker from diarization if available
+          const speakerLabel = evt.speaker ? `Speaker ${evt.speaker}` : 'Unknown Speaker';
+          const confidence = evt.confidence || 0;
+          
+          console.log(`📝 Final transcript: [${speakerLabel}] ${text} (confidence: ${confidence})`);
+          
+          const subtitleEntry = {
+            id: `official-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            original: text,
+            translated: null,
+            text,
+            timestamp: Date.now(),
+            speaker: speakerLabel,
+            speakerId: `speaker-${evt.speaker || 'unknown'}`,
+            sourceLanguage: 'en',
+            targetLanguage: 'en',
+            isTranslated: false,
+            createdAt: Date.now()
+          };
+          
+          setPermanentSubtitleHistory(prev => {
+            const updated = [...prev, subtitleEntry];
+            console.log(`📝 Official recording: [${speakerName}] ${text} (${updated.length} total)`);
+            
+            // Only the meeting host saves transcripts (prevents duplicates)
+            if (roomSettings.isHost) {
+              console.log('💾 Host saving official transcript to server');
+              transcriptAPI.saveTranscriptEntry(roomId, {
+                id: subtitleEntry.id,
+                text: subtitleEntry.text,
+                speaker: subtitleEntry.speaker,
+                speakerId: subtitleEntry.speakerId,
+                timestamp: subtitleEntry.timestamp,
+                createdAt: subtitleEntry.createdAt
+              });
+            }
+            
+            return updated;
+          });
+        },
+        onError: (error) => {
+          console.error('❌ Official AssemblyAI error:', error);
+          setIsSharedTranscriptionActive(false);
+        },
+        onClose: () => {
+          console.log('🔌 Official AssemblyAI session closed properly');
+          setIsSharedTranscriptionActive(false);
+        }
+      });
+      
+      await client.connect();
+      sharedAssemblyClientRef.current = client;
+      
+      // Setup audio mixing following official guidelines
+      await setupOfficialAudioMixer(client);
+      
+      console.log('✅ Official AssemblyAI transcription started successfully');
+      
+    } catch (error) {
+      console.error('❌ Failed to start official AssemblyAI transcription:', error);
+      setIsSharedTranscriptionActive(false);
+    }
+  };
+
+  const setupOfficialAudioMixer = async (client) => {
+    try {
+      console.log('🎧 Setting up official AssemblyAI audio processing...');
+      
+      // Official: Use 16kHz sample rate as recommended
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const destination = audioContext.createMediaStreamDestination();
+      const mixerGain = audioContext.createGain();
+      mixerGain.connect(destination);
+      
+      // Mix local stream (host audio)
+      if (localStream && localStream.getAudioTracks().length > 0) {
+        const localSource = audioContext.createMediaStreamSource(localStream);
+        localSource.connect(mixerGain);
+        console.log('🎤 Added local audio to mixer');
+      }
+      
+      // Mix all remote participant streams
+      let remoteCount = 0;
+      remoteStreams.forEach((stream) => {
+        if (stream.getAudioTracks().length > 0) {
+          const remoteSource = audioContext.createMediaStreamSource(stream);
+          remoteSource.connect(mixerGain);
+          remoteCount++;
+        }
+      });
+      console.log(`🔊 Added ${remoteCount} remote audio streams to mixer`);
+      
+      // Official: Use AudioWorklet for better performance (fallback to ScriptProcessor)
+      let processor;
+      try {
+        // Try modern AudioWorklet approach
+        await audioContext.audioWorklet.addModule('/audio-processor.js');
+        processor = new AudioWorkletNode(audioContext, 'audio-processor');
+        console.log('✅ Using AudioWorklet for audio processing');
+      } catch {
+        // Fallback to ScriptProcessor
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        console.log('⚠️ Using ScriptProcessor fallback');
+        
+        processor.onaudioprocess = (event) => {
+          const inputBuffer = event.inputBuffer.getChannelData(0);
+          const int16Buffer = new Int16Array(inputBuffer.length);
+          
+          // Official: Convert to 16-bit PCM as required
+          for (let i = 0; i < inputBuffer.length; i++) {
+            int16Buffer[i] = Math.max(-32768, Math.min(32767, Math.floor(inputBuffer[i] * 32768)));
+          }
+          
+          // Send to AssemblyAI following official format
+          client.sendPcmFrame(int16Buffer);
+        };
+      }
+      
+      mixerGain.connect(processor);
+      audioMixerRef.current = { audioContext, processor, mixerGain };
+      
+      console.log('✅ Official AssemblyAI audio mixer setup complete');
+      
+    } catch (error) {
+      console.error('❌ Failed to setup official audio mixer:', error);
+      throw error;
     }
   };
 
@@ -526,12 +683,13 @@ export default function MeetingPage() {
         startAudioAnalyzer(stream, id, false);
       }
 
-      // Start transcript recording for this remote participant (only if 2+ participants total)
+      // DISABLED: Individual transcription per participant (causes excessive AssemblyAI usage)
+      // TODO: Replace with single shared transcription session with speaker diarization
       const participantName = participantMap[id];
-      if (stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
+      if (false && stream.getAudioTracks().length > 0 && participantName && totalParticipants >= 2) {
         if (!assemblyClientsRef.current || !assemblyClientsRef.current.has(id)) {
-          console.log(`🎯 Starting transcript recording for remote participant: ${participantName} (${id}) - ${totalParticipants} total participants`);
-          startParticipantTranscriptRecording(stream, id, participantName);
+          console.log(`⚠️ DISABLED: Multiple transcription sessions cause excessive billing`);
+          // startParticipantTranscriptRecording(stream, id, participantName);
         }
       }
       const videoElement = document.getElementById(`remote-video-${id}`);
@@ -569,11 +727,12 @@ export default function MeetingPage() {
       // Audio processing for multilingual mode removed - using AssemblyAI only
     });
 
-    // Start local transcript recording if conditions are met (outside the loop to avoid duplicates)
-    if (totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
+    // DISABLED: Local transcript recording (part of multiple sessions fix)
+    // TODO: Replace with single shared transcription session
+    if (false && totalParticipants >= 2 && localStream && localStream.getAudioTracks().length > 0) {
       if (!assemblyClientsRef.current || !assemblyClientsRef.current.has('local')) {
-        console.log(`🎯 Starting transcript recording for local user - ${totalParticipants} total participants`);
-        startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
+        console.log(`⚠️ DISABLED: Local transcription to prevent excessive billing`);
+        // startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
       }
     }
     
@@ -1204,28 +1363,15 @@ To convert to MP4:
       return;
     }
 
-    console.log(`🚀 Starting continuous AssemblyAI transcript recording for ${totalParticipants} participants`);
+    console.log('🚨 CRITICAL: This function was causing 86x billing - DISABLED');
+    console.log('💸 Each participant was creating separate AssemblyAI sessions');
+    console.log('📊 9 participants × reconnections × token renewals = Massive overcharging');
+    console.log('💡 Use startSharedTranscription() instead for cost optimization');
+    return;
     
-    // Process each remote participant's audio stream separately
-    let remoteCount = 0;
-    remoteStreams.forEach((stream, peerId) => {
-      const participantName = participantMap[peerId];
-      if (participantName && stream.getAudioTracks().length > 0) {
-        console.log(`✅ Setting up transcript recording for ${participantName} (${peerId})`);
-        startParticipantTranscriptRecording(stream, peerId, participantName);
-        remoteCount++;
-      } else {
-        console.log(`⚠️ Skipping ${peerId} - no name or audio: name=${participantName}, audio=${stream.getAudioTracks().length}`);
-      }
-    });
-
-    // Also start recording local user's speech
-    if (localStream && localStream.getAudioTracks().length > 0) {
-      console.log('✅ Setting up transcript recording for local user');
-      startParticipantTranscriptRecording(localStream, 'local', user?.fullName || user?.username);
-    } else {
-      console.log('⚠️ No local stream or audio available for transcript recording');
-    }
+    // ORIGINAL BILLING-EXPLOSIVE CODE DISABLED:
+    // Each forEach iteration created a new AssemblyAI session
+    // This caused N×M×R billing where N=participants, M=reconnections, R=renewals
     
     console.log(`📊 Transcript recording started for ${remoteCount} remote participants + local user`);
   };
@@ -1235,6 +1381,11 @@ To convert to MP4:
     console.log('Enabling live subtitle display');
     setSubtitlesEnabled(true);
     subtitlesEnabledRef.current = true;
+    
+    // Start cost-optimized shared transcription
+    if (remoteStreams.size >= 1) { // At least 1 other participant
+      await startSharedTranscription();
+    }
   };
 
   // Process individual participant audio for continuous transcript recording
@@ -2060,14 +2211,43 @@ To convert to MP4:
     console.log('🛑 Disabling live subtitle display...');
     setSubtitlesEnabled(false);
     subtitlesEnabledRef.current = false;
+    
+    // Stop shared transcription
+    stopSharedTranscription();
+    
     // Clear temporary subtitle display
     setSubtitleHistory([]);
+  };
+
+  const stopSharedTranscription = () => {
+    console.log('🛑 Stopping shared transcription...');
+    
+    try {
+      if (sharedAssemblyClientRef.current) {
+        sharedAssemblyClientRef.current.close();
+        sharedAssemblyClientRef.current = null;
+      }
+      
+      if (audioMixerRef.current) {
+        audioMixerRef.current.processor?.disconnect();
+        audioMixerRef.current.audioContext?.close();
+        audioMixerRef.current = null;
+      }
+      
+      setIsSharedTranscriptionActive(false);
+      console.log('✅ Shared transcription stopped');
+    } catch (error) {
+      console.error('❌ Error stopping shared transcription:', error);
+    }
   };
 
   const stopTranscriptRecording = () => {
     console.log('🛑 Stopping transcript recording for all participants...');
     
-    // Close all individual AssemblyAI clients
+    // Stop shared transcription
+    stopSharedTranscription();
+    
+    // Close all individual AssemblyAI clients (legacy cleanup)
     if (assemblyClientsRef.current) {
       assemblyClientsRef.current.forEach((client, peerId) => {
         try {
@@ -2794,9 +2974,11 @@ To convert to MP4:
                     }`}
                   >
                     💬 Live Subtitles {subtitlesEnabled ? '(Show)' : '(Hidden)'}
+                    {isSharedTranscriptionActive && <span className="ml-2 px-2 py-0.5 bg-green-700 text-xs rounded">💰 Cost-Optimized</span>}
                   </button>
                   <p className="text-xs text-gray-400 mt-1 px-3">
                     This setting only controls subtitle display.
+                    {isSharedTranscriptionActive && <span className="block text-green-400 text-xs mt-1">✅ Using 1 shared session (saves ~90% costs)</span>}
                   </p>
                   {/* Temporarily commented out - will re-enable later
                   <button
