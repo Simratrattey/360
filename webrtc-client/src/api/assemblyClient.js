@@ -1,7 +1,6 @@
-import { StreamingTranscriber } from 'assemblyai';
 import API from './client';
 
-// Official AssemblyAI realtime client using their JavaScript SDK
+// Official AssemblyAI realtime client using their CDN approach for browsers
 export class AssemblyRealtimeClient {
   constructor({ 
     sampleRate = 16000, 
@@ -36,6 +35,13 @@ export class AssemblyRealtimeClient {
       }
       
       console.log('✅ Token received, setting up official AssemblyAI SDK transcriber');
+      
+      // Use global assemblyai variable from CDN (official browser approach)
+      if (!window.assemblyai) {
+        throw new Error('AssemblyAI SDK not loaded. Ensure the CDN script is included in index.html');
+      }
+      
+      const { StreamingTranscriber } = window.assemblyai;
       
       // Create official AssemblyAI StreamingTranscriber instance
       this.transcriber = new StreamingTranscriber({
