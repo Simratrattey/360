@@ -308,6 +308,29 @@ export default function MeetingPage() {
     }
   };
 
+  // Declare stopSharedTranscription early to avoid hoisting issues
+  const stopSharedTranscription = () => {
+    console.log('🛑 Stopping shared transcription...');
+    
+    try {
+      if (sharedAssemblyClientRef.current) {
+        sharedAssemblyClientRef.current.close();
+        sharedAssemblyClientRef.current = null;
+      }
+      
+      if (audioMixerRef.current) {
+        audioMixerRef.current.processor?.disconnect();
+        audioMixerRef.current.audioContext?.close();
+        audioMixerRef.current = null;
+      }
+      
+      setIsSharedTranscriptionActive(false);
+      console.log('✅ Shared transcription stopped');
+    } catch (error) {
+      console.error('❌ Error stopping shared transcription:', error);
+    }
+  };
+
   const setupOfficialAudioMixer = async (client) => {
     try {
       console.log('🎧 Setting up official AssemblyAI audio processing...');
@@ -2217,28 +2240,6 @@ To convert to MP4:
     
     // Clear temporary subtitle display
     setSubtitleHistory([]);
-  };
-
-  const stopSharedTranscription = () => {
-    console.log('🛑 Stopping shared transcription...');
-    
-    try {
-      if (sharedAssemblyClientRef.current) {
-        sharedAssemblyClientRef.current.close();
-        sharedAssemblyClientRef.current = null;
-      }
-      
-      if (audioMixerRef.current) {
-        audioMixerRef.current.processor?.disconnect();
-        audioMixerRef.current.audioContext?.close();
-        audioMixerRef.current = null;
-      }
-      
-      setIsSharedTranscriptionActive(false);
-      console.log('✅ Shared transcription stopped');
-    } catch (error) {
-      console.error('❌ Error stopping shared transcription:', error);
-    }
   };
 
   const stopTranscriptRecording = () => {
