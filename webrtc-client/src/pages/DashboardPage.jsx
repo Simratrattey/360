@@ -436,17 +436,17 @@ export default function DashboardPage() {
           </h2>
         </div>
         {(() => {
-          // Filter unread notifications, excluding message notifications for currently selected conversation
+          // Filter unread notifications, excluding message notifications ONLY if actively viewing that conversation
           const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
             .filter(notif => !notif.read)
             .filter(notif => {
-              // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
-              // Don't hide notifications just because user was previously on messages page
+              // ONLY hide message notifications if user is ACTIVELY on messages page viewing that specific conversation
+              // Check both the URL path AND that we're actually on the messages page component
               if (notif.type === 'message' && 
+                  window.location.pathname === '/messages' &&
                   isOnMessagesPage && 
-                  currentConversationId === notif.data?.conversationId &&
-                  window.location.pathname === '/messages') {
-                console.log('🔍 Hiding notification for current conversation:', notif.data?.conversationId);
+                  currentConversationId === notif.data?.conversationId) {
+                console.log('🔍 Hiding notification for actively viewed conversation:', notif.data?.conversationId);
                 return false;
               }
               return true;
@@ -458,15 +458,16 @@ export default function DashboardPage() {
             
             {/* General notifications (group/conversation events) */}
             {(() => {
-              // Filter unread notifications, excluding message notifications for currently selected conversation
+              // Filter unread notifications, excluding message notifications ONLY if actively viewing that conversation
               const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
                 .filter(notif => !notif.read)
                 .filter(notif => {
-                  // Only hide message notifications if user is CURRENTLY on messages page AND has that specific conversation selected
+                  // ONLY hide message notifications if user is ACTIVELY on messages page viewing that specific conversation
+                  // Check both the URL path AND that we're actually on the messages page component
                   if (notif.type === 'message' && 
+                      window.location.pathname === '/messages' &&
                       isOnMessagesPage && 
-                      currentConversationId === notif.data?.conversationId &&
-                      window.location.pathname === '/messages') {
+                      currentConversationId === notif.data?.conversationId) {
                     return false;
                   }
                   return true;

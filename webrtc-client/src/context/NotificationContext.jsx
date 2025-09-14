@@ -140,13 +140,20 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user, loadNotifications, loadUnreadCount]);
 
-  // Handle page visibility change - refresh notifications when page becomes visible
+  // Handle page visibility change - refresh notifications when page becomes visible after being hidden
   useEffect(() => {
+    let wasHidden = false;
+    
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user && isOnline) {
-        // Refresh notifications when page becomes visible
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true;
+      } else if (document.visibilityState === 'visible' && wasHidden && user && isOnline) {
+        // Only refresh notifications when page becomes visible after being hidden (returning from another tab/app)
+        // Don't refresh on initial page load or regular navigation
+        console.log('🔄 Page became visible after being hidden, refreshing notifications');
         loadNotifications();
         loadUnreadCount();
+        wasHidden = false;
       }
     };
 
