@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Video, 
@@ -54,6 +54,34 @@ export default function DashboardPage() {
   // Join request system
   const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
   const [approvedRooms, setApprovedRooms] = useState(new Set());
+
+  // Memoized notification filtering to prevent flash issues
+  const filteredNotifications = useMemo(() => {
+    return (Array.isArray(generalNotifications) ? generalNotifications : [])
+      .filter(notif => !notif.read)
+      .filter(notif => {
+        // Hide message notifications if actively viewing that specific conversation
+        if (notif.type === 'message' && 
+            window.location.pathname === '/messages' &&
+            isOnMessagesPage && 
+            currentConversationId === notif.data?.conversationId) {
+          console.log('🔍 Hiding message notification for actively viewed conversation:', notif.data?.conversationId);
+          return false;
+        }
+        
+        // Hide conversation/group notifications if messages page has been visited
+        // These should disappear once user opens messages, regardless of specific conversation
+        if ((notif.type === 'conversation_created' || 
+             notif.type === 'community_created' || 
+             notif.type === 'conversation_deleted') &&
+            window.location.pathname === '/messages') {
+          console.log('🔍 Hiding conversation notification - user is on messages page:', notif.type);
+          return false;
+        }
+        
+        return true;
+      });
+  }, [generalNotifications, isOnMessagesPage, currentConversationId]);
 
   const loadRooms = () => {
     API.get('/rooms')
@@ -435,46 +463,9 @@ export default function DashboardPage() {
             Notifications
           </h2>
         </div>
-        {(() => {
-          // Filter unread notifications, excluding message notifications ONLY if actively viewing that conversation
-          const unreadNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
-            .filter(notif => !notif.read)
-            .filter(notif => {
-              // ONLY hide message notifications if user is ACTIVELY on messages page viewing that specific conversation
-              // Check both the URL path AND that we're actually on the messages page component
-              if (notif.type === 'message' && 
-                  window.location.pathname === '/messages' &&
-                  isOnMessagesPage && 
-                  currentConversationId === notif.data?.conversationId) {
-                console.log('🔍 Hiding notification for actively viewed conversation:', notif.data?.conversationId);
-                return false;
-              }
-              return true;
-            });
-          
-          return unreadNotifications.length > 0;
-        })() ? (
+        {filteredNotifications.length > 0 ? (
           <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
-            
-            {/* General notifications (group/conversation events) */}
-            {(() => {
-              // Filter unread notifications, excluding message notifications ONLY if actively viewing that conversation
-              const filteredNotifications = (Array.isArray(generalNotifications) ? generalNotifications : [])
-                .filter(notif => !notif.read)
-                .filter(notif => {
-                  // ONLY hide message notifications if user is ACTIVELY on messages page viewing that specific conversation
-                  // Check both the URL path AND that we're actually on the messages page component
-                  if (notif.type === 'message' && 
-                      window.location.pathname === '/messages' &&
-                      isOnMessagesPage && 
-                      currentConversationId === notif.data?.conversationId) {
-                    return false;
-                  }
-                  return true;
-                });
-              
-              return filteredNotifications;
-            })().map((notif, idx) => (
+            {filteredNotifications.map((notif, idx) => (
               <motion.div
                 key={`general-${notif._id}-${idx}`}
                 initial={{ opacity: 0, x: 30 }}
