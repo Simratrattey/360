@@ -173,32 +173,6 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user, loadNotifications, loadUnreadCount]);
 
-  // Mark conversation notifications as read when user visits messages page
-  useEffect(() => {
-    const currentPath = window.location.pathname;
-    if (currentPath === '/messages' && notifications && notifications.length > 0) {
-      // Find conversation-related notifications that should be marked as read
-      const conversationNotifications = notifications.filter(notif => 
-        !notif.read && (
-          notif.type === 'conversation_created' || 
-          notif.type === 'community_created' || 
-          notif.type === 'conversation_deleted'
-        )
-      );
-      
-      console.log(`🔍 Found ${conversationNotifications.length} conversation notifications to mark as read`);
-      
-      // Mark them as read
-      conversationNotifications.forEach(notif => {
-        if (notif._id) {
-          console.log('🔍 Marking conversation notification as read:', notif.type, notif.title, notif._id);
-          markAsRead(notif._id).catch(err => {
-            console.error('Error marking conversation notification as read:', err);
-          });
-        }
-      });
-    }
-  }, [notifications, markAsRead]);
 
   // Handle page visibility change - refresh notifications when page becomes visible after being hidden
   useEffect(() => {
@@ -308,6 +282,33 @@ export const NotificationProvider = ({ children }) => {
       setError('Failed to mark notification as read');
     }
   }, [notifications, user?.id]);
+
+  // Mark conversation notifications as read when user visits messages page
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    if (currentPath === '/messages' && notifications && notifications.length > 0) {
+      // Find conversation-related notifications that should be marked as read
+      const conversationNotifications = notifications.filter(notif => 
+        !notif.read && (
+          notif.type === 'conversation_created' || 
+          notif.type === 'community_created' || 
+          notif.type === 'conversation_deleted'
+        )
+      );
+      
+      console.log(`🔍 Found ${conversationNotifications.length} conversation notifications to mark as read`);
+      
+      // Mark them as read
+      conversationNotifications.forEach(notif => {
+        if (notif._id) {
+          console.log('🔍 Marking conversation notification as read:', notif.type, notif.title, notif._id);
+          markAsRead(notif._id).catch(err => {
+            console.error('Error marking conversation notification as read:', err);
+          });
+        }
+      });
+    }
+  }, [notifications, markAsRead]);
 
   // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
