@@ -267,8 +267,8 @@ export default function PreMeetingSetup() {
                 <div className="w-16 h-16 bg-blue-800 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
                   <Video className="w-8 h-8 text-white" />
                 </div>
-                <h1 className="text-3xl font-bold text-blue-800 mb-3">Ready to join?</h1>
-                <p className="text-primary-700 text-lg font-medium">Set up your camera and microphone</p>
+                <h1 className="text-3xl font-bold text-black mb-3">Ready to join?</h1>
+                <p className="text-gray-700 text-lg font-medium">Set up your camera and microphone</p>
               </div>
 
               {error && (
@@ -280,7 +280,7 @@ export default function PreMeetingSetup() {
               <div className="space-y-8">
                 {/* Display Name */}
                 <div>
-                  <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                  <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
                     <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
                       <User size={12} className="text-white" />
                     </div>
@@ -290,7 +290,7 @@ export default function PreMeetingSetup() {
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-primary-800 placeholder-primary-600/70 font-medium"
+                    className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-black placeholder-gray-500 font-medium"
                     placeholder="Enter your display name"
                   />
                 </div>
@@ -298,7 +298,7 @@ export default function PreMeetingSetup() {
                 {/* Camera Selection */}
                 {devices.cameras.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
                       <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
                         <Camera size={12} className="text-white" />
                       </div>
@@ -307,7 +307,7 @@ export default function PreMeetingSetup() {
                     <select
                       value={selectedCamera}
                       onChange={(e) => changeCamera(e.target.value)}
-                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-primary-800 font-medium"
+                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-black font-medium"
                     >
                       {devices.cameras.map((camera) => (
                         <option key={camera.deviceId} value={camera.deviceId}>
@@ -321,7 +321,7 @@ export default function PreMeetingSetup() {
                 {/* Microphone Selection */}
                 {devices.microphones.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
                       <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
                         <Mic size={12} className="text-white" />
                       </div>
@@ -330,7 +330,7 @@ export default function PreMeetingSetup() {
                     <select
                       value={selectedMicrophone}
                       onChange={(e) => changeMicrophone(e.target.value)}
-                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-primary-800 font-medium"
+                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-lg transition-all duration-200 hover:shadow-xl text-black font-medium"
                     >
                       {devices.microphones.map((microphone) => (
                         <option key={microphone.deviceId} value={microphone.deviceId}>
@@ -343,16 +343,16 @@ export default function PreMeetingSetup() {
 
                 {/* Meeting Info */}
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-lg">
-                  <h3 className="font-semibold text-primary-800 mb-4 flex items-center space-x-2">
+                  <h3 className="font-semibold text-black mb-4 flex items-center space-x-2">
                     <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
                       <Settings size={12} className="text-white" />
                     </div>
                     <span>Meeting Details</span>
                   </h3>
                   <div className="space-y-2">
-                    <p className="text-sm text-primary-700 flex items-center justify-between">
+                    <p className="text-sm text-gray-700 flex items-center justify-between">
                       <span className="font-medium">Room:</span> 
-                      <span className="font-mono bg-primary-100/70 px-2 py-1 rounded-md text-xs text-primary-800">{roomId}</span>
+                      <span className="font-mono bg-gray-100/70 px-2 py-1 rounded-md text-xs text-black">{roomId}</span>
                     </p>
                   </div>
                 </div>
