@@ -264,7 +264,7 @@ export default function PreMeetingSetup() {
           <div className="p-10 flex flex-col justify-between bg-white/10 backdrop-blur-2xl">
             <div>
               <div className="text-center mb-10">
-                <div className="w-16 h-16 bg-blue-800 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
                   <Video className="w-8 h-8 text-white" />
                 </div>
                 <h1 className="text-3xl font-bold text-black mb-3">Ready to join?</h1>
@@ -281,7 +281,7 @@ export default function PreMeetingSetup() {
                 {/* Display Name */}
                 <div>
                   <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
-                    <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
+                    <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-md">
                       <User size={12} className="text-white" />
                     </div>
                     <span>Display Name</span>
@@ -299,7 +299,7 @@ export default function PreMeetingSetup() {
                 {devices.cameras.length > 1 && (
                   <div>
                     <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
-                      <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
+                      <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-md">
                         <Camera size={12} className="text-white" />
                       </div>
                       <span>Camera</span>
@@ -322,7 +322,7 @@ export default function PreMeetingSetup() {
                 {devices.microphones.length > 1 && (
                   <div>
                     <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
-                      <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
+                      <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-md">
                         <Mic size={12} className="text-white" />
                       </div>
                       <span>Microphone</span>
@@ -341,19 +341,19 @@ export default function PreMeetingSetup() {
                   </div>
                 )}
 
-                {/* Meeting Info */}
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-lg">
-                  <h3 className="font-semibold text-black mb-4 flex items-center space-x-2">
-                    <div className="w-5 h-5 bg-blue-800 rounded-md flex items-center justify-center shadow-md">
+                {/* Meeting Details */}
+                <div>
+                  <label className="flex items-center space-x-2 text-sm font-semibold text-black mb-3">
+                    <div className="w-5 h-5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-md">
                       <Settings size={12} className="text-white" />
                     </div>
                     <span>Meeting Details</span>
-                  </h3>
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-700 flex items-center justify-between">
-                      <span className="font-medium">Room:</span> 
-                      <span className="font-mono bg-gray-100/70 px-2 py-1 rounded-md text-xs text-black">{roomId}</span>
-                    </p>
+                  </label>
+                  <div className="w-full px-4 py-3 border border-white/30 rounded-xl bg-white/20 backdrop-blur-md shadow-lg text-black font-medium">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">Room:</span>
+                      <span className="font-mono text-sm">{roomId}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -364,7 +364,7 @@ export default function PreMeetingSetup() {
               <button
               onClick={joinMeeting}
               disabled={isLoading || !displayName.trim()}
-              className="w-full bg-blue-800 hover:bg-blue-900 disabled:bg-secondary-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] transform"
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-secondary-400 disabled:to-secondary-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] transform"
             >
               {isLoading ? (
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
