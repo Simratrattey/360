@@ -218,7 +218,7 @@ export default function PreMeetingSetup() {
               autoPlay
               muted
               playsInline
-              className={`w-full h-full object-contain rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
+              className={`w-full h-full object-contain bg-black rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
             />
             {!isVideoOn && (
               <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-slate-900 rounded-l-3xl">
