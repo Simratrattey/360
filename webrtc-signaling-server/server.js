@@ -435,9 +435,43 @@ const sendDashboardRefresh = (userId, data) => {
   }
 };
 
+// Function to send join request to host
+const sendJoinRequest = (hostId, requestData) => {
+  const hostSocket = onlineUsers.get(hostId);
+  if (hostSocket) {
+    console.log(`📝 Sending join request to host ${hostId} via socket ${hostSocket.socketId}`);
+    io.to(hostSocket.socketId).emit('joinRequest', requestData);
+  } else {
+    console.log(`❌ Host ${hostId} not connected - join request not sent`);
+  }
+};
+
+// Function to send join approval/denial to requesting user
+const sendJoinApproval = (userId, approvalData) => {
+  const userSocket = onlineUsers.get(userId);
+  if (userSocket) {
+    console.log(`✅ Sending join approval to user ${userId}: ${approvalData.approved ? 'APPROVED' : 'DENIED'}`);
+    io.to(userSocket.socketId).emit('joinApproval', approvalData);
+  } else {
+    console.log(`❌ User ${userId} not connected - join approval not sent`);
+  }
+};
+
+// Function to update join requests count for host
+const sendJoinRequestsUpdate = (hostId, updateData) => {
+  const hostSocket = onlineUsers.get(hostId);
+  if (hostSocket) {
+    console.log(`🔄 Updating join requests for host ${hostId}: ${updateData.count} pending`);
+    io.to(hostSocket.socketId).emit('joinRequestsUpdated', updateData);
+  }
+};
+
 // Make functions available to routes
 app.locals.sendNotification = sendNotification;
 app.locals.sendDashboardRefresh = sendDashboardRefresh;
+app.locals.sendJoinRequest = sendJoinRequest;
+app.locals.sendJoinApproval = sendJoinApproval;
+app.locals.sendJoinRequestsUpdate = sendJoinRequestsUpdate;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
 

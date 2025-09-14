@@ -12,8 +12,10 @@ import { SocketContext } from '../context/SocketContext';
 import BotService from '../api/botService';
 import AssemblyRealtimeClient from '../api/assemblyClient';
 import transcriptAPI from '../api/transcriptApi';
+import waitingRoomApi from '../api/waitingRoomApi';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
+import InviteLinks from '../components/InviteLinks';
 
 // Helper function to format UTC timestamp to user's local timezone
 const formatTimestamp = (utcTimestamp) => {
@@ -112,6 +114,10 @@ export default function MeetingPage() {
   // Screen sharing state
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null);
+  
+  // Waiting room state
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [showJoinRequests, setShowJoinRequests] = useState(false);
   
   // Meeting stats
   const [meetingStartTime, setMeetingStartTime] = useState(null);
@@ -836,6 +842,24 @@ export default function MeetingPage() {
       }
     };
 
+    // Waiting room join request handler for hosts
+    const handleJoinRequest = (data) => {
+      console.log('[MeetingPage] New join request received:', data);
+      // Add new request to the list or refresh the list
+      setJoinRequests(prev => {
+        const exists = prev.find(r => r.requestId === data.requestId);
+        if (exists) return prev;
+        return [...prev, {
+          requestId: data.requestId,
+          userId: data.user.id,
+          username: data.user.username,
+          fullName: data.user.fullName,
+          meetingTitle: data.meetingTitle,
+          requestedAt: new Date().toISOString()
+        }];
+      });
+    };
+
     // Join request handler for hosts - updated to use joinRequestsUpdated
     const handleJoinRequestsUpdated = ({ pendingRequests, count }) => {
       console.log('[MeetingPage] Join requests updated:', { pendingRequests, count });
@@ -876,6 +900,7 @@ export default function MeetingPage() {
 
     sfuSocket.on('screenShareStarted', handleRemoteScreenShareStarted);
     sfuSocket.on('screenShareStopped', handleRemoteScreenShareStopped);
+    sfuSocket.on('joinRequest', handleJoinRequest);
     sfuSocket.on('joinRequestsUpdated', handleJoinRequestsUpdated);
     sfuSocket.on('hostTransferred', handleHostTransferred);
     sfuSocket.on('hostChanged', handleHostChanged);
@@ -883,6 +908,7 @@ export default function MeetingPage() {
     return () => {
       sfuSocket.off('screenShareStarted', handleRemoteScreenShareStarted);
       sfuSocket.off('screenShareStopped', handleRemoteScreenShareStopped);
+      sfuSocket.off('joinRequest', handleJoinRequest);
       sfuSocket.off('joinRequestsUpdated', handleJoinRequestsUpdated);
       sfuSocket.off('hostTransferred', handleHostTransferred);
       sfuSocket.off('hostChanged', handleHostChanged);
@@ -2411,21 +2437,24 @@ To convert to MP4:
     setSubtitlePosition({ x: 0, y: 0 });
   };
 
-  // Join request response handlers
-  const handleJoinRequestResponse = (requestId, approved) => {
-    const request = joinRequests.find(r => r.requestId === requestId);
-    if (!request || !sfuSocket) return;
+  // Join request response handlers using waiting room API
+  const handleJoinRequestResponse = async (requestId, approved) => {
+    const request = joinRequests.find(r => r.requestId === requestId || r._id === requestId);
+    if (!request) return;
 
-    console.log(`[MeetingPage] ${approved ? 'Approving' : 'Denying'} join request from ${request.requesterName}`);
+    console.log(`[MeetingPage] ${approved ? 'Approving' : 'Denying'} join request from ${request.fullName || request.username}`);
     
-    sfuSocket.emit('respondToJoinRequest', {
-      requestId,
-      approved,
-      requesterSocketId: request.requesterSocketId,
-      roomId: request.roomId
-    });
-
-    // No need to remove locally - server will send updated list via joinRequestsUpdated
+    try {
+      const action = approved ? 'approve' : 'deny';
+      await waitingRoomApi.handleJoinRequest(roomId, requestId, action);
+      console.log(`✅ Join request ${action}d successfully`);
+    } catch (error) {
+      console.error(`❌ Failed to ${approved ? 'approve' : 'deny'} join request:`, error);
+      // Show error toast if available
+      if (window.toast) {
+        window.toast.error(`Failed to ${approved ? 'approve' : 'deny'} join request`);
+      }
+    }
   };
 
   const approveJoinRequest = (requestId) => {
@@ -2889,6 +2918,15 @@ To convert to MP4:
         >
           <FileText size={20}/>
         </button>
+        
+        {/* Invite Links - Host Only */}
+        {roomSettings?.isHost && (
+          <InviteLinks 
+            roomId={roomId} 
+            meetingTitle="Meeting" 
+            isHost={true} 
+          />
+        )}
         
         <button 
           onClick={handleLeave} 

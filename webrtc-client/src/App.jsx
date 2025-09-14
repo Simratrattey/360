@@ -14,7 +14,22 @@ import SettingsPage from './pages/SettingsPage.jsx';
 import MessagesPage from './pages/MessagesPage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
+import WaitingRoom from './components/WaitingRoom.jsx';
 
+// Router component to handle meeting vs waiting room based on URL parameters
+function MeetingPageRouter() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const type = searchParams.get('type');
+  
+  // If type=waiting, show waiting room
+  // If type=direct or no type, show meeting page
+  if (type === 'waiting') {
+    return <WaitingRoom />;
+  } else {
+    return <MeetingPage />;
+  }
+}
 
 export default function App() {
   const { user, loading } = useContext(AuthContext);
@@ -52,7 +67,14 @@ export default function App() {
       <>
         <div className="min-h-screen bg-gray-900">
           <Routes>
-            <Route path="/meeting/:roomId" element={ <PrivateRoute> <MeetingPage /> </PrivateRoute> } />
+            <Route 
+              path="/meeting/:roomId" 
+              element={ 
+                <PrivateRoute> 
+                  <MeetingPageRouter /> 
+                </PrivateRoute> 
+              } 
+            />
             <Route path="*" element={ <Navigate to="/login" replace /> } />
           </Routes>
         </div>

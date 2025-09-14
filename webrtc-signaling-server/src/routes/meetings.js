@@ -406,4 +406,187 @@ router.post('/:id/regenerate-summary', authMiddleware, async (req, res) => {
     });
   }
 });
+
+// Waiting Room API Endpoints
+
+// Request to join meeting (for waiting room)
+router.post('/:id/request-join', authMiddleware, async (req, res) => {
+  try {
+    const { id: meetingId } = req.params;
+    const userId = req.user.id;
+    const { username, fullName } = req.user;
+
+    const meeting = await Meeting.findOne({ roomId: meetingId });
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    // Check if user is already in the meeting or has pending request
+    const existingRequest = meeting.pendingJoinRequests.find(
+      req => req.userId.toString() === userId && req.status === 'pending'
+    );
+    
+    if (existingRequest) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Join request already pending' 
+      });
+    }
+
+    // Check if user is organizer or already a participant
+    if (meeting.organizer.toString() === userId || 
+        meeting.participants.some(p => p.toString() === userId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User is already authorized for this meeting' 
+      });
+    }
+
+    // Add join request
+    meeting.pendingJoinRequests.push({
+      userId,
+      username,
+      fullName,
+      requestedAt: new Date(),
+      status: 'pending'
+    });
+
+    await meeting.save();
+
+    // Emit real-time notification to host/organizer
+    if (req.app.locals.sendJoinRequest) {
+      req.app.locals.sendJoinRequest(meeting.organizer.toString(), {
+        meetingId,
+        requestId: meeting.pendingJoinRequests[meeting.pendingJoinRequests.length - 1]._id,
+        user: { id: userId, username, fullName },
+        meetingTitle: meeting.title
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Join request sent successfully',
+      requestId: meeting.pendingJoinRequests[meeting.pendingJoinRequests.length - 1]._id
+    });
+
+  } catch (error) {
+    console.error('Error requesting to join meeting:', error);
+    res.status(500).json({ success: false, error: 'Failed to request join' });
+  }
+});
+
+// Approve/Deny join request (host only)
+router.post('/:id/handle-join-request', authMiddleware, async (req, res) => {
+  try {
+    const { id: meetingId } = req.params;
+    const { requestId, action } = req.body; // action: 'approve' or 'deny'
+    const hostId = req.user.id;
+
+    const meeting = await Meeting.findOne({ roomId: meetingId });
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    // Check if user is the organizer
+    if (meeting.organizer.toString() !== hostId) {
+      return res.status(403).json({ success: false, error: 'Only meeting organizer can handle join requests' });
+    }
+
+    // Find the join request
+    const requestIndex = meeting.pendingJoinRequests.findIndex(
+      req => req._id.toString() === requestId && req.status === 'pending'
+    );
+
+    if (requestIndex === -1) {
+      return res.status(404).json({ success: false, error: 'Join request not found or already handled' });
+    }
+
+    const joinRequest = meeting.pendingJoinRequests[requestIndex];
+    
+    if (action === 'approve') {
+      // Add user to participants if not already there
+      if (!meeting.participants.some(p => p.toString() === joinRequest.userId.toString())) {
+        meeting.participants.push(joinRequest.userId);
+      }
+      joinRequest.status = 'approved';
+      
+      // Emit approval notification to the requesting user
+      if (req.app.locals.sendJoinApproval) {
+        req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
+          meetingId,
+          approved: true,
+          meetingTitle: meeting.title
+        });
+      }
+    } else if (action === 'deny') {
+      joinRequest.status = 'denied';
+      
+      // Emit denial notification to the requesting user
+      if (req.app.locals.sendJoinApproval) {
+        req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
+          meetingId,
+          approved: false,
+          meetingTitle: meeting.title,
+          reason: req.body.reason || 'Request denied by host'
+        });
+      }
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid action' });
+    }
+
+    await meeting.save();
+
+    // Update pending requests for host
+    const pendingRequests = meeting.pendingJoinRequests.filter(req => req.status === 'pending');
+    if (req.app.locals.sendJoinRequestsUpdate) {
+      req.app.locals.sendJoinRequestsUpdate(hostId, {
+        meetingId,
+        pendingRequests,
+        count: pendingRequests.length
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Join request ${action}d successfully`,
+      action,
+      pendingCount: pendingRequests.length
+    });
+
+  } catch (error) {
+    console.error('Error handling join request:', error);
+    res.status(500).json({ success: false, error: 'Failed to handle join request' });
+  }
+});
+
+// Get pending join requests (host only)
+router.get('/:id/join-requests', authMiddleware, async (req, res) => {
+  try {
+    const { id: meetingId } = req.params;
+    const hostId = req.user.id;
+
+    const meeting = await Meeting.findOne({ roomId: meetingId }).populate('pendingJoinRequests.userId', 'username fullName');
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+
+    // Check if user is the organizer
+    if (meeting.organizer.toString() !== hostId) {
+      return res.status(403).json({ success: false, error: 'Only meeting organizer can view join requests' });
+    }
+
+    const pendingRequests = meeting.pendingJoinRequests.filter(req => req.status === 'pending');
+
+    res.json({
+      success: true,
+      requests: pendingRequests,
+      count: pendingRequests.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching join requests:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch join requests' });
+  }
+});
+
 export default router;

@@ -91,6 +91,24 @@ const MeetingSchema = new Schema({
     ref: 'User',
     default: null
   },
+  // Waiting room configuration
+  waitingRoomEnabled: {
+    type: Boolean,
+    default: false
+  },
+  // Pending join requests for waiting room
+  pendingJoinRequests: [{
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    username: String,
+    fullName: String,
+    requestedAt: { type: Date, default: Date.now },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'denied'],
+      default: 'pending'
+    }
+  }],
+  
   // Meeting summary and transcript
   summary: {
     type: String,
