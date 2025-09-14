@@ -525,34 +525,17 @@ export function useWebRTC() {
     }
   }, [getUserMedia, loadDevice, createSendTransport, createRecvTransport, produceLocalTracks, consumeProducers, joinRoom, sfuSocket]);
 
-  // === Toggle Video (Mediasoup Official Method) ===
+  // === Toggle Video (Official Mediasoup Demo Pattern) ===
   const toggleVideo = useCallback(async () => {
-    if (!localStream) {
-      console.error('[WebRTC] No localStream for video toggle');
-      return { success: false, enabled: false };
-    }
-
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (!videoTrack) {
-      console.error('[WebRTC] No video track found');
-      return { success: false, enabled: false };
-    }
-
     // Find the video producer
     const videoProducer = producersRef.current.find(p => p.track && p.track.kind === 'video');
-    if (!videoProducer) {
-      console.error('[WebRTC] No video producer found');
-      return { success: false, enabled: false };
-    }
+    const hasVideoProducer = videoProducer && !videoProducer.closed;
 
-    try {
-      // Check if video is currently enabled (has real camera vs stopped)
-      const isVideoEnabled = videoTrack.readyState === 'live' && videoTrack.getSettings().deviceId;
+    if (!hasVideoProducer) {
+      // Enable video (following official demo pattern)
+      console.log('[WebRTC] 🔄 enableWebcam() - Creating new video producer...');
 
-      if (!isVideoEnabled) {
-        // Turn video ON - Get new camera stream (mediasoup official method)
-        console.log('[WebRTC] 🔄 Turning video ON - Getting new camera stream...');
-
+      try {
         // Check for pre-meeting camera selection
         const preMeetingSettings = localStorage.getItem('preMeetingSettings');
         let videoConstraints = true;
@@ -568,68 +551,98 @@ export function useWebRTC() {
         }
 
         // Get new camera stream
-        const newStream = await navigator.mediaDevices.getUserMedia({
+        const stream = await navigator.mediaDevices.getUserMedia({
           video: videoConstraints,
           audio: false
         });
-        const newVideoTrack = newStream.getVideoTracks()[0];
+        const videoTrack = stream.getVideoTracks()[0];
 
-        // Stop old track if it exists
-        if (videoTrack.readyState !== 'ended') {
-          videoTrack.stop();
+        if (!sendTransportRef.current) {
+          throw new Error('No send transport available');
         }
 
-        // Replace in local stream
-        localStream.removeTrack(videoTrack);
-        localStream.addTrack(newVideoTrack);
+        // Create new producer (official pattern)
+        const newProducer = await sendTransportRef.current.produce({ track: videoTrack });
+        producersRef.current.push(newProducer);
 
-        // Replace track in producer (this recreates the transport - causes ~3s delay)
-        await videoProducer.replaceTrack({ track: newVideoTrack });
+        // Add to local stream
+        if (localStream) {
+          // Remove old video track if exists
+          const oldVideoTrack = localStream.getVideoTracks()[0];
+          if (oldVideoTrack) {
+            localStream.removeTrack(oldVideoTrack);
+            oldVideoTrack.stop();
+          }
+          localStream.addTrack(videoTrack);
 
-        // Update video element
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStream;
+          // Update video element
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
+          }
         }
 
-        console.log('[WebRTC] ✅ Video turned ON with new camera stream');
+        console.log('[WebRTC] ✅ Video enabled with new producer:', newProducer.id);
         return { success: true, enabled: true };
-      } else {
-        // Turn video OFF - Stop track completely (mediasoup official method)
-        console.log('[WebRTC] 🔴 Turning video OFF - Stopping camera track...');
+      } catch (error) {
+        console.error('[WebRTC] ❌ enableWebcam() | failed:', error);
+        return {
+          success: false,
+          enabled: false,
+          error: `Error enabling webcam: ${error}`
+        };
+      }
+    } else {
+      // Disable video (following official demo pattern)
+      console.log('[WebRTC] 🔴 disableWebcam() - Closing video producer...');
 
-        // Stop the camera track to turn off hardware
-        videoTrack.stop();
+      try {
+        // Step 1: Close the producer locally (official pattern)
+        videoProducer.close();
 
-        // Replace with null in producer (stops sending video)
-        await videoProducer.replaceTrack({ track: null });
+        // Step 2: Notify server (official pattern)
+        const { success, error: serverError } = await meetingService.closeProducer(videoProducer.id);
 
-        // Update video element to show black
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStream;
+        if (!success) {
+          console.error('[WebRTC] ❌ disableWebcam() | server-side close failed:', serverError);
+          return {
+            success: false,
+            enabled: true,
+            error: `Error closing server-side webcam Producer: ${serverError}`
+          };
         }
 
-        console.log('[WebRTC] ✅ Video turned OFF - Camera hardware stopped');
+        // Step 3: Remove from producers array and clean up local stream
+        producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
+
+        // Stop and remove video track from local stream
+        if (localStream) {
+          const videoTrack = localStream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.stop();
+            localStream.removeTrack(videoTrack);
+          }
+
+          // Update video element
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
+          }
+        }
+
+        console.log('[WebRTC] ✅ Video disabled - Producer closed, camera stopped');
         return { success: true, enabled: false };
+      } catch (error) {
+        console.error('[WebRTC] ❌ disableWebcam() | failed:', error);
+        return {
+          success: false,
+          enabled: true,
+          error: `Error disabling webcam: ${error}`
+        };
       }
-    } catch (error) {
-      console.error('[WebRTC] ❌ Failed to toggle video:', error);
-      return { success: false, enabled: false };
     }
   }, [localStream, localVideoRef]);
 
-  // === Toggle Audio (Mediasoup Official Method - Pause/Resume) ===
+  // === Toggle Audio (Official Mediasoup Demo Pattern) ===
   const toggleAudio = useCallback(async () => {
-    if (!localStream) {
-      console.error('[WebRTC] No localStream for audio toggle');
-      return { success: false, enabled: false };
-    }
-
-    const audioTrack = localStream.getAudioTracks()[0];
-    if (!audioTrack) {
-      console.error('[WebRTC] No audio track found');
-      return { success: false, enabled: false };
-    }
-
     // Find the audio producer
     const audioProducer = producersRef.current.find(p => p.track && p.track.kind === 'audio');
     if (!audioProducer) {
@@ -637,27 +650,86 @@ export function useWebRTC() {
       return { success: false, enabled: false };
     }
 
-    try {
-      const currentlyEnabled = !audioProducer.paused;
+    const currentlyEnabled = !audioProducer.paused;
 
-      if (currentlyEnabled) {
-        // Turn audio OFF - Pause producer (mediasoup official method)
-        console.log('[WebRTC] 🔇 Turning audio OFF - Pausing producer...');
-        await audioProducer.pause();
-        console.log('[WebRTC] ✅ Audio turned OFF (producer paused, mic indicator stays on)');
+    if (currentlyEnabled) {
+      // Mute audio (following official demo pattern)
+      console.log('[WebRTC] 🔇 muteMic() - Pausing producer...');
+
+      // Step 1: Pause locally first (official pattern)
+      audioProducer.pause();
+
+      try {
+        // Step 2: Notify server (official pattern)
+        const { success, error: serverError } = await meetingService.pauseProducer(audioProducer.id);
+
+        if (!success) {
+          console.error('[WebRTC] ❌ muteMic() | server-side pause failed:', serverError);
+
+          // Rollback local state on server error
+          audioProducer.resume();
+
+          return {
+            success: false,
+            enabled: true,
+            error: `Error pausing server-side mic Producer: ${serverError}`
+          };
+        }
+
+        console.log('[WebRTC] ✅ Audio muted (producer paused, mic indicator stays on)');
         return { success: true, enabled: false };
-      } else {
-        // Turn audio ON - Resume producer (mediasoup official method)
-        console.log('[WebRTC] 🔊 Turning audio ON - Resuming producer...');
-        await audioProducer.resume();
-        console.log('[WebRTC] ✅ Audio turned ON (producer resumed)');
-        return { success: true, enabled: true };
+      } catch (error) {
+        console.error('[WebRTC] ❌ muteMic() | failed:', error);
+
+        // Rollback local state on error
+        audioProducer.resume();
+
+        return {
+          success: false,
+          enabled: true,
+          error: `Error pausing server-side mic Producer: ${error}`
+        };
       }
-    } catch (error) {
-      console.error('[WebRTC] ❌ Failed to toggle audio:', error);
-      return { success: false, enabled: audioTrack.enabled };
+    } else {
+      // Unmute audio (following official demo pattern)
+      console.log('[WebRTC] 🔊 unmuteMic() - Resuming producer...');
+
+      // Step 1: Resume locally first (official pattern)
+      audioProducer.resume();
+
+      try {
+        // Step 2: Notify server (official pattern)
+        const { success, error: serverError } = await meetingService.resumeProducer(audioProducer.id);
+
+        if (!success) {
+          console.error('[WebRTC] ❌ unmuteMic() | server-side resume failed:', serverError);
+
+          // Rollback local state on server error
+          audioProducer.pause();
+
+          return {
+            success: false,
+            enabled: false,
+            error: `Error resuming server-side mic Producer: ${serverError}`
+          };
+        }
+
+        console.log('[WebRTC] ✅ Audio unmuted (producer resumed)');
+        return { success: true, enabled: true };
+      } catch (error) {
+        console.error('[WebRTC] ❌ unmuteMic() | failed:', error);
+
+        // Rollback local state on error
+        audioProducer.pause();
+
+        return {
+          success: false,
+          enabled: false,
+          error: `Error resuming server-side mic Producer: ${error}`
+        };
+      }
     }
-  }, [localStream]);
+  }, []);
 
   // === Leave Meeting ===
   const leaveMeeting = useCallback(() => {

@@ -158,14 +158,53 @@ class MeetingService {
       const params = {};
       if (typeof roomId === 'string') params.roomId = roomId;
       else if (roomId && roomId.roomId) params.roomId = roomId.roomId;
-      
+
       // Add peerId to exclude own producers
       if (excludePeerId) params.peerId = excludePeerId;
-      
+
       const response = await SFU.get('/sfu/producers', { params });
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: 'Failed to get producers' };
+    }
+  }
+
+  // Pause a producer (official mediasoup pattern)
+  async pauseProducer(producerId) {
+    try {
+      await SFU.post('/sfu/producers/pause', { producerId });
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to pause producer'
+      };
+    }
+  }
+
+  // Resume a producer (official mediasoup pattern)
+  async resumeProducer(producerId) {
+    try {
+      await SFU.post('/sfu/producers/resume', { producerId });
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to resume producer'
+      };
+    }
+  }
+
+  // Close a producer (official mediasoup pattern)
+  async closeProducer(producerId) {
+    try {
+      await SFU.post('/sfu/producers/close', { producerId });
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Failed to close producer'
+      };
     }
   }
 }
