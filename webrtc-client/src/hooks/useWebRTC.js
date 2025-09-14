@@ -637,41 +637,48 @@ export function useWebRTC() {
         };
       }
     } else {
-      // Disable video (following official demo pattern)
-      console.log('[WebRTC] 🔴 disableWebcam() - Closing video producer...');
+      // Disable video (exact mediasoup demo pattern)
+      console.log('[WebRTC] 🔴 disableWebcam() - Following official mediasoup pattern...');
 
       try {
-        // Step 1: Stop camera track IMMEDIATELY to turn off green light
-        if (localStream) {
-          const videoTrack = localStream.getVideoTracks()[0];
-          if (videoTrack) {
-            console.log('[WebRTC] 🔴 Stopping camera track immediately - green light should turn OFF');
-            videoTrack.stop();
-            localStream.removeTrack(videoTrack);
-          }
+        // Step 1: Close the producer (should stop underlying track automatically)
+        console.log('[WebRTC] 🔄 Closing webcam producer:', videoProducer.id);
+        videoProducer.close();
 
-          // Update video element immediately
+        // Step 2: Remove from producers array (official pattern)
+        producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
+
+        // Step 3: Notify server (official pattern)
+        try {
+          await meetingService.closeProducer(videoProducer.id);
+          console.log('[WebRTC] ✅ Server notified of producer closure');
+        } catch (error) {
+          console.error('[WebRTC] ❌ Error closing server-side webcam Producer:', error);
+          // Continue - local closure is what matters most
+        }
+
+        // Step 4: Clean up local stream (remove the stopped track)
+        if (localStream) {
+          const videoTracks = localStream.getVideoTracks();
+          videoTracks.forEach(track => {
+            console.log('[WebRTC] 🗑️ Removing video track from localStream, readyState:', track.readyState);
+            localStream.removeTrack(track);
+            if (track.readyState !== 'ended') {
+              console.log('[WebRTC] 🔴 Force stopping video track');
+              track.stop();
+            }
+          });
+
+          // Update localStream state to trigger re-render
+          setLocalStream(new MediaStream(localStream.getTracks()));
+
+          // Update video element
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = localStream;
           }
         }
 
-        // Step 2: Close the producer locally (official pattern)
-        videoProducer.close();
-
-        // Step 3: Remove from producers array
-        producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
-
-        // Step 4: Notify server (official pattern)
-        const { success, error: serverError } = await meetingService.closeProducer(videoProducer.id);
-
-        if (!success) {
-          console.error('[WebRTC] ❌ disableWebcam() | server-side close failed:', serverError);
-          // Don't rollback here - local camera is already stopped which is what user expects
-          console.warn('[WebRTC] ⚠️ Server sync failed but camera hardware stopped successfully');
-        }
-
-        console.log('[WebRTC] ✅ Video disabled - Producer closed, camera hardware stopped');
+        console.log('[WebRTC] ✅ Video disabled - Producer closed, camera should be stopped');
         return { success: true, enabled: false };
       } catch (error) {
         console.error('[WebRTC] ❌ disableWebcam() | failed:', error);
