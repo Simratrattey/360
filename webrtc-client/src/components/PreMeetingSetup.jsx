@@ -208,8 +208,8 @@ export default function PreMeetingSetup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden border border-white/20">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-secondary-50 flex items-center justify-center p-4">
+      <div className="bg-white/20 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden border border-white/20">
         <div className="grid md:grid-cols-2 min-h-[650px]">
           {/* Video Preview Section */}
           <div className="bg-gradient-to-br from-gray-900 to-slate-800 relative flex items-center justify-center rounded-l-3xl">
@@ -218,7 +218,7 @@ export default function PreMeetingSetup() {
               autoPlay
               muted
               playsInline
-              className={`w-full h-full object-cover rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
+              className={`w-full h-full object-contain rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
             />
             {!isVideoOn && (
               <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-gray-900 rounded-l-3xl">
@@ -261,14 +261,14 @@ export default function PreMeetingSetup() {
           </div>
 
           {/* Settings Section */}
-          <div className="p-10 flex flex-col justify-between bg-gradient-to-br from-slate-50 to-blue-50/50">
+          <div className="p-10 flex flex-col justify-between bg-white/10 backdrop-blur-2xl">
             <div>
               <div className="text-center mb-10">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
                   <Video className="w-8 h-8 text-white" />
                 </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">Ready to join?</h1>
-                <p className="text-slate-600 text-lg">Set up your camera and microphone</p>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-3">Ready to join?</h1>
+                <p className="text-primary-700 text-lg font-medium">Set up your camera and microphone</p>
               </div>
 
               {error && (
@@ -280,8 +280,8 @@ export default function PreMeetingSetup() {
               <div className="space-y-8">
                 {/* Display Name */}
                 <div>
-                  <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
-                    <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-md flex items-center justify-center">
+                  <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                    <div className="w-5 h-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-md flex items-center justify-center">
                       <User size={12} className="text-white" />
                     </div>
                     <span>Display Name</span>
@@ -290,7 +290,7 @@ export default function PreMeetingSetup() {
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800 placeholder-slate-400"
+                    className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md text-primary-800 placeholder-primary-600/70 font-medium"
                     placeholder="Enter your display name"
                   />
                 </div>
@@ -298,8 +298,8 @@ export default function PreMeetingSetup() {
                 {/* Camera Selection */}
                 {devices.cameras.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
-                      <div className="w-5 h-5 bg-gradient-to-br from-green-500 to-emerald-500 rounded-md flex items-center justify-center">
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                      <div className="w-5 h-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-md flex items-center justify-center">
                         <Camera size={12} className="text-white" />
                       </div>
                       <span>Camera</span>
@@ -307,7 +307,7 @@ export default function PreMeetingSetup() {
                     <select
                       value={selectedCamera}
                       onChange={(e) => changeCamera(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800"
+                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md text-primary-800 font-medium"
                     >
                       {devices.cameras.map((camera) => (
                         <option key={camera.deviceId} value={camera.deviceId}>
@@ -321,8 +321,8 @@ export default function PreMeetingSetup() {
                 {/* Microphone Selection */}
                 {devices.microphones.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
-                      <div className="w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-md flex items-center justify-center">
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-primary-800 mb-3">
+                      <div className="w-5 h-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-md flex items-center justify-center">
                         <Mic size={12} className="text-white" />
                       </div>
                       <span>Microphone</span>
@@ -330,7 +330,7 @@ export default function PreMeetingSetup() {
                     <select
                       value={selectedMicrophone}
                       onChange={(e) => changeMicrophone(e.target.value)}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800"
+                      className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-white/20 backdrop-blur-md shadow-sm transition-all duration-200 hover:shadow-md text-primary-800 font-medium"
                     >
                       {devices.microphones.map((microphone) => (
                         <option key={microphone.deviceId} value={microphone.deviceId}>
@@ -342,24 +342,24 @@ export default function PreMeetingSetup() {
                 )}
 
                 {/* Meeting Info */}
-                <div className="bg-gradient-to-br from-slate-100/80 to-blue-100/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 shadow-sm">
-                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center space-x-2">
-                    <div className="w-5 h-5 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-md flex items-center justify-center">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-sm">
+                  <h3 className="font-semibold text-primary-800 mb-4 flex items-center space-x-2">
+                    <div className="w-5 h-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-md flex items-center justify-center">
                       <Settings size={12} className="text-white" />
                     </div>
                     <span>Meeting Details</span>
                   </h3>
                   <div className="space-y-2">
-                    <p className="text-sm text-slate-600 flex items-center justify-between">
+                    <p className="text-sm text-primary-700 flex items-center justify-between">
                       <span className="font-medium">Room:</span> 
-                      <span className="font-mono bg-slate-200/60 px-2 py-1 rounded-md text-xs">{roomId}</span>
+                      <span className="font-mono bg-primary-100/70 px-2 py-1 rounded-md text-xs text-primary-800">{roomId}</span>
                     </p>
-                    <p className="text-sm text-slate-600 flex items-center justify-between">
+                    <p className="text-sm text-primary-700 flex items-center justify-between">
                       <span className="font-medium">Type:</span> 
                       <span className={`px-2 py-1 rounded-md text-xs font-medium ${
                         meetingType === 'waiting' 
-                          ? 'bg-orange-100 text-orange-800' 
-                          : 'bg-green-100 text-green-800'
+                          ? 'bg-orange-100/80 text-orange-800 border border-orange-200/50' 
+                          : 'bg-green-100/80 text-green-800 border border-green-200/50'
                       }`}>
                         {meetingType === 'waiting' ? 'Approval Required' : 'Direct Join'}
                       </span>
@@ -373,7 +373,7 @@ export default function PreMeetingSetup() {
             <button
               onClick={joinMeeting}
               disabled={isLoading || !displayName.trim()}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transform"
+              className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 disabled:from-secondary-400 disabled:via-secondary-400 disabled:to-secondary-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transform"
             >
               {isLoading ? (
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
