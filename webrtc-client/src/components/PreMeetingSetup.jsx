@@ -212,7 +212,7 @@ export default function PreMeetingSetup() {
       <div className="bg-white/20 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden border border-white/20">
         <div className="grid md:grid-cols-2 min-h-[650px]">
           {/* Video Preview Section */}
-          <div className="bg-gradient-to-br from-gray-900 to-slate-800 relative flex items-center justify-center rounded-l-3xl">
+          <div className="bg-slate-900 relative flex items-center justify-center rounded-l-3xl">
             <video
               ref={videoRef}
               autoPlay
@@ -221,7 +221,7 @@ export default function PreMeetingSetup() {
               className={`w-full h-full object-contain rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
             />
             {!isVideoOn && (
-              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-gray-900 rounded-l-3xl">
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-slate-900 rounded-l-3xl">
                 <div className="text-center">
                   <div className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-600/50">
                     <CameraOff size={72} className="text-slate-300 mx-auto mb-4" />
@@ -354,23 +354,14 @@ export default function PreMeetingSetup() {
                       <span className="font-medium">Room:</span> 
                       <span className="font-mono bg-primary-100/70 px-2 py-1 rounded-md text-xs text-primary-800">{roomId}</span>
                     </p>
-                    <p className="text-sm text-primary-700 flex items-center justify-between">
-                      <span className="font-medium">Type:</span> 
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                        meetingType === 'waiting' 
-                          ? 'bg-orange-100/80 text-orange-800 border border-orange-200/50' 
-                          : 'bg-green-100/80 text-green-800 border border-green-200/50'
-                      }`}>
-                        {meetingType === 'waiting' ? 'Approval Required' : 'Direct Join'}
-                      </span>
-                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Join Button */}
-            <button
+            <div className="mt-8">
+              <button
               onClick={joinMeeting}
               disabled={isLoading || !displayName.trim()}
               className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 disabled:from-secondary-400 disabled:via-secondary-400 disabled:to-secondary-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transform"
@@ -385,7 +376,8 @@ export default function PreMeetingSetup() {
                   <span className="text-lg">Join Meeting</span>
                 </>
               )}
-            </button>
+              </button>
+            </div>
           </div>
         </div>
       </div>
