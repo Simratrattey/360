@@ -291,20 +291,28 @@ export default function ChatWindow({
                   
                   if (isSystemMsg) {
                     const isDeletionNotice = msg.isDeletionNotice || (msg.text && msg.text.includes('no longer exists'));
+                    const isWelcomeMessage = msg.text && (
+                      msg.text.includes('created this group') || 
+                      msg.text.includes('created this community') ||
+                      msg.text.includes('was created')
+                    );
                     
                     return (
                       <div 
                         key={msg._id || msg.id}
                         id={`message-${msg._id || msg.id}`}
-                        className="flex justify-center my-4"
+                        className="flex justify-center my-6"
                       >
                         <div 
-                          className={`px-4 py-2 rounded-full text-xs font-medium max-w-md text-center shadow-sm backdrop-blur-sm ${
+                          className={`px-4 py-3 rounded-lg text-sm font-medium max-w-sm text-center shadow-md backdrop-blur-sm ${
                             isDeletionNotice
-                              ? 'bg-red-100/70 text-red-600 border border-red-200/50' 
-                              : 'bg-blue-100/70 text-blue-600 border border-blue-200/50'
+                              ? 'bg-red-100/80 text-red-700 border border-red-200/60' 
+                              : isWelcomeMessage
+                              ? 'bg-green-100/80 text-green-700 border border-green-200/60'
+                              : 'bg-blue-100/80 text-blue-700 border border-blue-200/60'
                           }`}
                         >
+                          {isWelcomeMessage && <span className="text-green-600 mr-1">🎉</span>}
                           {msg.text}
                         </div>
                       </div>
