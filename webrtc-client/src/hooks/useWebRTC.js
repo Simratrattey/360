@@ -557,6 +557,8 @@ export function useWebRTC() {
         });
         const videoTrack = stream.getVideoTracks()[0];
 
+        console.log('[WebRTC] 📹 Got new camera stream, track readyState:', videoTrack.readyState);
+
         if (!sendTransportRef.current) {
           throw new Error('No send transport available');
         }
@@ -565,19 +567,39 @@ export function useWebRTC() {
         const newProducer = await sendTransportRef.current.produce({ track: videoTrack });
         producersRef.current.push(newProducer);
 
-        // Add to local stream
+        // Add to local stream and update video element IMMEDIATELY
         if (localStream) {
           // Remove old video track if exists
           const oldVideoTrack = localStream.getVideoTracks()[0];
           if (oldVideoTrack) {
+            console.log('[WebRTC] 🗑️ Removing old video track');
             localStream.removeTrack(oldVideoTrack);
             oldVideoTrack.stop();
           }
-          localStream.addTrack(videoTrack);
 
-          // Update video element
+          // Add new video track
+          localStream.addTrack(videoTrack);
+          console.log('[WebRTC] ➕ Added new video track to localStream');
+
+          // Force update video element with fresh stream
           if (localVideoRef.current) {
+            console.log('[WebRTC] 📺 Updating video element with new stream');
+            localVideoRef.current.srcObject = null; // Clear first
             localVideoRef.current.srcObject = localStream;
+
+            // Force video to play
+            localVideoRef.current.play().catch(e => {
+              console.warn('[WebRTC] Video play failed (may be normal):', e);
+            });
+          }
+        } else {
+          console.warn('[WebRTC] ⚠️ No localStream available, creating new one');
+          setLocalStream(stream);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.play().catch(e => {
+              console.warn('[WebRTC] Video play failed (may be normal):', e);
+            });
           }
         }
 
@@ -596,39 +618,37 @@ export function useWebRTC() {
       console.log('[WebRTC] 🔴 disableWebcam() - Closing video producer...');
 
       try {
-        // Step 1: Close the producer locally (official pattern)
-        videoProducer.close();
-
-        // Step 2: Notify server (official pattern)
-        const { success, error: serverError } = await meetingService.closeProducer(videoProducer.id);
-
-        if (!success) {
-          console.error('[WebRTC] ❌ disableWebcam() | server-side close failed:', serverError);
-          return {
-            success: false,
-            enabled: true,
-            error: `Error closing server-side webcam Producer: ${serverError}`
-          };
-        }
-
-        // Step 3: Remove from producers array and clean up local stream
-        producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
-
-        // Stop and remove video track from local stream
+        // Step 1: Stop camera track IMMEDIATELY to turn off green light
         if (localStream) {
           const videoTrack = localStream.getVideoTracks()[0];
           if (videoTrack) {
+            console.log('[WebRTC] 🔴 Stopping camera track immediately - green light should turn OFF');
             videoTrack.stop();
             localStream.removeTrack(videoTrack);
           }
 
-          // Update video element
+          // Update video element immediately
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = localStream;
           }
         }
 
-        console.log('[WebRTC] ✅ Video disabled - Producer closed, camera stopped');
+        // Step 2: Close the producer locally (official pattern)
+        videoProducer.close();
+
+        // Step 3: Remove from producers array
+        producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
+
+        // Step 4: Notify server (official pattern)
+        const { success, error: serverError } = await meetingService.closeProducer(videoProducer.id);
+
+        if (!success) {
+          console.error('[WebRTC] ❌ disableWebcam() | server-side close failed:', serverError);
+          // Don't rollback here - local camera is already stopped which is what user expects
+          console.warn('[WebRTC] ⚠️ Server sync failed but camera hardware stopped successfully');
+        }
+
+        console.log('[WebRTC] ✅ Video disabled - Producer closed, camera hardware stopped');
         return { success: true, enabled: false };
       } catch (error) {
         console.error('[WebRTC] ❌ disableWebcam() | failed:', error);
