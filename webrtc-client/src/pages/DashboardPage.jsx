@@ -60,22 +60,9 @@ export default function DashboardPage() {
     return (Array.isArray(generalNotifications) ? generalNotifications : [])
       .filter(notif => !notif.read)
       .filter(notif => {
-        // Hide message notifications if actively viewing that specific conversation
-        if (notif.type === 'message' && 
-            window.location.pathname === '/messages' &&
-            isOnMessagesPage && 
-            currentConversationId === notif.data?.conversationId) {
-          console.log('🔍 Hiding message notification for actively viewed conversation:', notif.data?.conversationId);
-          return false;
-        }
-        
-        // Hide conversation/group notifications if messages page has been visited
-        // These should disappear once user opens messages, regardless of specific conversation
-        if ((notif.type === 'conversation_created' || 
-             notif.type === 'community_created' || 
-             notif.type === 'conversation_deleted') &&
-            window.location.pathname === '/messages') {
-          console.log('🔍 Hiding conversation notification - user is on messages page:', notif.type);
+        // Hide ALL notifications when user is on messages page
+        if (window.location.pathname === '/messages') {
+          console.log('🔍 Hiding all notifications - user is on messages page');
           return false;
         }
         
