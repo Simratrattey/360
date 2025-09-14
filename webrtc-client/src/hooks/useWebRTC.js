@@ -568,6 +568,9 @@ export function useWebRTC() {
         producersRef.current.push(newProducer);
 
         // Add to local stream and update video element IMMEDIATELY
+        console.log('[WebRTC] 🔍 Debug - localStream exists:', !!localStream);
+        console.log('[WebRTC] 🔍 Debug - localVideoRef.current exists:', !!localVideoRef.current);
+
         if (localStream) {
           // Remove old video track if exists
           const oldVideoTrack = localStream.getVideoTracks()[0];
@@ -580,26 +583,46 @@ export function useWebRTC() {
           // Add new video track
           localStream.addTrack(videoTrack);
           console.log('[WebRTC] ➕ Added new video track to localStream');
+          console.log('[WebRTC] 🔍 LocalStream tracks after adding:', localStream.getTracks().map(t => `${t.kind}:${t.readyState}`));
+
+          // Update the localStream state to trigger React re-renders
+          setLocalStream(new MediaStream(localStream.getTracks()));
 
           // Force update video element with fresh stream
           if (localVideoRef.current) {
             console.log('[WebRTC] 📺 Updating video element with new stream');
-            localVideoRef.current.srcObject = null; // Clear first
-            localVideoRef.current.srcObject = localStream;
 
-            // Force video to play
-            localVideoRef.current.play().catch(e => {
-              console.warn('[WebRTC] Video play failed (may be normal):', e);
-            });
+            // Use a small delay to ensure state update is processed
+            setTimeout(() => {
+              if (localVideoRef.current) {
+                localVideoRef.current.srcObject = localStream;
+                console.log('[WebRTC] 🔄 Set localStream to video element');
+
+                // Force video to play
+                localVideoRef.current.play().then(() => {
+                  console.log('[WebRTC] ✅ Video play successful');
+                }).catch(e => {
+                  console.warn('[WebRTC] Video play failed:', e);
+                });
+              }
+            }, 100);
+          } else {
+            console.error('[WebRTC] ❌ localVideoRef.current is null!');
           }
         } else {
           console.warn('[WebRTC] ⚠️ No localStream available, creating new one');
-          setLocalStream(stream);
+          const newStream = new MediaStream([videoTrack]);
+          setLocalStream(newStream);
           if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-            localVideoRef.current.play().catch(e => {
-              console.warn('[WebRTC] Video play failed (may be normal):', e);
+            console.log('[WebRTC] 📺 Setting fresh stream to video element');
+            localVideoRef.current.srcObject = newStream;
+            localVideoRef.current.play().then(() => {
+              console.log('[WebRTC] ✅ Video play successful (new stream)');
+            }).catch(e => {
+              console.warn('[WebRTC] Video play failed (new stream):', e);
             });
+          } else {
+            console.error('[WebRTC] ❌ localVideoRef.current is null! (no localStream case)');
           }
         }
 
