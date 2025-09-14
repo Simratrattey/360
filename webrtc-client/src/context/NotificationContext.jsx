@@ -35,31 +35,58 @@ export const NotificationProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [error, setError] = useState(null);
 
-  // Clear old notification data and reset state on mount
+  // One-time cleanup of old notification data
   useEffect(() => {
     if (!user?.id) return;
     
-    try {
-      const STORAGE_KEYS = getStorageKeys(user.id);
-      
-      // Clear old cached notifications to ensure fresh data
-      localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
-      localStorage.removeItem(STORAGE_KEYS.UNREAD_COUNT);
-      
-      // Clear any legacy notification cache keys
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('notifications_cache') || key.includes('unread_count_cache')) {
-          localStorage.removeItem(key);
+    const CLEANUP_KEY = `notifications_cleanup_done_${user.id}`;
+    const cleanupDone = localStorage.getItem(CLEANUP_KEY);
+    
+    // Only do cleanup once per user
+    if (!cleanupDone) {
+      try {
+        const STORAGE_KEYS = getStorageKeys(user.id);
+        
+        // Clear old cached notifications to ensure fresh data
+        localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+        localStorage.removeItem(STORAGE_KEYS.UNREAD_COUNT);
+        
+        // Clear any legacy notification cache keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.includes('notifications_cache') || key.includes('unread_count_cache')) {
+            localStorage.removeItem(key);
+          }
+        });
+        
+        // Reset state to ensure clean start
+        setNotifications([]);
+        setUnreadCount(0);
+        
+        // Mark cleanup as done
+        localStorage.setItem(CLEANUP_KEY, 'true');
+        
+        console.log('🧹 One-time cleanup of notification cache completed');
+      } catch (err) {
+        console.error('Error clearing notification cache:', err);
+      }
+    } else {
+      // Load cached notifications normally
+      try {
+        const STORAGE_KEYS = getStorageKeys(user.id);
+        const cachedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+        const cachedUnread = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
+        
+        if (cachedNotifications) {
+          const parsed = JSON.parse(cachedNotifications);
+          setNotifications(parsed);
         }
-      });
-      
-      // Reset state to ensure clean start
-      setNotifications([]);
-      setUnreadCount(0);
-      
-      console.log('🧹 Cleared notification cache and reset state for fresh data');
-    } catch (err) {
-      console.error('Error clearing notification cache:', err);
+        
+        if (cachedUnread) {
+          setUnreadCount(parseInt(cachedUnread, 10));
+        }
+      } catch (err) {
+        console.error('Error loading notifications from cache:', err);
+      }
     }
   }, [user?.id]);
 
@@ -131,17 +158,8 @@ export const NotificationProvider = ({ children }) => {
   // Load notifications from server when user changes
   useEffect(() => {
     if (user) {
-      // Mark all existing notifications as read to clear old ones
-      notificationService.markAllAsRead().then(() => {
-        console.log('🧹 Marked all existing notifications as read');
-        loadNotifications();
-        loadUnreadCount();
-      }).catch(err => {
-        console.error('Error marking all notifications as read:', err);
-        // Still load notifications even if marking fails
-        loadNotifications();
-        loadUnreadCount();
-      });
+      loadNotifications();
+      loadUnreadCount();
     } else {
       // Clear user-specific cache when user logs out
       setNotifications([]);
