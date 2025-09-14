@@ -537,13 +537,14 @@ io.on('connection', async socket => {
   // fetch authenticated user
   const user = await User.findById(socket.userId).select('username fullName avatarUrl');
   if (!user) return socket.disconnect(true);
-  const userName = user.username;
+  const userName = user.fullName || user.username;
   
   // Add user to online users
   onlineUsers.set(socket.userId, {
     id: socket.userId,
-    username: userName,
+    username: user.username,
     fullName: user.fullName,
+    displayName: userName, // Full name for display purposes
     avatarUrl: user.avatarUrl,
     socketId: socket.id,
     lastSeen: new Date()
