@@ -19,7 +19,6 @@ export default function MeetingStatsBar({
 }) {
   const [duration, setDuration] = useState('0:00');
   const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
   const [inviteLinkType, setInviteLinkType] = useState('direct'); // 'direct' or 'waitingRoom'
   const [copiedLinkType, setCopiedLinkType] = useState(null);
   
@@ -59,16 +58,6 @@ export default function MeetingStatsBar({
     return () => clearInterval(interval);
   }, [meetingStartTime]);
 
-  const handleCopyInviteLink = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopySuccess(true);
-      if (onCopyInviteLink) onCopyInviteLink();
-      setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
-  };
 
   // Get participant list from participantMap
   const participants = Object.entries(participantMap).map(([peerId, name]) => ({
@@ -122,22 +111,22 @@ export default function MeetingStatsBar({
               </div>
               <div className="max-h-64 overflow-y-auto">
                 {joinRequests.map((request) => (
-                  <div key={request.requestId} className="p-3 border-b border-gray-100 last:border-b-0">
+                  <div key={request.requestId || request._id} className="p-3 border-b border-gray-100 last:border-b-0">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{request.requesterName}</div>
+                        <div className="text-sm font-medium text-gray-900">{request.fullName || request.username || 'Unknown User'}</div>
                         <div className="text-xs text-gray-500">Wants to join the meeting</div>
                       </div>
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => onApproveJoinRequest?.(request.requestId)}
+                          onClick={() => onApproveJoinRequest?.(request.requestId || request._id)}
                           className="flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
                           title="Approve"
                         >
                           <Check size={14} />
                         </button>
                         <button
-                          onClick={() => onDenyJoinRequest?.(request.requestId)}
+                          onClick={() => onDenyJoinRequest?.(request.requestId || request._id)}
                           className="flex items-center justify-center w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
                           title="Deny"
                         >

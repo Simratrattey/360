@@ -569,7 +569,16 @@ router.post('/:id/handle-join-request', authMiddleware, async (req, res) => {
     await meeting.save();
 
     // Update pending requests for host
-    const pendingRequests = meeting.pendingJoinRequests.filter(req => req.status === 'pending');
+    const pendingRequests = meeting.pendingJoinRequests
+      .filter(req => req.status === 'pending')
+      .map(req => ({
+        requestId: req._id,
+        userId: req.userId,
+        username: req.username,
+        fullName: req.fullName,
+        requestedAt: req.requestedAt,
+        status: req.status
+      }));
     if (req.app.locals.sendJoinRequestsUpdate) {
       req.app.locals.sendJoinRequestsUpdate(hostId, {
         meetingId,
@@ -607,7 +616,16 @@ router.get('/:id/join-requests', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only meeting organizer can view join requests' });
     }
 
-    const pendingRequests = meeting.pendingJoinRequests.filter(req => req.status === 'pending');
+    const pendingRequests = meeting.pendingJoinRequests
+      .filter(req => req.status === 'pending')
+      .map(req => ({
+        requestId: req._id,
+        userId: req.userId,
+        username: req.username,
+        fullName: req.fullName,
+        requestedAt: req.requestedAt,
+        status: req.status
+      }));
 
     res.json({
       success: true,
