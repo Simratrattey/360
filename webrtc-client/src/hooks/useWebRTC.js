@@ -525,6 +525,140 @@ export function useWebRTC() {
     }
   }, [getUserMedia, loadDevice, createSendTransport, createRecvTransport, produceLocalTracks, consumeProducers, joinRoom, sfuSocket]);
 
+  // === Toggle Video (Mediasoup Official Method) ===
+  const toggleVideo = useCallback(async () => {
+    if (!localStream) {
+      console.error('[WebRTC] No localStream for video toggle');
+      return { success: false, enabled: false };
+    }
+
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (!videoTrack) {
+      console.error('[WebRTC] No video track found');
+      return { success: false, enabled: false };
+    }
+
+    // Find the video producer
+    const videoProducer = producersRef.current.find(p => p.track && p.track.kind === 'video');
+    if (!videoProducer) {
+      console.error('[WebRTC] No video producer found');
+      return { success: false, enabled: false };
+    }
+
+    try {
+      // Check if video is currently enabled (has real camera vs stopped)
+      const isVideoEnabled = videoTrack.readyState === 'live' && videoTrack.getSettings().deviceId;
+
+      if (!isVideoEnabled) {
+        // Turn video ON - Get new camera stream (mediasoup official method)
+        console.log('[WebRTC] 🔄 Turning video ON - Getting new camera stream...');
+
+        // Check for pre-meeting camera selection
+        const preMeetingSettings = localStorage.getItem('preMeetingSettings');
+        let videoConstraints = true;
+        if (preMeetingSettings) {
+          try {
+            const settings = JSON.parse(preMeetingSettings);
+            if (settings.selectedCamera) {
+              videoConstraints = { deviceId: { exact: settings.selectedCamera } };
+            }
+          } catch (e) {
+            console.warn('[WebRTC] Failed to parse pre-meeting settings for camera:', e);
+          }
+        }
+
+        // Get new camera stream
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+
+        // Stop old track if it exists
+        if (videoTrack.readyState !== 'ended') {
+          videoTrack.stop();
+        }
+
+        // Replace in local stream
+        localStream.removeTrack(videoTrack);
+        localStream.addTrack(newVideoTrack);
+
+        // Replace track in producer (this recreates the transport - causes ~3s delay)
+        await videoProducer.replaceTrack({ track: newVideoTrack });
+
+        // Update video element
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream;
+        }
+
+        console.log('[WebRTC] ✅ Video turned ON with new camera stream');
+        return { success: true, enabled: true };
+      } else {
+        // Turn video OFF - Stop track completely (mediasoup official method)
+        console.log('[WebRTC] 🔴 Turning video OFF - Stopping camera track...');
+
+        // Stop the camera track to turn off hardware
+        videoTrack.stop();
+
+        // Replace with null in producer (stops sending video)
+        await videoProducer.replaceTrack({ track: null });
+
+        // Update video element to show black
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream;
+        }
+
+        console.log('[WebRTC] ✅ Video turned OFF - Camera hardware stopped');
+        return { success: true, enabled: false };
+      }
+    } catch (error) {
+      console.error('[WebRTC] ❌ Failed to toggle video:', error);
+      return { success: false, enabled: false };
+    }
+  }, [localStream, localVideoRef]);
+
+  // === Toggle Audio (Mediasoup Official Method - Pause/Resume) ===
+  const toggleAudio = useCallback(async () => {
+    if (!localStream) {
+      console.error('[WebRTC] No localStream for audio toggle');
+      return { success: false, enabled: false };
+    }
+
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (!audioTrack) {
+      console.error('[WebRTC] No audio track found');
+      return { success: false, enabled: false };
+    }
+
+    // Find the audio producer
+    const audioProducer = producersRef.current.find(p => p.track && p.track.kind === 'audio');
+    if (!audioProducer) {
+      console.error('[WebRTC] No audio producer found');
+      return { success: false, enabled: false };
+    }
+
+    try {
+      const currentlyEnabled = !audioProducer.paused;
+
+      if (currentlyEnabled) {
+        // Turn audio OFF - Pause producer (mediasoup official method)
+        console.log('[WebRTC] 🔇 Turning audio OFF - Pausing producer...');
+        await audioProducer.pause();
+        console.log('[WebRTC] ✅ Audio turned OFF (producer paused, mic indicator stays on)');
+        return { success: true, enabled: false };
+      } else {
+        // Turn audio ON - Resume producer (mediasoup official method)
+        console.log('[WebRTC] 🔊 Turning audio ON - Resuming producer...');
+        await audioProducer.resume();
+        console.log('[WebRTC] ✅ Audio turned ON (producer resumed)');
+        return { success: true, enabled: true };
+      }
+    } catch (error) {
+      console.error('[WebRTC] ❌ Failed to toggle audio:', error);
+      return { success: false, enabled: audioTrack.enabled };
+    }
+  }, [localStream]);
+
   // === Leave Meeting ===
   const leaveMeeting = useCallback(() => {
     localStream?.getTracks().forEach(track => track.stop());
@@ -585,6 +719,8 @@ export function useWebRTC() {
     remoteVideoRefs,
     joinMeeting,
     leaveMeeting,
+    toggleVideo,
+    toggleAudio,
     addRemoteVideoRef: (peerId, ref) => remoteVideoRefs.current.set(peerId, ref),
     removeRemoteVideoRef: (peerId) => remoteVideoRefs.current.delete(peerId),
   };

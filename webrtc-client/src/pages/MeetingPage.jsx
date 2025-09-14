@@ -36,7 +36,7 @@ export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
-  const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef } = useWebRTC();
+  const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef, toggleVideo: webrtcToggleVideo, toggleAudio: webrtcToggleAudio } = useWebRTC();
   const { 
     avatarOutput, 
     avatarNavigate, 
@@ -953,71 +953,35 @@ export default function MeetingPage() {
     sendAvatarNavigate(i);
   };
 
-  // Toggle audio
-  const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsAudioEnabled(audioTrack.enabled);
-      } else {
-        console.error('No audio track found');
-      }
+  // Toggle audio using mediasoup official method
+  const toggleAudio = async () => {
+    console.log('[MeetingPage] 🔄 Toggling audio...');
+    const result = await webrtcToggleAudio();
+
+    if (result.success) {
+      setIsAudioEnabled(result.enabled);
+      console.log('[MeetingPage] ✅ Audio toggled to:', result.enabled);
     } else {
-      console.error('No localStream for audio toggle');
+      console.error('[MeetingPage] ❌ Failed to toggle audio');
     }
   };
 
   const toggleVideo = async () => {
-    if (!localStream) {
-      console.error('No localStream for video toggle');
-      return;
-    }
-
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (!videoTrack) {
-      console.error('No video track found');
-      return;
-    }
-
-    const willBeEnabled = !videoTrack.enabled;
-
-    if (willBeEnabled) {
-      // Turning video ON - ensure we have a working video track
-      if (videoTrack.readyState === 'ended') {
-        // Video track was stopped, need to get a new one
-        try {
-          console.log('[MeetingPage] Video track was stopped, getting new camera stream...');
-          const newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          const newVideoTrack = newStream.getVideoTracks()[0];
-          
-          // Replace the old video track with the new one
-          localStream.removeTrack(videoTrack);
-          localStream.addTrack(newVideoTrack);
-          
-          // Update video element
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = localStream;
-          }
-          
-          setIsVideoEnabled(true);
-          console.log('[MeetingPage] ✅ Camera turned on with new stream');
-        } catch (error) {
-          console.error('[MeetingPage] ❌ Failed to restart camera:', error);
-          setIsVideoEnabled(false);
-        }
-      } else {
-        // Video track exists, just enable it
-        videoTrack.enabled = true;
-        setIsVideoEnabled(true);
-        console.log('[MeetingPage] ✅ Camera turned on (track re-enabled)');
-      }
+    console.log('[MeetingPage] 🔄 Toggling video...');
+    const result = await webrtcToggleVideo();
+    
+    if (result.success) {
+      setIsVideoEnabled(result.enabled);
+      console.log(`[MeetingPage] ✅ Video ${result.enabled ? 'ON' : 'OFF'}`);
     } else {
-      // Turning video OFF - actually stop the camera to turn off green light
-      console.log('[MeetingPage] 🔴 Stopping camera (this will turn off green light)');
-      videoTrack.stop(); // This actually stops the camera hardware
-      setIsVideoEnabled(false);
-      console.log('[MeetingPage] ✅ Camera turned off (hardware stopped)');
+      console.error('[MeetingPage] ❌ Failed to toggle video');
+      // Keep UI state consistent with actual state
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          setIsVideoEnabled(videoTrack.enabled);
+        }
+      }
     }
   };
 
