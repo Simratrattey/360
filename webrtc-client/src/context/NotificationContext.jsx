@@ -36,24 +36,27 @@ export const NotificationProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   // Load notifications from cache on mount - user-specific
+  // Clear old notification data on mount to fix stale notifications
   useEffect(() => {
     if (!user?.id) return;
     
     try {
       const STORAGE_KEYS = getStorageKeys(user.id);
-      const cachedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-      const cachedUnread = localStorage.getItem(STORAGE_KEYS.UNREAD_COUNT);
       
-      if (cachedNotifications) {
-        const parsed = JSON.parse(cachedNotifications);
-        setNotifications(parsed);
-      }
+      // Clear old cached notifications to ensure fresh data
+      localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+      localStorage.removeItem(STORAGE_KEYS.UNREAD_COUNT);
       
-      if (cachedUnread) {
-        setUnreadCount(parseInt(cachedUnread, 10));
-      }
+      // Clear any legacy notification cache keys
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('notifications_cache') || key.includes('unread_count_cache')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      console.log('🧹 Cleared notification cache for fresh data');
     } catch (err) {
-      console.error('Error loading notifications from cache:', err);
+      console.error('Error clearing notification cache:', err);
     }
   }, [user?.id]);
 
