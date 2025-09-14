@@ -679,71 +679,32 @@ export function useWebRTC() {
           // Continue - local closure is what matters most
         }
 
-        // Step 4: COMPREHENSIVE camera cleanup to ensure green light turns off
-        console.log('[WebRTC] 🔄 Starting comprehensive camera cleanup...');
+        // Step 4: Clean up LOCAL video tracks ONLY (official mediasoup pattern)
+        console.log('[WebRTC] 🔄 Cleaning up local video tracks...');
 
-        // Get all video tracks from all possible sources
-        const allVideoTracks = [];
-
-        // From localStream
-        if (localStream) {
-          const streamVideoTracks = localStream.getVideoTracks();
-          allVideoTracks.push(...streamVideoTracks);
-        }
-
-        // From the producer track directly
+        // Only stop the producer's track (official pattern)
         if (videoProducer.track) {
-          allVideoTracks.push(videoProducer.track);
-        }
-
-        // From all video elements on the page (they might have references)
-        const videoElements = document.querySelectorAll('video');
-        videoElements.forEach(video => {
-          if (video.srcObject && video.srcObject instanceof MediaStream) {
-            const videoTracks = video.srcObject.getVideoTracks();
-            allVideoTracks.push(...videoTracks);
-          }
-        });
-
-        // Deduplicate tracks by ID
-        const uniqueVideoTracks = allVideoTracks.filter((track, index, arr) =>
-          arr.findIndex(t => t.id === track.id) === index
-        );
-
-        console.log('[WebRTC] 🎯 Found', uniqueVideoTracks.length, 'unique video tracks to clean up');
-
-        // Aggressively stop ALL video tracks
-        uniqueVideoTracks.forEach((track, index) => {
-          console.log(`[WebRTC] 🔴 Stopping track ${index + 1}/${uniqueVideoTracks.length}:`, {
-            id: track.id,
-            label: track.label,
-            readyState: track.readyState,
-            enabled: track.enabled
+          console.log('[WebRTC] 🔴 Stopping producer video track:', {
+            id: videoProducer.track.id,
+            label: videoProducer.track.label,
+            readyState: videoProducer.track.readyState
           });
 
-          // Disable track first
-          track.enabled = false;
+          // Stop the producer's track to turn off camera
+          videoProducer.track.stop();
+        }
 
-          // Stop the track
-          track.stop();
-
-          // Force additional cleanup
-          try {
-            // Clear any event listeners
-            track.onended = null;
-            track.onmute = null;
-            track.onunmute = null;
-          } catch (e) {
-            // Ignore
-          }
-        });
-
-        // Clean up localStream
+        // Clean up localStream video tracks ONLY
         if (localStream) {
-          // Remove all video tracks from localStream
-          const streamVideoTracks = localStream.getVideoTracks();
-          streamVideoTracks.forEach(track => {
+          const localVideoTracks = localStream.getVideoTracks();
+          localVideoTracks.forEach(track => {
+            console.log('[WebRTC] 🗑️ Removing local video track from localStream:', track.id);
             localStream.removeTrack(track);
+
+            // Stop local track if different from producer track
+            if (track.id !== videoProducer.track?.id) {
+              track.stop();
+            }
           });
 
           // Update localStream state to trigger re-render
@@ -751,72 +712,33 @@ export function useWebRTC() {
 
           console.log('[WebRTC] 📊 LocalStream after cleanup - tracks:',
             localStream.getTracks().map(t => `${t.kind}:${t.readyState}`));
-        }
 
-        // Clean up ALL video elements on the page
-        console.log('[WebRTC] 🧹 Cleaning up video elements...');
-        videoElements.forEach((video, index) => {
-          if (video.srcObject && video.srcObject instanceof MediaStream) {
-            const hasVideoTracks = video.srcObject.getVideoTracks().length > 0;
-            if (hasVideoTracks) {
-              console.log(`[WebRTC] 📺 Cleaning video element ${index + 1} - removing video tracks`);
+          // Update ONLY the local video element (by ref if available)
+          if (localVideoRef.current) {
+            console.log('[WebRTC] 📺 Updating local video element via ref');
+            localVideoRef.current.srcObject = localStream;
+          } else {
+            console.log('[WebRTC] 🔍 localVideoRef is null, trying to find local video element');
+            // Find local video element (should be muted for local video)
+            const videoElements = document.querySelectorAll('video[muted]');
+            videoElements.forEach(video => {
+              // Only update if it has our localStream or similar tracks
+              if (video.srcObject && video.srcObject instanceof MediaStream) {
+                const streamTracks = video.srcObject.getTracks();
+                const hasOurAudioTrack = localStream.getAudioTracks().some(ourTrack =>
+                  streamTracks.some(streamTrack => streamTrack.id === ourTrack.id)
+                );
 
-              // Create new stream without video tracks
-              const audioTracks = video.srcObject.getAudioTracks();
-              video.srcObject = new MediaStream(audioTracks);
-
-              // If this is likely the local video element, update it properly
-              if (video.muted && localVideoRef.current === video) {
-                console.log('[WebRTC] 🎯 Found local video element via ref, updating srcObject');
-                video.srcObject = localStream;
-              } else if (video.muted && !localVideoRef.current) {
-                console.log('[WebRTC] 🎯 Found likely local video element (muted), updating srcObject');
-                video.srcObject = localStream;
+                if (hasOurAudioTrack) {
+                  console.log('[WebRTC] 📺 Found local video element, updating srcObject');
+                  video.srcObject = localStream;
+                }
               }
-            }
-          }
-        });
-
-        // Force garbage collection hint (browser may ignore)
-        if (window.gc) {
-          try {
-            window.gc();
-            console.log('[WebRTC] 🗑️ Forced garbage collection');
-          } catch (e) {
-            // Ignore - gc not available in production
+            });
           }
         }
 
-        console.log('[WebRTC] ✅ Comprehensive camera cleanup completed');
-
-        // Additional delayed cleanup to ensure camera light turns off
-        setTimeout(() => {
-          console.log('[WebRTC] 🔄 Delayed cleanup check...');
-          const remainingVideoElements = document.querySelectorAll('video');
-          let foundActiveVideo = false;
-
-          remainingVideoElements.forEach((video, index) => {
-            if (video.srcObject && video.srcObject instanceof MediaStream) {
-              const videoTracks = video.srcObject.getVideoTracks();
-              if (videoTracks.length > 0) {
-                console.log(`[WebRTC] ⚠️ Found remaining video tracks in element ${index}, cleaning up...`);
-                videoTracks.forEach(track => {
-                  console.log('[WebRTC] 🔴 Delayed stop of remaining video track:', track.id);
-                  track.enabled = false;
-                  track.stop();
-                });
-                // Replace with audio-only stream
-                const audioTracks = video.srcObject.getAudioTracks();
-                video.srcObject = new MediaStream(audioTracks);
-                foundActiveVideo = true;
-              }
-            }
-          });
-
-          if (!foundActiveVideo) {
-            console.log('[WebRTC] ✅ Delayed cleanup check: No active video tracks found');
-          }
-        }, 500);
+        console.log('[WebRTC] ✅ Local video cleanup completed (preserving remote streams)');
 
         console.log('[WebRTC] ✅ Video disabled - Producer closed, camera should be stopped');
         return { success: true, enabled: false };
@@ -923,75 +845,37 @@ export function useWebRTC() {
 
   // === Leave Meeting ===
   const leaveMeeting = useCallback(() => {
-    console.log('[WebRTC] 🚪 Leaving meeting - starting comprehensive cleanup...');
+    console.log('[WebRTC] 🚪 Leaving meeting - cleaning up local resources...');
 
-    // Step 1: Get ALL media tracks from everywhere and stop them aggressively
-    const allTracks = [];
-
-    // From localStream
+    // Step 1: Stop only LOCAL tracks (mediasoup pattern)
     if (localStream) {
-      allTracks.push(...localStream.getTracks());
+      localStream.getTracks().forEach(track => {
+        console.log(`[WebRTC] 🔴 Stopping local ${track.kind} track:`, track.id);
+        track.stop();
+      });
     }
 
-    // From producers
+    // Step 2: Stop producer tracks (they should be local only)
     producersRef.current.forEach(producer => {
       if (producer.track) {
-        allTracks.push(producer.track);
+        console.log(`[WebRTC] 🔴 Stopping producer ${producer.track.kind} track:`, producer.track.id);
+        producer.track.stop();
       }
     });
 
-    // From all video elements on the page
-    const videoElements = document.querySelectorAll('video');
-    videoElements.forEach(video => {
-      if (video.srcObject && video.srcObject instanceof MediaStream) {
-        allTracks.push(...video.srcObject.getTracks());
-      }
-    });
+    // Step 3: Clean up only local video element
+    if (localVideoRef.current) {
+      console.log('[WebRTC] 📺 Clearing local video element');
+      localVideoRef.current.srcObject = null;
+    }
 
-    // Deduplicate tracks by ID
-    const uniqueTracks = allTracks.filter((track, index, arr) =>
-      arr.findIndex(t => t.id === track.id) === index
-    );
-
-    console.log('[WebRTC] 🎯 Found', uniqueTracks.length, 'unique tracks to clean up during leave');
-
-    // Aggressively stop ALL tracks
-    uniqueTracks.forEach((track, index) => {
-      console.log(`[WebRTC] 🔴 Stopping track ${index + 1}/${uniqueTracks.length}:`, {
-        id: track.id,
-        kind: track.kind,
-        label: track.label,
-        readyState: track.readyState
-      });
-
-      track.enabled = false;
-      track.stop();
-
-      // Clear event listeners
-      try {
-        track.onended = null;
-        track.onmute = null;
-        track.onunmute = null;
-      } catch (e) {
-        // Ignore
-      }
-    });
-
-    // Step 2: Clean up video elements
-    videoElements.forEach((video, index) => {
-      if (video.srcObject) {
-        console.log(`[WebRTC] 📺 Clearing video element ${index + 1} srcObject`);
-        video.srcObject = null;
-      }
-    });
-
-    // Step 3: Clean up mediasoup resources
+    // Step 4: Clean up mediasoup resources
     sendTransportRef.current?.close();
     recvTransportRef.current?.close();
     producersRef.current.forEach(p => p.close());
     consumersRef.current.forEach(c => c.close());
 
-    // Step 4: Reset all state
+    // Step 5: Reset all state
     producersRef.current = [];
     consumersRef.current = [];
     sendTransportRef.current = null;
@@ -1002,10 +886,10 @@ export function useWebRTC() {
     setRemoteStreams(new Map());
     remoteVideoRefs.current.clear();
 
-    // Step 5: Leave the room
+    // Step 6: Leave the room
     leaveRoom();
 
-    console.log('[WebRTC] ✅ Meeting left - all resources cleaned up');
+    console.log('[WebRTC] ✅ Meeting left - local resources cleaned up');
   }, [localStream, leaveRoom]);
 
   useEffect(() => {
@@ -1039,52 +923,44 @@ export function useWebRTC() {
     return () => { sfuSocket.off('roomClosed', handleClosed); };
   }, [sfuSocket, currentRoom, leaveMeeting, navigate]);
 
-  // === Force Camera Cleanup (emergency function) ===
+  // === Force LOCAL Camera Cleanup (emergency function) ===
   const forceCameraCleanup = useCallback(() => {
-    console.log('[WebRTC] 🚨 EMERGENCY: Force camera cleanup requested');
+    console.log('[WebRTC] 🚨 EMERGENCY: Force LOCAL camera cleanup requested');
 
-    const allVideoTracks = [];
+    const localVideoTracks = [];
 
-    // Get all video tracks from everywhere
+    // Get video tracks from localStream only
     if (localStream) {
-      allVideoTracks.push(...localStream.getVideoTracks());
+      localVideoTracks.push(...localStream.getVideoTracks());
     }
 
+    // Get video tracks from local producers only
     producersRef.current.forEach(p => {
       if (p.track && p.track.kind === 'video') {
-        allVideoTracks.push(p.track);
+        localVideoTracks.push(p.track);
       }
     });
 
-    // From video elements
-    document.querySelectorAll('video').forEach(video => {
-      if (video.srcObject instanceof MediaStream) {
-        allVideoTracks.push(...video.srcObject.getVideoTracks());
-      }
-    });
-
-    // Deduplicate and stop all
-    const uniqueVideoTracks = allVideoTracks.filter((track, index, arr) =>
+    // Deduplicate by ID
+    const uniqueLocalVideoTracks = localVideoTracks.filter((track, index, arr) =>
       arr.findIndex(t => t.id === track.id) === index
     );
 
-    console.log('[WebRTC] 🎯 Emergency cleanup: stopping', uniqueVideoTracks.length, 'video tracks');
+    console.log('[WebRTC] 🎯 Emergency cleanup: stopping', uniqueLocalVideoTracks.length, 'LOCAL video tracks');
 
-    uniqueVideoTracks.forEach(track => {
+    uniqueLocalVideoTracks.forEach(track => {
       track.enabled = false;
       track.stop();
-      console.log('[WebRTC] 🔴 Emergency stopped track:', track.id, track.label);
+      console.log('[WebRTC] 🔴 Emergency stopped LOCAL track:', track.id, track.label);
     });
 
-    // Clear all video elements
-    document.querySelectorAll('video').forEach(video => {
-      if (video.srcObject instanceof MediaStream) {
-        const audioTracks = video.srcObject.getAudioTracks();
-        video.srcObject = new MediaStream(audioTracks);
-      }
-    });
+    // Only clear the local video element (muted)
+    if (localVideoRef.current) {
+      const audioTracks = localStream?.getAudioTracks() || [];
+      localVideoRef.current.srcObject = new MediaStream(audioTracks);
+    }
 
-    console.log('[WebRTC] ✅ Emergency camera cleanup completed');
+    console.log('[WebRTC] ✅ Emergency LOCAL camera cleanup completed (remote streams preserved)');
   }, [localStream]);
 
   return {
