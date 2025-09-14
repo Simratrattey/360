@@ -524,43 +524,111 @@ router.post('/:id/handle-join-request', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only meeting organizer can handle join requests' });
     }
 
-    // Find the join request
-    const requestIndex = meeting.pendingJoinRequests.findIndex(
-      req => req._id.toString() === requestId && req.status === 'pending'
-    );
+    // First check for socket-based join requests (in-memory storage)
+    const rooms = req.app.locals.rooms || {};
+    const room = rooms[meetingId];
+    let isSocketRequest = false;
+    let socketRequestData = null;
 
-    if (requestIndex === -1) {
-      return res.status(404).json({ success: false, error: 'Join request not found or already handled' });
+    if (room && room.pendingJoinRequests && room.pendingJoinRequests.has) {
+      // Check if this is a socket-based request by iterating through the Map
+      for (const [userId, requestData] of room.pendingJoinRequests.entries()) {
+        if (requestData.requestId === requestId) {
+          isSocketRequest = true;
+          socketRequestData = requestData;
+          break;
+        }
+      }
     }
 
-    const joinRequest = meeting.pendingJoinRequests[requestIndex];
+    let joinRequest = null;
+    let requestIndex = -1;
+
+    if (isSocketRequest) {
+      // Handle socket-based request
+      joinRequest = {
+        userId: socketRequestData.requesterUserId,
+        username: socketRequestData.username,
+        fullName: socketRequestData.fullName,
+        requestId: socketRequestData.requestId,
+        requestedAt: socketRequestData.requestedAt
+      };
+    } else {
+      // Handle database-stored request (original waiting room API)
+      requestIndex = meeting.pendingJoinRequests.findIndex(
+        req => req._id.toString() === requestId && req.status === 'pending'
+      );
+
+      if (requestIndex === -1) {
+        return res.status(404).json({ success: false, error: 'Join request not found or already handled' });
+      }
+
+      joinRequest = meeting.pendingJoinRequests[requestIndex];
+    }
     
     if (action === 'approve') {
       // Add user to participants if not already there
       if (!meeting.participants.some(p => p.toString() === joinRequest.userId.toString())) {
         meeting.participants.push(joinRequest.userId);
       }
-      joinRequest.status = 'approved';
-      
-      // Emit approval notification to the requesting user
-      if (req.app.locals.sendJoinApproval) {
-        req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
-          meetingId,
-          approved: true,
-          meetingTitle: meeting.title
-        });
+
+      if (isSocketRequest) {
+        // Handle socket-based request approval
+        room.pendingJoinRequests.delete(socketRequestData.requesterUserId);
+        
+        // Emit approval to requesting user via socket
+        if (req.app.locals.io) {
+          const requesterSocket = Array.from(req.app.locals.io.sockets.sockets.values())
+            .find(s => s.id === socketRequestData.requesterSocketId);
+          if (requesterSocket) {
+            requesterSocket.emit('joinRequestApproved', {
+              roomId: meetingId,
+              message: 'Your join request has been approved!'
+            });
+          }
+        }
+      } else {
+        // Handle database-stored request approval  
+        joinRequest.status = 'approved';
+        
+        // Emit approval notification to the requesting user
+        if (req.app.locals.sendJoinApproval) {
+          req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
+            meetingId,
+            approved: true,
+            meetingTitle: meeting.title
+          });
+        }
       }
     } else if (action === 'deny') {
-      joinRequest.status = 'denied';
-      
-      // Emit denial notification to the requesting user
-      if (req.app.locals.sendJoinApproval) {
-        req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
-          meetingId,
-          approved: false,
-          meetingTitle: meeting.title,
-          reason: req.body.reason || 'Request denied by host'
-        });
+      if (isSocketRequest) {
+        // Handle socket-based request denial
+        room.pendingJoinRequests.delete(socketRequestData.requesterUserId);
+        
+        // Emit denial to requesting user via socket
+        if (req.app.locals.io) {
+          const requesterSocket = Array.from(req.app.locals.io.sockets.sockets.values())
+            .find(s => s.id === socketRequestData.requesterSocketId);
+          if (requesterSocket) {
+            requesterSocket.emit('joinRequestDenied', {
+              roomId: meetingId,
+              message: req.body.reason || 'Your join request was denied by the host.'
+            });
+          }
+        }
+      } else {
+        // Handle database-stored request denial
+        joinRequest.status = 'denied';
+        
+        // Emit denial notification to the requesting user
+        if (req.app.locals.sendJoinApproval) {
+          req.app.locals.sendJoinApproval(joinRequest.userId.toString(), {
+            meetingId,
+            approved: false,
+            meetingTitle: meeting.title,
+            reason: req.body.reason || 'Request denied by host'
+          });
+        }
       }
     } else {
       return res.status(400).json({ success: false, error: 'Invalid action' });
@@ -568,8 +636,11 @@ router.post('/:id/handle-join-request', authMiddleware, async (req, res) => {
 
     await meeting.save();
 
-    // Update pending requests for host
-    const pendingRequests = meeting.pendingJoinRequests
+    // Update pending requests for host - combine both database and socket requests
+    let pendingRequests = [];
+
+    // Add database-stored pending requests
+    pendingRequests = meeting.pendingJoinRequests
       .filter(req => req.status === 'pending')
       .map(req => ({
         requestId: req._id,
@@ -579,6 +650,20 @@ router.post('/:id/handle-join-request', authMiddleware, async (req, res) => {
         requestedAt: req.requestedAt,
         status: req.status
       }));
+
+    // Add socket-based pending requests if room exists
+    if (room && room.pendingJoinRequests) {
+      const socketRequests = Array.from(room.pendingJoinRequests.values()).map(req => ({
+        requestId: req.requestId,
+        userId: req.requesterUserId,
+        username: req.username,
+        fullName: req.fullName,
+        requestedAt: req.requestedAt,
+        status: 'pending'
+      }));
+      pendingRequests = [...pendingRequests, ...socketRequests];
+    }
+
     if (req.app.locals.sendJoinRequestsUpdate) {
       req.app.locals.sendJoinRequestsUpdate(hostId, {
         meetingId,
@@ -616,7 +701,8 @@ router.get('/:id/join-requests', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Only meeting organizer can view join requests' });
     }
 
-    const pendingRequests = meeting.pendingJoinRequests
+    // Combine both database and socket-based pending requests
+    let pendingRequests = meeting.pendingJoinRequests
       .filter(req => req.status === 'pending')
       .map(req => ({
         requestId: req._id,
@@ -626,6 +712,21 @@ router.get('/:id/join-requests', authMiddleware, async (req, res) => {
         requestedAt: req.requestedAt,
         status: req.status
       }));
+
+    // Add socket-based pending requests if room exists
+    const rooms = req.app.locals.rooms || {};
+    const room = rooms[meetingId];
+    if (room && room.pendingJoinRequests) {
+      const socketRequests = Array.from(room.pendingJoinRequests.values()).map(req => ({
+        requestId: req.requestId,
+        userId: req.requesterUserId,
+        username: req.username,
+        fullName: req.fullName,
+        requestedAt: req.requestedAt,
+        status: 'pending'
+      }));
+      pendingRequests = [...pendingRequests, ...socketRequests];
+    }
 
     res.json({
       success: true,

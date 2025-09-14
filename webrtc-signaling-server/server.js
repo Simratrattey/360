@@ -474,6 +474,7 @@ app.locals.sendJoinApproval = sendJoinApproval;
 app.locals.sendJoinRequestsUpdate = sendJoinRequestsUpdate;
 app.locals.io = io;
 app.locals.onlineUsers = onlineUsers;
+app.locals.rooms = rooms;
 
 // Helper function to transfer host when current host leaves
 function transferHost(roomId, leavingUserId) {
@@ -987,9 +988,13 @@ io.on('connection', async socket => {
         requestId: `${Date.now()}-${requesterUserId}`,
         roomId,
         requesterName,
+        fullName: requesterName, // Add this for UI compatibility
+        username: requesterName, // Add this as fallback  
         requesterUserId,
+        userId: requesterUserId, // Add this for API compatibility
         requesterSocketId: socket.id,
-        requestTime: new Date().toISOString()
+        requestTime: new Date().toISOString(),
+        requestedAt: new Date().toISOString() // Add this for API compatibility
       };
       
       // Store the pending request
