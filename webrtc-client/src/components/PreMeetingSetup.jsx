@@ -77,8 +77,10 @@ export default function PreMeetingSetup() {
     if (stream) {
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
-        videoTrack.enabled = !isVideoOn;
-        setIsVideoOn(!isVideoOn);
+        const newVideoState = !isVideoOn;
+        videoTrack.enabled = newVideoState;
+        setIsVideoOn(newVideoState);
+        console.log('[PreMeetingSetup] Video toggled:', newVideoState);
       }
     }
   };
@@ -211,16 +213,15 @@ export default function PreMeetingSetup() {
         <div className="grid md:grid-cols-2 min-h-[600px]">
           {/* Video Preview Section */}
           <div className="bg-gray-900 relative flex items-center justify-center">
-            {isVideoOn ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-800">
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className={`w-full h-full object-cover ${!isVideoOn ? 'invisible' : ''}`}
+            />
+            {!isVideoOn && (
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-800">
                 <div className="text-center">
                   <CameraOff size={64} className="text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-400">Camera is off</p>

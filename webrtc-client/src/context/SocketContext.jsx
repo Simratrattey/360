@@ -196,11 +196,37 @@ export function SocketProvider({ children }) {
     }
     
     const emitJoinRoom = () => {
-      if (meetingInfo) {
-        console.log('[SocketContext] 📤 Emitting joinRoom with meeting info');
-        sfuSocket.emit('joinRoom', roomId, meetingInfo);
+      // Check for pre-meeting settings that might contain a custom display name
+      let finalMeetingInfo = meetingInfo;
+      
+      const preMeetingSettings = localStorage.getItem('preMeetingSettings');
+      if (preMeetingSettings) {
+        try {
+          const settings = JSON.parse(preMeetingSettings);
+          if (settings.displayName) {
+            // Merge pre-meeting display name into meeting info
+            finalMeetingInfo = {
+              ...meetingInfo,
+              displayName: settings.displayName
+            };
+            console.log('[SocketContext] 📝 Adding display name to meeting info:', settings.displayName);
+          }
+        } catch (err) {
+          console.warn('[SocketContext] Failed to parse pre-meeting settings:', err);
+        }
+      }
+      
+      if (finalMeetingInfo) {
+        console.log('[SocketContext] 📤 Emitting joinRoom with meeting info:', finalMeetingInfo);
+        sfuSocket.emit('joinRoom', roomId, finalMeetingInfo);
         // Clean up localStorage after sending
         localStorage.removeItem(meetingInfoKey);
+        
+        // Also clean up pre-meeting settings now that they've been used
+        if (finalMeetingInfo && finalMeetingInfo.displayName) {
+          localStorage.removeItem('preMeetingSettings');
+          console.log('[SocketContext] 🧹 Cleared pre-meeting settings after room join');
+        }
       } else {
         console.log('[SocketContext] 📤 Emitting joinRoom without meeting info');
         sfuSocket.emit('joinRoom', roomId);

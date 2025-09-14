@@ -67,8 +67,8 @@ export function useWebRTC() {
           setLocalStream(stream);
           if (localVideoRef.current) localVideoRef.current.srcObject = stream;
           
-          // Clear pre-meeting settings after use
-          localStorage.removeItem('preMeetingSettings');
+          // Note: Don't clear pre-meeting settings here - SocketContext needs them for display name
+          // They will be cleared after room join
           
           return stream;
         } catch (settingsError) {

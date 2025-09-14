@@ -675,18 +675,22 @@ io.on('connection', async socket => {
     
     // Remove any legacy username-only entries
     rooms[roomId].participants = rooms[roomId].participants.filter(p => typeof p === 'object');
+    // Check if custom display name is provided in meeting info
+    const displayName = (meetingInfo && meetingInfo.displayName) ? meetingInfo.displayName : userName;
+    console.log(`[Signaling] Using display name: "${displayName}" for user ${socket.userId} (original: "${userName}")`);
+    
     // Only add if not already present
     if (!rooms[roomId].participants.some(p => p.socketId === socket.id)) {
-      rooms[roomId].participants.push({ socketId: socket.id, userName, userId: socket.userId });
+      rooms[roomId].participants.push({ socketId: socket.id, userName: displayName, userId: socket.userId });
     }
-    connectedSockets.push({ socketId: socket.id, userName, roomId });
+    connectedSockets.push({ socketId: socket.id, userName: displayName, roomId });
 
     // Add participant to meeting record
     try {
       const meeting = await Meeting.findOne({ roomId: roomId, status: 'active' });
       if (meeting) {
-        await meeting.addParticipant(socket.userId, userName);
-        console.log(`[Meeting] User ${userName} joined meeting ${meeting._id}`);
+        await meeting.addParticipant(socket.userId, displayName);
+        console.log(`[Meeting] User ${displayName} joined meeting ${meeting._id}`);
       }
     } catch (error) {
       console.error('[Meeting] Error adding participant to meeting:', error);
