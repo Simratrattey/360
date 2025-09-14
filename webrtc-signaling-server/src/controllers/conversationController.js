@@ -5,6 +5,94 @@ import Notification from '../models/notification.js';
 import mongoose from 'mongoose';
 import { createNotification } from './notificationController.js';
 
+// Helper function to create system messages
+async function createSystemMessage(conversationId, systemMessageType, actionBy, actionOn = [], additionalData = {}) {
+  try {
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) return null;
+
+    const actionByUser = actionBy ? await User.findById(actionBy) : null;
+    const actionOnUsers = actionOn.length > 0 ? await User.find({ _id: { $in: actionOn } }) : [];
+
+    let messageText = '';
+    
+    switch (systemMessageType) {
+      case 'conversation_created':
+        if (conversation.type === 'dm') {
+          // For DMs, don't create a system message as it's just two people starting a conversation
+          return null;
+        } else if (conversation.type === 'group') {
+          if (actionByUser) {
+            const memberNames = actionOnUsers.filter(u => u._id.toString() !== actionByUser._id.toString())
+              .map(u => u.fullName || u.username).join(', ');
+            if (memberNames) {
+              messageText = `${actionByUser.fullName || actionByUser.username} created this group and added ${memberNames}`;
+            } else {
+              messageText = `${actionByUser.fullName || actionByUser.username} created this group`;
+            }
+          } else {
+            messageText = `This group was created`;
+          }
+        } else if (conversation.type === 'community') {
+          if (actionByUser) {
+            messageText = `${actionByUser.fullName || actionByUser.username} created this community`;
+          } else {
+            messageText = `This community was created`;
+          }
+        }
+        break;
+        
+      case 'member_added':
+        if (actionByUser && actionOnUsers.length > 0) {
+          const addedNames = actionOnUsers.map(u => u.fullName || u.username).join(', ');
+          if (actionOnUsers.length === 1 && actionOnUsers[0]._id.toString() === actionByUser._id.toString()) {
+            messageText = `${actionByUser.fullName || actionByUser.username} joined the ${conversation.type}`;
+          } else {
+            messageText = `${actionByUser.fullName || actionByUser.username} added ${addedNames}`;
+          }
+        }
+        break;
+        
+      case 'member_removed':
+        if (actionByUser && actionOnUsers.length > 0) {
+          const removedNames = actionOnUsers.map(u => u.fullName || u.username).join(', ');
+          messageText = `${actionByUser.fullName || actionByUser.username} removed ${removedNames}`;
+        }
+        break;
+        
+      case 'member_left':
+        if (actionOnUsers.length > 0) {
+          const leftNames = actionOnUsers.map(u => u.fullName || u.username).join(', ');
+          messageText = `${leftNames} left the ${conversation.type}`;
+        }
+        break;
+    }
+
+    if (!messageText) return null;
+
+    const systemMessage = new Message({
+      conversation: conversationId,
+      text: messageText,
+      type: 'system',
+      isSystemMessage: true,
+      systemMessageType,
+      systemMessageData: {
+        actionBy,
+        actionOn,
+        conversationName: conversation.name,
+        conversationType: conversation.type,
+        additionalData
+      }
+    });
+
+    await systemMessage.save();
+    return systemMessage;
+  } catch (error) {
+    console.error('Error creating system message:', error);
+    return null;
+  }
+}
+
 // List all conversations for the current user
 export async function listConversations(req, res, next) {
   try {
@@ -164,6 +252,14 @@ export async function createConversation(req, res, next) {
       // Populate members for response
       await conversation.populate('members', 'username fullName avatarUrl');
 
+      // Create welcome system message
+      const systemMessage = await createSystemMessage(
+        conversation._id,
+        'conversation_created',
+        userId,
+        allUserIds
+      );
+
       // Emit real-time event to all users and join them to the community room
       if (req.io) {
         const conversationId = conversation._id.toString();
@@ -249,6 +345,16 @@ export async function createConversation(req, res, next) {
 
     // Populate members for response
     await conversation.populate('members', 'username fullName avatarUrl');
+
+    // Create welcome system message (only for groups, not DMs)
+    if (type !== 'dm') {
+      const systemMessage = await createSystemMessage(
+        conversation._id,
+        'conversation_created',
+        userId,
+        [userId, ...memberIds]
+      );
+    }
 
     // Emit real-time event to all conversation members and join them to the room
     if (req.io) {

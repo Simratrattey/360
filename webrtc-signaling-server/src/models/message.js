@@ -16,7 +16,7 @@ const fileSchema = new mongoose.Schema({
 
 const messageSchema = new mongoose.Schema({
   conversation: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   text: { type: String },
   file: fileSchema,
   reactions: [reactionSchema],
@@ -25,6 +25,21 @@ const messageSchema = new mongoose.Schema({
   // Track which users have received and read this message
   deliveredTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // System message fields
+  type: { type: String, enum: ['regular', 'system'], default: 'regular' },
+  isSystemMessage: { type: Boolean, default: false },
+  systemMessageType: { 
+    type: String, 
+    enum: ['conversation_created', 'member_added', 'member_removed', 'member_left', 'conversation_deleted'],
+    required: function() { return this.type === 'system'; }
+  },
+  systemMessageData: {
+    actionBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Who performed the action
+    actionOn: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Users affected by the action
+    conversationName: String,
+    conversationType: String,
+    additionalData: mongoose.Schema.Types.Mixed
+  }
 }, { timestamps: true });
 
 // Create a compound index on conversation and createdAt to accelerate queries and sorting
