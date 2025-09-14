@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users, CircleDot, Check, X, ChevronDown, Share2, Copy } from 'lucide-react';
+import { Clock, Users, CircleDot, Check, X, ChevronDown, Share2, Copy, UserCheck, ClockIcon } from 'lucide-react';
+import { generateMeetingLinks, copyLinkToClipboard } from '../utils/meetingLinks';
 
 export default function MeetingStatsBar({ 
   participantCount, 
@@ -19,6 +20,8 @@ export default function MeetingStatsBar({
   const [duration, setDuration] = useState('0:00');
   const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [inviteLinkType, setInviteLinkType] = useState('direct'); // 'direct' or 'waiting'
+  const [copiedLinkType, setCopiedLinkType] = useState(null);
   
   // Debug logging for participant count
   useEffect(() => {
@@ -175,43 +178,83 @@ export default function MeetingStatsBar({
                 ))}
               </div>
 
-              {/* Invite Section */}
-              {inviteLink && (
-                <div className="p-3 border-t border-gray-200 bg-blue-50">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Share2 size={16} className="text-blue-600" />
-                    <span className="text-sm font-semibold text-gray-900">Invite Others</span>
+              {/* Invite Section - Host Only */}
+              {isHost && (
+                <div className="p-3 border-t border-gray-200 bg-gray-50">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Share2 size={16} className="text-indigo-600" />
+                    <span className="text-sm font-semibold text-gray-900">Invite to Meeting</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={inviteLink}
-                      readOnly
-                      className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600"
-                    />
+                  
+                  {/* Link Type Toggle */}
+                  <div className="flex bg-white rounded-lg p-1 mb-3 border">
                     <button
-                      onClick={handleCopyInviteLink}
-                      className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
-                        copySuccess 
-                          ? 'bg-green-600 text-white' 
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      onClick={() => setInviteLinkType('direct')}
+                      className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                        inviteLinkType === 'direct'
+                          ? 'bg-green-100 text-green-800 border border-green-200'
+                          : 'text-gray-600 hover:text-gray-800'
                       }`}
                     >
-                      {copySuccess ? (
-                        <div className="flex items-center space-x-1">
-                          <Check size={12} />
-                          <span>Copied!</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1">
-                          <Copy size={12} />
-                          <span>Copy</span>
-                        </div>
-                      )}
+                      <UserCheck size={14} />
+                      <span>Direct</span>
+                    </button>
+                    <button
+                      onClick={() => setInviteLinkType('waiting')}
+                      className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                        inviteLinkType === 'waiting'
+                          ? 'bg-orange-100 text-orange-800 border border-orange-200'
+                          : 'text-gray-600 hover:text-gray-800'
+                      }`}
+                    >
+                      <ClockIcon size={14} />
+                      <span>Waiting Room</span>
                     </button>
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    Anyone with this link can join the meeting.
+                  
+                  {/* Current Link Display */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={generateMeetingLinks(roomId)[inviteLinkType]}
+                        readOnly
+                        className="flex-1 text-xs bg-white border border-gray-300 rounded px-2 py-1 text-gray-600 font-mono"
+                      />
+                      <button
+                        onClick={async () => {
+                          const links = generateMeetingLinks(roomId);
+                          const success = await copyLinkToClipboard(links[inviteLinkType], inviteLinkType);
+                          if (success) {
+                            setCopiedLinkType(inviteLinkType);
+                            setTimeout(() => setCopiedLinkType(null), 2000);
+                          }
+                        }}
+                        className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                          copiedLinkType === inviteLinkType
+                            ? 'bg-green-600 text-white' 
+                            : `${inviteLinkType === 'direct' ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'} text-white`
+                        }`}
+                      >
+                        {copiedLinkType === inviteLinkType ? (
+                          <div className="flex items-center space-x-1">
+                            <Check size={12} />
+                            <span>Copied!</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1">
+                            <Copy size={12} />
+                            <span>Copy</span>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      {inviteLinkType === 'direct' 
+                        ? 'Participants join immediately without approval.' 
+                        : 'Participants must request approval to join.'
+                      }
+                    </div>
                   </div>
                 </div>
               )}

@@ -15,7 +15,6 @@ import transcriptAPI from '../api/transcriptApi';
 import waitingRoomApi from '../api/waitingRoomApi';
 import AvatarSidebar from '../components/AvatarSidebar';
 import MeetingStatsBar from '../components/MeetingStatsBar';
-import InviteLinks from '../components/InviteLinks';
 
 // Helper function to format UTC timestamp to user's local timezone
 const formatTimestamp = (utcTimestamp) => {
@@ -2914,15 +2913,6 @@ To convert to MP4:
         >
           <FileText size={20}/>
         </button>
-        
-        {/* Invite Links - Host Only */}
-        {roomSettings?.isHost && (
-          <InviteLinks 
-            roomId={roomId} 
-            meetingTitle="Meeting" 
-            isHost={true} 
-          />
-        )}
         
         <button 
           onClick={handleLeave} 
