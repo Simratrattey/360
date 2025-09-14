@@ -21,10 +21,6 @@ export default function PreMeetingSetup() {
   const [selectedCamera, setSelectedCamera] = useState('');
   const [selectedMicrophone, setSelectedMicrophone] = useState('');
 
-  // Get URL parameters to determine meeting type
-  const searchParams = new URLSearchParams(location.search);
-  const meetingType = searchParams.get('type') || 'direct';
-
   // Initialize media devices
   useEffect(() => {
     const initializeMedia = async () => {
@@ -73,15 +69,53 @@ export default function PreMeetingSetup() {
   }, []);
 
   // Handle camera toggle
-  const toggleVideo = () => {
-    if (stream) {
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        const newVideoState = !isVideoOn;
-        videoTrack.enabled = newVideoState;
-        setIsVideoOn(newVideoState);
-        console.log('[PreMeetingSetup] Video toggled:', newVideoState);
+  const toggleVideo = async () => {
+    if (!stream) return;
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return;
+
+    const newVideoState = !isVideoOn;
+
+    if (newVideoState) {
+      // Turning video ON
+      if (videoTrack.readyState === 'ended') {
+        // Video track was stopped, need to get a new one
+        try {
+          console.log('[PreMeetingSetup] Video track was stopped, getting new camera stream...');
+          const newStream = await navigator.mediaDevices.getUserMedia({ 
+            video: selectedCamera ? { deviceId: { exact: selectedCamera } } : true, 
+            audio: false 
+          });
+          const newVideoTrack = newStream.getVideoTracks()[0];
+          
+          // Replace the old video track with the new one
+          stream.removeTrack(videoTrack);
+          stream.addTrack(newVideoTrack);
+          
+          // Update video element
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          
+          setIsVideoOn(true);
+          console.log('[PreMeetingSetup] ✅ Camera turned on with new stream');
+        } catch (error) {
+          console.error('[PreMeetingSetup] ❌ Failed to restart camera:', error);
+          setIsVideoOn(false);
+        }
+      } else {
+        // Video track exists, just enable it
+        videoTrack.enabled = true;
+        setIsVideoOn(true);
+        console.log('[PreMeetingSetup] ✅ Camera turned on (track re-enabled)');
       }
+    } else {
+      // Turning video OFF - actually stop the camera to turn off green light
+      console.log('[PreMeetingSetup] 🔴 Stopping camera (this will turn off green light)');
+      videoTrack.stop(); // This actually stops the camera hardware
+      setIsVideoOn(false);
+      console.log('[PreMeetingSetup] ✅ Camera turned off (hardware stopped)');
     }
   };
 

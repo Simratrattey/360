@@ -968,17 +968,56 @@ export default function MeetingPage() {
     }
   };
 
-  const toggleVideo = () => {
-    if (localStream) {
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoEnabled(videoTrack.enabled);
+  const toggleVideo = async () => {
+    if (!localStream) {
+      console.error('No localStream for video toggle');
+      return;
+    }
+
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (!videoTrack) {
+      console.error('No video track found');
+      return;
+    }
+
+    const willBeEnabled = !videoTrack.enabled;
+
+    if (willBeEnabled) {
+      // Turning video ON - ensure we have a working video track
+      if (videoTrack.readyState === 'ended') {
+        // Video track was stopped, need to get a new one
+        try {
+          console.log('[MeetingPage] Video track was stopped, getting new camera stream...');
+          const newStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          const newVideoTrack = newStream.getVideoTracks()[0];
+          
+          // Replace the old video track with the new one
+          localStream.removeTrack(videoTrack);
+          localStream.addTrack(newVideoTrack);
+          
+          // Update video element
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = localStream;
+          }
+          
+          setIsVideoEnabled(true);
+          console.log('[MeetingPage] ✅ Camera turned on with new stream');
+        } catch (error) {
+          console.error('[MeetingPage] ❌ Failed to restart camera:', error);
+          setIsVideoEnabled(false);
+        }
       } else {
-        console.error('No video track found');
+        // Video track exists, just enable it
+        videoTrack.enabled = true;
+        setIsVideoEnabled(true);
+        console.log('[MeetingPage] ✅ Camera turned on (track re-enabled)');
       }
     } else {
-      console.error('No localStream for video toggle');
+      // Turning video OFF - actually stop the camera to turn off green light
+      console.log('[MeetingPage] 🔴 Stopping camera (this will turn off green light)');
+      videoTrack.stop(); // This actually stops the camera hardware
+      setIsVideoEnabled(false);
+      console.log('[MeetingPage] ✅ Camera turned off (hardware stopped)');
     }
   };
 
