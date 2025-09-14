@@ -208,80 +208,89 @@ export default function PreMeetingSetup() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden">
-        <div className="grid md:grid-cols-2 min-h-[600px]">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
+      <div className="bg-white/95 backdrop-blur-sm rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden border border-white/20">
+        <div className="grid md:grid-cols-2 min-h-[650px]">
           {/* Video Preview Section */}
-          <div className="bg-gray-900 relative flex items-center justify-center">
+          <div className="bg-gradient-to-br from-gray-900 to-slate-800 relative flex items-center justify-center rounded-l-3xl">
             <video
               ref={videoRef}
               autoPlay
               muted
               playsInline
-              className={`w-full h-full object-contain bg-black ${!isVideoOn ? 'invisible' : ''}`}
+              className={`w-full h-full object-cover rounded-l-3xl ${!isVideoOn ? 'invisible' : ''}`}
             />
             {!isVideoOn && (
-              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gray-800">
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-gray-900 rounded-l-3xl">
                 <div className="text-center">
-                  <CameraOff size={64} className="text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-400">Camera is off</p>
+                  <div className="bg-slate-700/50 backdrop-blur-sm rounded-2xl p-8 border border-slate-600/50">
+                    <CameraOff size={72} className="text-slate-300 mx-auto mb-4" />
+                    <p className="text-slate-300 text-lg font-medium">Camera is off</p>
+                    <p className="text-slate-400 text-sm mt-2">Click the camera button to turn it on</p>
+                  </div>
                 </div>
               </div>
             )}
             
             {/* Video controls overlay */}
-            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-4">
+            <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-3">
               <button
                 onClick={toggleVideo}
-                className={`p-3 rounded-full transition-colors ${
+                className={`p-4 rounded-full backdrop-blur-md border transition-all duration-200 ${
                   isVideoOn 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
+                    ? 'bg-white/20 border-white/30 text-white hover:bg-white/30' 
+                    : 'bg-red-500/90 border-red-400/50 text-white hover:bg-red-600/90'
+                } shadow-lg hover:scale-105`}
+                title={isVideoOn ? "Turn off camera" : "Turn on camera"}
               >
-                {isVideoOn ? <Camera size={20} /> : <CameraOff size={20} />}
+                {isVideoOn ? <Camera size={22}/> : <CameraOff size={22}/>} 
               </button>
               
               <button
                 onClick={toggleAudio}
-                className={`p-3 rounded-full transition-colors ${
+                className={`p-4 rounded-full backdrop-blur-md border transition-all duration-200 ${
                   isAudioOn 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
+                    ? 'bg-white/20 border-white/30 text-white hover:bg-white/30' 
+                    : 'bg-red-500/90 border-red-400/50 text-white hover:bg-red-600/90'
+                } shadow-lg hover:scale-105`}
+                title={isAudioOn ? "Mute microphone" : "Unmute microphone"}
               >
-                {isAudioOn ? <Mic size={20} /> : <MicOff size={20} />}
+                {isAudioOn ? <Mic size={22}/> : <MicOff size={22}/>} 
               </button>
             </div>
           </div>
 
           {/* Settings Section */}
-          <div className="p-8 flex flex-col justify-between">
+          <div className="p-10 flex flex-col justify-between bg-gradient-to-br from-slate-50 to-blue-50/50">
             <div>
-              <div className="text-center mb-8">
-                <Video className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Ready to join?</h1>
-                <p className="text-gray-600">Set up your camera and microphone</p>
+              <div className="text-center mb-10">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <Video className="w-8 h-8 text-white" />
+                </div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">Ready to join?</h1>
+                <p className="text-slate-600 text-lg">Set up your camera and microphone</p>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
-                  <p className="text-red-800 text-sm">{error}</p>
+                <div className="bg-red-50/80 backdrop-blur-sm border border-red-200/60 rounded-xl p-4 mb-8 shadow-sm">
+                  <p className="text-red-800 text-sm font-medium">{error}</p>
                 </div>
               )}
 
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* Display Name */}
                 <div>
-                  <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                    <User size={16} />
+                  <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
+                    <div className="w-5 h-5 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-md flex items-center justify-center">
+                      <User size={12} className="text-white" />
+                    </div>
                     <span>Display Name</span>
                   </label>
                   <input
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800 placeholder-slate-400"
                     placeholder="Enter your display name"
                   />
                 </div>
@@ -289,14 +298,16 @@ export default function PreMeetingSetup() {
                 {/* Camera Selection */}
                 {devices.cameras.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                      <Camera size={16} />
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
+                      <div className="w-5 h-5 bg-gradient-to-br from-green-500 to-emerald-500 rounded-md flex items-center justify-center">
+                        <Camera size={12} className="text-white" />
+                      </div>
                       <span>Camera</span>
                     </label>
                     <select
                       value={selectedCamera}
                       onChange={(e) => changeCamera(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800"
                     >
                       {devices.cameras.map((camera) => (
                         <option key={camera.deviceId} value={camera.deviceId}>
@@ -310,14 +321,16 @@ export default function PreMeetingSetup() {
                 {/* Microphone Selection */}
                 {devices.microphones.length > 1 && (
                   <div>
-                    <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
-                      <Mic size={16} />
+                    <label className="flex items-center space-x-2 text-sm font-semibold text-slate-700 mb-3">
+                      <div className="w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-md flex items-center justify-center">
+                        <Mic size={12} className="text-white" />
+                      </div>
                       <span>Microphone</span>
                     </label>
                     <select
                       value={selectedMicrophone}
                       onChange={(e) => changeMicrophone(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white/70 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md text-slate-800"
                     >
                       {devices.microphones.map((microphone) => (
                         <option key={microphone.deviceId} value={microphone.deviceId}>
@@ -329,12 +342,29 @@ export default function PreMeetingSetup() {
                 )}
 
                 {/* Meeting Info */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-medium text-gray-900 mb-2">Meeting Details</h3>
-                  <p className="text-sm text-gray-600">Room: {roomId}</p>
-                  <p className="text-sm text-gray-600">
-                    Type: {meetingType === 'waiting' ? 'Approval Required' : 'Direct Join'}
-                  </p>
+                <div className="bg-gradient-to-br from-slate-100/80 to-blue-100/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 shadow-sm">
+                  <h3 className="font-semibold text-slate-800 mb-4 flex items-center space-x-2">
+                    <div className="w-5 h-5 bg-gradient-to-br from-indigo-500 to-blue-500 rounded-md flex items-center justify-center">
+                      <Settings size={12} className="text-white" />
+                    </div>
+                    <span>Meeting Details</span>
+                  </h3>
+                  <div className="space-y-2">
+                    <p className="text-sm text-slate-600 flex items-center justify-between">
+                      <span className="font-medium">Room:</span> 
+                      <span className="font-mono bg-slate-200/60 px-2 py-1 rounded-md text-xs">{roomId}</span>
+                    </p>
+                    <p className="text-sm text-slate-600 flex items-center justify-between">
+                      <span className="font-medium">Type:</span> 
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                        meetingType === 'waiting' 
+                          ? 'bg-orange-100 text-orange-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {meetingType === 'waiting' ? 'Approval Required' : 'Direct Join'}
+                      </span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -343,14 +373,16 @@ export default function PreMeetingSetup() {
             <button
               onClick={joinMeeting}
               disabled={isLoading || !displayName.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-200 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl hover:scale-[1.02] transform"
             >
               {isLoading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
               ) : (
                 <>
-                  <Video size={20} />
-                  <span>Join Meeting</span>
+                  <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center">
+                    <Video size={16} className="text-white" />
+                  </div>
+                  <span className="text-lg">Join Meeting</span>
                 </>
               )}
             </button>
