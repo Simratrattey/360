@@ -215,4 +215,72 @@ router.get('/producers', (req, res) => {
   res.json(list);
 });
 
+// 6) Pause producer (official mediasoup pattern)
+router.post('/producers/pause', async (req, res) => {
+  const { producerId } = req.body;
+
+  console.log(`[SFU] 🔇 Pausing producer: ${producerId}`);
+
+  const producerEntry = producers.get(producerId);
+  if (!producerEntry) {
+    return res.status(404).json({ error: 'Producer not found' });
+  }
+
+  try {
+    await producerEntry.producer.pause();
+    console.log(`[SFU] ✅ Producer ${producerId} paused successfully`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[SFU] ❌ Failed to pause producer ${producerId}:`, error);
+    res.status(500).json({ error: 'Failed to pause producer' });
+  }
+});
+
+// 7) Resume producer (official mediasoup pattern)
+router.post('/producers/resume', async (req, res) => {
+  const { producerId } = req.body;
+
+  console.log(`[SFU] 🔊 Resuming producer: ${producerId}`);
+
+  const producerEntry = producers.get(producerId);
+  if (!producerEntry) {
+    return res.status(404).json({ error: 'Producer not found' });
+  }
+
+  try {
+    await producerEntry.producer.resume();
+    console.log(`[SFU] ✅ Producer ${producerId} resumed successfully`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[SFU] ❌ Failed to resume producer ${producerId}:`, error);
+    res.status(500).json({ error: 'Failed to resume producer' });
+  }
+});
+
+// 8) Close producer (official mediasoup pattern)
+router.post('/producers/close', async (req, res) => {
+  const { producerId } = req.body;
+
+  console.log(`[SFU] 🔴 Closing producer: ${producerId}`);
+
+  const producerEntry = producers.get(producerId);
+  if (!producerEntry) {
+    return res.status(404).json({ error: 'Producer not found' });
+  }
+
+  try {
+    // Close the producer
+    producerEntry.producer.close();
+
+    // Remove from tracking
+    producers.delete(producerId);
+
+    console.log(`[SFU] ✅ Producer ${producerId} closed successfully`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`[SFU] ❌ Failed to close producer ${producerId}:`, error);
+    res.status(500).json({ error: 'Failed to close producer' });
+  }
+});
+
 export default router;
