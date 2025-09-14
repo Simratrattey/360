@@ -285,8 +285,7 @@ export const NotificationProvider = ({ children }) => {
 
   // Mark conversation notifications as read when user visits messages page
   useEffect(() => {
-    const currentPath = window.location.pathname;
-    if (currentPath === '/messages' && notifications && notifications.length > 0) {
+    if (isOnMessagesPage && notifications && notifications.length > 0) {
       // Find conversation-related notifications that should be marked as read
       const conversationNotifications = notifications.filter(notif => 
         !notif.read && (
@@ -296,19 +295,21 @@ export const NotificationProvider = ({ children }) => {
         )
       );
       
-      console.log(`🔍 Found ${conversationNotifications.length} conversation notifications to mark as read`);
-      
-      // Mark them as read
-      conversationNotifications.forEach(notif => {
-        if (notif._id) {
-          console.log('🔍 Marking conversation notification as read:', notif.type, notif.title, notif._id);
-          markAsRead(notif._id).catch(err => {
-            console.error('Error marking conversation notification as read:', err);
-          });
-        }
-      });
+      if (conversationNotifications.length > 0) {
+        console.log(`🔍 User is on messages page, marking ${conversationNotifications.length} conversation notifications as read`);
+        
+        // Mark them as read
+        conversationNotifications.forEach(notif => {
+          if (notif._id) {
+            console.log('🔍 Marking conversation notification as read:', notif.type, notif.title, notif._id);
+            markAsRead(notif._id).catch(err => {
+              console.error('Error marking conversation notification as read:', err);
+            });
+          }
+        });
+      }
     }
-  }, [notifications, markAsRead]);
+  }, [isOnMessagesPage, notifications, markAsRead]);
 
   // Show browser notification helper
   const showBrowserNotification = useCallback((notification) => {
