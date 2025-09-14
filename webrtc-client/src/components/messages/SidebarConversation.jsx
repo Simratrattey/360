@@ -173,7 +173,7 @@ export default function SidebarConversation({
           isActive 
             ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300 shadow-lg transform scale-[1.02]' 
             : 'bg-gradient-to-r from-blue-100/30 to-purple-100/30 border-blue-200 hover:border-blue-300 hover:shadow-md'
-        } sticky top-0 z-10`}
+        }`}
         onClick={onSelect}
       >
         <div className="flex items-center space-x-2">
