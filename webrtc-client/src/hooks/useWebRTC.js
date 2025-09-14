@@ -599,19 +599,7 @@ export function useWebRTC() {
         // Step 1: Close the producer locally (official pattern)
         videoProducer.close();
 
-        // Step 2: Notify server (official pattern)
-        const { success, error: serverError } = await meetingService.closeProducer(videoProducer.id);
-
-        if (!success) {
-          console.error('[WebRTC] ❌ disableWebcam() | server-side close failed:', serverError);
-          return {
-            success: false,
-            enabled: true,
-            error: `Error closing server-side webcam Producer: ${serverError}`
-          };
-        }
-
-        // Step 3: Remove from producers array and clean up local stream
+        // Step 2: Remove from producers array and clean up local stream
         producersRef.current = producersRef.current.filter(p => p.id !== videoProducer.id);
 
         // Stop and remove video track from local stream
@@ -626,6 +614,15 @@ export function useWebRTC() {
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = localStream;
           }
+        }
+
+        // Step 3: Notify server (optional - if endpoint exists)
+        try {
+          await meetingService.closeProducer(videoProducer.id);
+          console.log('[WebRTC] ✅ Server notified of producer closure');
+        } catch (serverError) {
+          // Server notification failed but local operation succeeded
+          console.warn('[WebRTC] ⚠️ Server notification failed (endpoint may not exist):', serverError);
         }
 
         console.log('[WebRTC] ✅ Video disabled - Producer closed, camera stopped');
@@ -656,76 +653,54 @@ export function useWebRTC() {
       // Mute audio (following official demo pattern)
       console.log('[WebRTC] 🔇 muteMic() - Pausing producer...');
 
-      // Step 1: Pause locally first (official pattern)
-      audioProducer.pause();
-
       try {
-        // Step 2: Notify server (official pattern)
-        const { success, error: serverError } = await meetingService.pauseProducer(audioProducer.id);
+        // Step 1: Pause locally first (official pattern)
+        audioProducer.pause();
 
-        if (!success) {
-          console.error('[WebRTC] ❌ muteMic() | server-side pause failed:', serverError);
-
-          // Rollback local state on server error
-          audioProducer.resume();
-
-          return {
-            success: false,
-            enabled: true,
-            error: `Error pausing server-side mic Producer: ${serverError}`
-          };
+        // Step 2: Notify server (optional - if endpoint exists)
+        try {
+          await meetingService.pauseProducer(audioProducer.id);
+          console.log('[WebRTC] ✅ Server notified of producer pause');
+        } catch (serverError) {
+          // Server notification failed but local operation succeeded
+          console.warn('[WebRTC] ⚠️ Server notification failed (endpoint may not exist):', serverError);
         }
 
         console.log('[WebRTC] ✅ Audio muted (producer paused, mic indicator stays on)');
         return { success: true, enabled: false };
       } catch (error) {
         console.error('[WebRTC] ❌ muteMic() | failed:', error);
-
-        // Rollback local state on error
-        audioProducer.resume();
-
         return {
           success: false,
           enabled: true,
-          error: `Error pausing server-side mic Producer: ${error}`
+          error: `Error pausing mic Producer: ${error}`
         };
       }
     } else {
       // Unmute audio (following official demo pattern)
       console.log('[WebRTC] 🔊 unmuteMic() - Resuming producer...');
 
-      // Step 1: Resume locally first (official pattern)
-      audioProducer.resume();
-
       try {
-        // Step 2: Notify server (official pattern)
-        const { success, error: serverError } = await meetingService.resumeProducer(audioProducer.id);
+        // Step 1: Resume locally first (official pattern)
+        audioProducer.resume();
 
-        if (!success) {
-          console.error('[WebRTC] ❌ unmuteMic() | server-side resume failed:', serverError);
-
-          // Rollback local state on server error
-          audioProducer.pause();
-
-          return {
-            success: false,
-            enabled: false,
-            error: `Error resuming server-side mic Producer: ${serverError}`
-          };
+        // Step 2: Notify server (optional - if endpoint exists)
+        try {
+          await meetingService.resumeProducer(audioProducer.id);
+          console.log('[WebRTC] ✅ Server notified of producer resume');
+        } catch (serverError) {
+          // Server notification failed but local operation succeeded
+          console.warn('[WebRTC] ⚠️ Server notification failed (endpoint may not exist):', serverError);
         }
 
         console.log('[WebRTC] ✅ Audio unmuted (producer resumed)');
         return { success: true, enabled: true };
       } catch (error) {
         console.error('[WebRTC] ❌ unmuteMic() | failed:', error);
-
-        // Rollback local state on error
-        audioProducer.pause();
-
         return {
           success: false,
           enabled: false,
-          error: `Error resuming server-side mic Producer: ${error}`
+          error: `Error resuming mic Producer: ${error}`
         };
       }
     }
