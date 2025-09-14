@@ -114,7 +114,7 @@ export default function MeetingStatsBar({
                   <div key={request.requestId || request._id} className="p-3 border-b border-gray-100 last:border-b-0">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{request.fullName || request.username || 'Unknown User'}</div>
+                        <div className="text-sm font-medium text-gray-900">{request.fullName || request.username || request.requesterName || 'Unknown User'}</div>
                         <div className="text-xs text-gray-500">Wants to join the meeting</div>
                       </div>
                       <div className="flex space-x-2">
