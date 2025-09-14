@@ -55,29 +55,6 @@ export default function DashboardPage() {
   const [joinRequestNotifications, setJoinRequestNotifications] = useState([]);
   const [approvedRooms, setApprovedRooms] = useState(new Set());
 
-  // Mark conversation notifications as read when user visits messages page
-  useEffect(() => {
-    if (window.location.pathname === '/messages' && generalNotifications) {
-      // Find conversation-related notifications that should be marked as read
-      const conversationNotifications = generalNotifications.filter(notif => 
-        !notif.read && (
-          notif.type === 'conversation_created' || 
-          notif.type === 'community_created' || 
-          notif.type === 'conversation_deleted'
-        )
-      );
-      
-      // Mark them as read
-      conversationNotifications.forEach(notif => {
-        if (notif._id && markAsRead) {
-          console.log('🔍 Marking conversation notification as read:', notif.type, notif._id);
-          markAsRead(notif._id).catch(err => {
-            console.error('Error marking conversation notification as read:', err);
-          });
-        }
-      });
-    }
-  }, [generalNotifications, markAsRead]);
 
   // Memoized notification filtering to prevent flash issues
   const filteredNotifications = useMemo(() => {
