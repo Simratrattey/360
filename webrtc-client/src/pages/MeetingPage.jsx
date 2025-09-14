@@ -674,6 +674,20 @@ export default function MeetingPage() {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
       
+      // Sync UI state with actual track states (important for pre-meeting settings)
+      const videoTrack = localStream.getVideoTracks()[0];
+      const audioTrack = localStream.getAudioTracks()[0];
+      
+      if (videoTrack) {
+        setIsVideoEnabled(videoTrack.enabled);
+        console.log('[MeetingPage] Synced video state:', videoTrack.enabled);
+      }
+      
+      if (audioTrack) {
+        setIsAudioEnabled(audioTrack.enabled);
+        console.log('[MeetingPage] Synced audio state:', audioTrack.enabled);
+      }
+      
       // Start audio analyzer for local stream
       if (localStream.getAudioTracks().length > 0 && !audioAnalyzers.current.has('local')) {
         startAudioAnalyzer(localStream, 'local', true);

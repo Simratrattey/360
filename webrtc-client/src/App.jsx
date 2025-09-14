@@ -15,20 +15,35 @@ import MessagesPage from './pages/MessagesPage.jsx';
 import SearchResultsPage from './pages/SearchResultsPage.jsx';
 import MeetingDetailsPage from './pages/MeetingDetailsPage.jsx';
 import WaitingRoom from './components/WaitingRoom.jsx';
+import PreMeetingSetup from './components/PreMeetingSetup.jsx';
 
-// Router component to handle meeting vs waiting room based on URL parameters
+// Router component to handle meeting flow based on URL parameters
 function MeetingPageRouter() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const type = searchParams.get('type');
+  const setup = searchParams.get('setup');
   
-  // If type=waiting, show waiting room
-  // If type=direct or no type, show meeting page
-  if (type === 'waiting') {
-    return <WaitingRoom />;
-  } else {
-    return <MeetingPage />;
+  // If setup=skip, bypass pre-meeting setup (for returning users or direct API joins)
+  if (setup === 'skip') {
+    if (type === 'waiting') {
+      return <WaitingRoom />;
+    } else {
+      return <MeetingPage />;
+    }
   }
+  
+  // If setup=done, proceed to meeting/waiting room
+  if (setup === 'done') {
+    if (type === 'waiting') {
+      return <WaitingRoom />;
+    } else {
+      return <MeetingPage />;
+    }
+  }
+  
+  // Default: show pre-meeting setup first
+  return <PreMeetingSetup />;
 }
 
 export default function App() {

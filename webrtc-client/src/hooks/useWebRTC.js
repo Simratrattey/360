@@ -26,7 +26,59 @@ export function useWebRTC() {
   const getUserMedia = useCallback(async () => {
     try {
       console.log('[WebRTC] 📹 Requesting camera/microphone access...');
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      
+      // Check for pre-meeting settings
+      const preMeetingSettings = localStorage.getItem('preMeetingSettings');
+      let constraints = { video: true, audio: true };
+      
+      if (preMeetingSettings) {
+        try {
+          const settings = JSON.parse(preMeetingSettings);
+          console.log('[WebRTC] 🔧 Using pre-meeting settings:', settings);
+          
+          // Apply device constraints if specified
+          if (settings.selectedCamera) {
+            constraints.video = { deviceId: { exact: settings.selectedCamera } };
+          }
+          if (settings.selectedMicrophone) {
+            constraints.audio = { deviceId: { exact: settings.selectedMicrophone } };
+          }
+          
+          // Get stream with specified devices
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          
+          // Apply pre-meeting enabled/disabled state
+          const videoTrack = stream.getVideoTracks()[0];
+          const audioTrack = stream.getAudioTracks()[0];
+          
+          if (videoTrack) {
+            videoTrack.enabled = settings.videoEnabled !== false; // Default to true if not specified
+          }
+          if (audioTrack) {
+            audioTrack.enabled = settings.audioEnabled !== false; // Default to true if not specified
+          }
+          
+          console.log('[WebRTC] ✅ Got media stream with pre-meeting settings:', {
+            video: videoTrack?.enabled,
+            audio: audioTrack?.enabled,
+            tracks: stream.getTracks().map(t => t.kind)
+          });
+          
+          setLocalStream(stream);
+          if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+          
+          // Clear pre-meeting settings after use
+          localStorage.removeItem('preMeetingSettings');
+          
+          return stream;
+        } catch (settingsError) {
+          console.warn('[WebRTC] Failed to apply pre-meeting settings, falling back to default:', settingsError);
+          // Fall through to default behavior
+        }
+      }
+      
+      // Default behavior (no pre-meeting settings or failed to apply them)
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log('[WebRTC] ✅ Got media stream:', stream.getTracks().map(t => t.kind));
       setLocalStream(stream);
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;

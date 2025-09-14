@@ -51,7 +51,7 @@ export default function WaitingRoom() {
           setRequestStatus('approved');
           // Automatically redirect to meeting after 1 second
           setTimeout(() => {
-            navigate(`/meeting/${roomId}?type=direct`);
+            navigate(`/meeting/${roomId}?type=direct&setup=done`);
           }, 1000);
         } else {
           setRequestStatus('denied');
@@ -92,7 +92,7 @@ export default function WaitingRoom() {
 
   // Join directly (if user is already authorized)
   const handleJoinDirectly = () => {
-    navigate(`/meeting/${roomId}?type=direct`);
+    navigate(`/meeting/${roomId}?type=direct&setup=done`);
   };
 
   if (loading) {
