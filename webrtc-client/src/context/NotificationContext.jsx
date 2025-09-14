@@ -35,8 +35,7 @@ export const NotificationProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [error, setError] = useState(null);
 
-  // Load notifications from cache on mount - user-specific
-  // Clear old notification data on mount to fix stale notifications
+  // Clear old notification data and reset state on mount
   useEffect(() => {
     if (!user?.id) return;
     
@@ -54,7 +53,11 @@ export const NotificationProvider = ({ children }) => {
         }
       });
       
-      console.log('🧹 Cleared notification cache for fresh data');
+      // Reset state to ensure clean start
+      setNotifications([]);
+      setUnreadCount(0);
+      
+      console.log('🧹 Cleared notification cache and reset state for fresh data');
     } catch (err) {
       console.error('Error clearing notification cache:', err);
     }
@@ -128,8 +131,17 @@ export const NotificationProvider = ({ children }) => {
   // Load notifications from server when user changes
   useEffect(() => {
     if (user) {
-      loadNotifications();
-      loadUnreadCount();
+      // Mark all existing notifications as read to clear old ones
+      notificationService.markAllAsRead().then(() => {
+        console.log('🧹 Marked all existing notifications as read');
+        loadNotifications();
+        loadUnreadCount();
+      }).catch(err => {
+        console.error('Error marking all notifications as read:', err);
+        // Still load notifications even if marking fails
+        loadNotifications();
+        loadUnreadCount();
+      });
     } else {
       // Clear user-specific cache when user logs out
       setNotifications([]);
