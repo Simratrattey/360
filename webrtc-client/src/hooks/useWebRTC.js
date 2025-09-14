@@ -588,27 +588,49 @@ export function useWebRTC() {
           // Update the localStream state to trigger React re-renders
           setLocalStream(new MediaStream(localStream.getTracks()));
 
-          // Force update video element with fresh stream
-          if (localVideoRef.current) {
-            console.log('[WebRTC] 📺 Updating video element with new stream');
+          // Force update video element with fresh stream - handle null ref gracefully
+          console.log('[WebRTC] 📺 Attempting to update video element...');
 
-            // Use a small delay to ensure state update is processed
-            setTimeout(() => {
-              if (localVideoRef.current) {
-                localVideoRef.current.srcObject = localStream;
-                console.log('[WebRTC] 🔄 Set localStream to video element');
+          const updateVideoElement = () => {
+            if (localVideoRef.current) {
+              console.log('[WebRTC] ✅ Found localVideoRef, updating video element');
+              localVideoRef.current.srcObject = localStream;
+              localVideoRef.current.play().then(() => {
+                console.log('[WebRTC] ✅ Video play successful via ref');
+              }).catch(e => {
+                console.warn('[WebRTC] Video play failed via ref:', e);
+              });
+            } else {
+              console.warn('[WebRTC] ❌ localVideoRef.current is null, searching for video element...');
 
-                // Force video to play
-                localVideoRef.current.play().then(() => {
-                  console.log('[WebRTC] ✅ Video play successful');
-                }).catch(e => {
-                  console.warn('[WebRTC] Video play failed:', e);
-                });
+              // Try to find video element directly in DOM
+              const videoElements = document.querySelectorAll('video[autoplay][muted]');
+              console.log('[WebRTC] 🔍 Found', videoElements.length, 'video elements');
+
+              let updated = false;
+              videoElements.forEach((video, index) => {
+                // Look for local video (usually muted)
+                if (video.muted && !updated) {
+                  console.log('[WebRTC] 📺 Updating video element directly (index:', index, ')');
+                  video.srcObject = localStream;
+                  video.play().then(() => {
+                    console.log('[WebRTC] ✅ Video play successful via DOM search');
+                  }).catch(e => {
+                    console.warn('[WebRTC] Video play failed via DOM search:', e);
+                  });
+                  updated = true;
+                }
+              });
+
+              if (!updated) {
+                console.error('[WebRTC] ❌ Could not find any suitable video element to update');
               }
-            }, 100);
-          } else {
-            console.error('[WebRTC] ❌ localVideoRef.current is null!');
-          }
+            }
+          };
+
+          // Try immediate update and also delayed update
+          updateVideoElement();
+          setTimeout(updateVideoElement, 200);
         } else {
           console.warn('[WebRTC] ⚠️ No localStream available, creating new one');
           const newStream = new MediaStream([videoTrack]);
@@ -657,26 +679,144 @@ export function useWebRTC() {
           // Continue - local closure is what matters most
         }
 
-        // Step 4: Clean up local stream (remove the stopped track)
+        // Step 4: COMPREHENSIVE camera cleanup to ensure green light turns off
+        console.log('[WebRTC] 🔄 Starting comprehensive camera cleanup...');
+
+        // Get all video tracks from all possible sources
+        const allVideoTracks = [];
+
+        // From localStream
         if (localStream) {
-          const videoTracks = localStream.getVideoTracks();
-          videoTracks.forEach(track => {
-            console.log('[WebRTC] 🗑️ Removing video track from localStream, readyState:', track.readyState);
+          const streamVideoTracks = localStream.getVideoTracks();
+          allVideoTracks.push(...streamVideoTracks);
+        }
+
+        // From the producer track directly
+        if (videoProducer.track) {
+          allVideoTracks.push(videoProducer.track);
+        }
+
+        // From all video elements on the page (they might have references)
+        const videoElements = document.querySelectorAll('video');
+        videoElements.forEach(video => {
+          if (video.srcObject && video.srcObject instanceof MediaStream) {
+            const videoTracks = video.srcObject.getVideoTracks();
+            allVideoTracks.push(...videoTracks);
+          }
+        });
+
+        // Deduplicate tracks by ID
+        const uniqueVideoTracks = allVideoTracks.filter((track, index, arr) =>
+          arr.findIndex(t => t.id === track.id) === index
+        );
+
+        console.log('[WebRTC] 🎯 Found', uniqueVideoTracks.length, 'unique video tracks to clean up');
+
+        // Aggressively stop ALL video tracks
+        uniqueVideoTracks.forEach((track, index) => {
+          console.log(`[WebRTC] 🔴 Stopping track ${index + 1}/${uniqueVideoTracks.length}:`, {
+            id: track.id,
+            label: track.label,
+            readyState: track.readyState,
+            enabled: track.enabled
+          });
+
+          // Disable track first
+          track.enabled = false;
+
+          // Stop the track
+          track.stop();
+
+          // Force additional cleanup
+          try {
+            // Clear any event listeners
+            track.onended = null;
+            track.onmute = null;
+            track.onunmute = null;
+          } catch (e) {
+            // Ignore
+          }
+        });
+
+        // Clean up localStream
+        if (localStream) {
+          // Remove all video tracks from localStream
+          const streamVideoTracks = localStream.getVideoTracks();
+          streamVideoTracks.forEach(track => {
             localStream.removeTrack(track);
-            if (track.readyState !== 'ended') {
-              console.log('[WebRTC] 🔴 Force stopping video track');
-              track.stop();
-            }
           });
 
           // Update localStream state to trigger re-render
           setLocalStream(new MediaStream(localStream.getTracks()));
 
-          // Update video element
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = localStream;
+          console.log('[WebRTC] 📊 LocalStream after cleanup - tracks:',
+            localStream.getTracks().map(t => `${t.kind}:${t.readyState}`));
+        }
+
+        // Clean up ALL video elements on the page
+        console.log('[WebRTC] 🧹 Cleaning up video elements...');
+        videoElements.forEach((video, index) => {
+          if (video.srcObject && video.srcObject instanceof MediaStream) {
+            const hasVideoTracks = video.srcObject.getVideoTracks().length > 0;
+            if (hasVideoTracks) {
+              console.log(`[WebRTC] 📺 Cleaning video element ${index + 1} - removing video tracks`);
+
+              // Create new stream without video tracks
+              const audioTracks = video.srcObject.getAudioTracks();
+              video.srcObject = new MediaStream(audioTracks);
+
+              // If this is likely the local video element, update it properly
+              if (video.muted && localVideoRef.current === video) {
+                console.log('[WebRTC] 🎯 Found local video element via ref, updating srcObject');
+                video.srcObject = localStream;
+              } else if (video.muted && !localVideoRef.current) {
+                console.log('[WebRTC] 🎯 Found likely local video element (muted), updating srcObject');
+                video.srcObject = localStream;
+              }
+            }
+          }
+        });
+
+        // Force garbage collection hint (browser may ignore)
+        if (window.gc) {
+          try {
+            window.gc();
+            console.log('[WebRTC] 🗑️ Forced garbage collection');
+          } catch (e) {
+            // Ignore - gc not available in production
           }
         }
+
+        console.log('[WebRTC] ✅ Comprehensive camera cleanup completed');
+
+        // Additional delayed cleanup to ensure camera light turns off
+        setTimeout(() => {
+          console.log('[WebRTC] 🔄 Delayed cleanup check...');
+          const remainingVideoElements = document.querySelectorAll('video');
+          let foundActiveVideo = false;
+
+          remainingVideoElements.forEach((video, index) => {
+            if (video.srcObject && video.srcObject instanceof MediaStream) {
+              const videoTracks = video.srcObject.getVideoTracks();
+              if (videoTracks.length > 0) {
+                console.log(`[WebRTC] ⚠️ Found remaining video tracks in element ${index}, cleaning up...`);
+                videoTracks.forEach(track => {
+                  console.log('[WebRTC] 🔴 Delayed stop of remaining video track:', track.id);
+                  track.enabled = false;
+                  track.stop();
+                });
+                // Replace with audio-only stream
+                const audioTracks = video.srcObject.getAudioTracks();
+                video.srcObject = new MediaStream(audioTracks);
+                foundActiveVideo = true;
+              }
+            }
+          });
+
+          if (!foundActiveVideo) {
+            console.log('[WebRTC] ✅ Delayed cleanup check: No active video tracks found');
+          }
+        }, 500);
 
         console.log('[WebRTC] ✅ Video disabled - Producer closed, camera should be stopped');
         return { success: true, enabled: false };
@@ -783,12 +923,75 @@ export function useWebRTC() {
 
   // === Leave Meeting ===
   const leaveMeeting = useCallback(() => {
-    localStream?.getTracks().forEach(track => track.stop());
+    console.log('[WebRTC] 🚪 Leaving meeting - starting comprehensive cleanup...');
+
+    // Step 1: Get ALL media tracks from everywhere and stop them aggressively
+    const allTracks = [];
+
+    // From localStream
+    if (localStream) {
+      allTracks.push(...localStream.getTracks());
+    }
+
+    // From producers
+    producersRef.current.forEach(producer => {
+      if (producer.track) {
+        allTracks.push(producer.track);
+      }
+    });
+
+    // From all video elements on the page
+    const videoElements = document.querySelectorAll('video');
+    videoElements.forEach(video => {
+      if (video.srcObject && video.srcObject instanceof MediaStream) {
+        allTracks.push(...video.srcObject.getTracks());
+      }
+    });
+
+    // Deduplicate tracks by ID
+    const uniqueTracks = allTracks.filter((track, index, arr) =>
+      arr.findIndex(t => t.id === track.id) === index
+    );
+
+    console.log('[WebRTC] 🎯 Found', uniqueTracks.length, 'unique tracks to clean up during leave');
+
+    // Aggressively stop ALL tracks
+    uniqueTracks.forEach((track, index) => {
+      console.log(`[WebRTC] 🔴 Stopping track ${index + 1}/${uniqueTracks.length}:`, {
+        id: track.id,
+        kind: track.kind,
+        label: track.label,
+        readyState: track.readyState
+      });
+
+      track.enabled = false;
+      track.stop();
+
+      // Clear event listeners
+      try {
+        track.onended = null;
+        track.onmute = null;
+        track.onunmute = null;
+      } catch (e) {
+        // Ignore
+      }
+    });
+
+    // Step 2: Clean up video elements
+    videoElements.forEach((video, index) => {
+      if (video.srcObject) {
+        console.log(`[WebRTC] 📺 Clearing video element ${index + 1} srcObject`);
+        video.srcObject = null;
+      }
+    });
+
+    // Step 3: Clean up mediasoup resources
     sendTransportRef.current?.close();
     recvTransportRef.current?.close();
     producersRef.current.forEach(p => p.close());
     consumersRef.current.forEach(c => c.close());
 
+    // Step 4: Reset all state
     producersRef.current = [];
     consumersRef.current = [];
     sendTransportRef.current = null;
@@ -798,8 +1001,11 @@ export function useWebRTC() {
     setLocalStream(null);
     setRemoteStreams(new Map());
     remoteVideoRefs.current.clear();
+
+    // Step 5: Leave the room
     leaveRoom();
-    console.log('🚪 Cleaned up');
+
+    console.log('[WebRTC] ✅ Meeting left - all resources cleaned up');
   }, [localStream, leaveRoom]);
 
   useEffect(() => {
@@ -833,6 +1039,54 @@ export function useWebRTC() {
     return () => { sfuSocket.off('roomClosed', handleClosed); };
   }, [sfuSocket, currentRoom, leaveMeeting, navigate]);
 
+  // === Force Camera Cleanup (emergency function) ===
+  const forceCameraCleanup = useCallback(() => {
+    console.log('[WebRTC] 🚨 EMERGENCY: Force camera cleanup requested');
+
+    const allVideoTracks = [];
+
+    // Get all video tracks from everywhere
+    if (localStream) {
+      allVideoTracks.push(...localStream.getVideoTracks());
+    }
+
+    producersRef.current.forEach(p => {
+      if (p.track && p.track.kind === 'video') {
+        allVideoTracks.push(p.track);
+      }
+    });
+
+    // From video elements
+    document.querySelectorAll('video').forEach(video => {
+      if (video.srcObject instanceof MediaStream) {
+        allVideoTracks.push(...video.srcObject.getVideoTracks());
+      }
+    });
+
+    // Deduplicate and stop all
+    const uniqueVideoTracks = allVideoTracks.filter((track, index, arr) =>
+      arr.findIndex(t => t.id === track.id) === index
+    );
+
+    console.log('[WebRTC] 🎯 Emergency cleanup: stopping', uniqueVideoTracks.length, 'video tracks');
+
+    uniqueVideoTracks.forEach(track => {
+      track.enabled = false;
+      track.stop();
+      console.log('[WebRTC] 🔴 Emergency stopped track:', track.id, track.label);
+    });
+
+    // Clear all video elements
+    document.querySelectorAll('video').forEach(video => {
+      if (video.srcObject instanceof MediaStream) {
+        const audioTracks = video.srcObject.getAudioTracks();
+        video.srcObject = new MediaStream(audioTracks);
+      }
+    });
+
+    console.log('[WebRTC] ✅ Emergency camera cleanup completed');
+  }, [localStream]);
+
   return {
     localStream,
     remoteStreams,
@@ -843,6 +1097,7 @@ export function useWebRTC() {
     leaveMeeting,
     toggleVideo,
     toggleAudio,
+    forceCameraCleanup,
     addRemoteVideoRef: (peerId, ref) => remoteVideoRefs.current.set(peerId, ref),
     removeRemoteVideoRef: (peerId) => remoteVideoRefs.current.delete(peerId),
   };

@@ -36,7 +36,7 @@ export default function MeetingPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
-  const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef, toggleVideo: webrtcToggleVideo, toggleAudio: webrtcToggleAudio } = useWebRTC();
+  const { joinMeeting, leaveMeeting, localStream, remoteStreams, localVideoRef, toggleVideo: webrtcToggleVideo, toggleAudio: webrtcToggleAudio, forceCameraCleanup } = useWebRTC();
   const { 
     avatarOutput, 
     avatarNavigate, 
