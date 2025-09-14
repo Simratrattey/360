@@ -19,6 +19,7 @@ export default function MeetingStatsBar({
 }) {
   const [duration, setDuration] = useState('0:00');
   const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
+  const [activeTab, setActiveTab] = useState('participants'); // 'participants' or 'requests'
   const [inviteLinkType, setInviteLinkType] = useState('direct'); // 'direct' or 'waitingRoom'
   const [copiedLinkType, setCopiedLinkType] = useState(null);
   
@@ -84,11 +85,13 @@ export default function MeetingStatsBar({
           <div 
             className="participants-badge flex items-center space-x-2 cursor-pointer hover:bg-gray-700 rounded px-2 py-1"
             onClick={() => {
+              // Always show participants dropdown, but set appropriate tab
               if (isHost && joinRequests.length > 0 && !showParticipantsDropdown) {
-                onToggleJoinRequests();
-              } else {
-                setShowParticipantsDropdown(!showParticipantsDropdown);
+                setActiveTab('requests'); // Show requests tab if there are pending requests
+              } else if (!showParticipantsDropdown) {
+                setActiveTab('participants'); // Default to participants tab
               }
+              setShowParticipantsDropdown(!showParticipantsDropdown);
             }}
           >
             <Users size={16} className="text-blue-400" />
@@ -102,73 +105,120 @@ export default function MeetingStatsBar({
             )}
           </div>
           
-          {/* Dropdown for join requests */}
-          {isHost && showJoinRequests && joinRequests.length > 0 && (
-            <div className="join-requests-dropdown absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
-              <div className="p-3 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900">Join Requests</h3>
-                <p className="text-xs text-gray-500">{joinRequests.length} pending request(s)</p>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                {joinRequests.map((request) => (
-                  <div key={request.requestId || request._id} className="p-3 border-b border-gray-100 last:border-b-0">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{request.fullName || request.username || request.requesterName || 'Unknown User'}</div>
-                        <div className="text-xs text-gray-500">Wants to join the meeting</div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => onApproveJoinRequest?.(request.requestId || request._id)}
-                          className="flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
-                          title="Approve"
-                        >
-                          <Check size={14} />
-                        </button>
-                        <button
-                          onClick={() => onDenyJoinRequest?.(request.requestId || request._id)}
-                          className="flex items-center justify-center w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
-                          title="Deny"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Participants Dropdown */}
+          {/* Tabbed Participants Dropdown */}
           {showParticipantsDropdown && (
             <div className="participants-dropdown absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-80">
-              {/* Header */}
-              <div className="p-3 border-b border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900">Participants ({participantCount})</h3>
+              {/* Tab Header */}
+              <div className="border-b border-gray-200">
+                <div className="flex">
+                  <button
+                    onClick={() => setActiveTab('participants')}
+                    className={`flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 transition-colors ${
+                      activeTab === 'participants'
+                        ? 'border-blue-500 text-blue-600 bg-blue-50'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <Users size={14} />
+                      <span>Participants ({participantCount})</span>
+                    </div>
+                  </button>
+                  {isHost && (
+                    <button
+                      onClick={() => setActiveTab('requests')}
+                      className={`flex-1 px-4 py-3 text-sm font-medium text-center border-b-2 transition-colors relative ${
+                        activeTab === 'requests'
+                          ? 'border-red-500 text-red-600 bg-red-50'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center space-x-2">
+                        <ClockIcon size={14} />
+                        <span>Requests ({joinRequests.length})</span>
+                        {joinRequests.length > 0 && (
+                          <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                            {joinRequests.length}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Participants List */}
-              <div className="max-h-64 overflow-y-auto">
-                {participants.map((participant, index) => (
-                  <div key={participant.id || index} className="p-3 border-b border-gray-100 last:border-b-0">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                        {participant.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">{participant.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {participant.id === 'local' ? 'You' : 'Participant'}
+              {/* Tab Content */}
+              {activeTab === 'participants' ? (
+                <>
+                  {/* Participants List */}
+                  <div className="max-h-64 overflow-y-auto">
+                    {participants.map((participant, index) => (
+                      <div key={participant.id || index} className="p-3 border-b border-gray-100 last:border-b-0">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-8 w-8 bg-gradient-to-br from-blue-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                            {participant.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">{participant.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {participant.id === 'local' ? 'You' : 'Participant'}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* Join Requests List */}
+                  <div className="max-h-64 overflow-y-auto">
+                    {joinRequests.length > 0 ? (
+                      joinRequests.map((request) => (
+                        <div key={request.requestId || request._id} className="p-3 border-b border-gray-100 last:border-b-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="h-8 w-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                {(request.fullName || request.username || 'U').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {request.fullName || request.username || request.requesterName || 'Unknown User'}
+                                </div>
+                                <div className="text-xs text-gray-500">Wants to join the meeting</div>
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => onApproveJoinRequest?.(request.requestId || request._id)}
+                                className="flex items-center justify-center w-8 h-8 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+                                title="Approve"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={() => onDenyJoinRequest?.(request.requestId || request._id)}
+                                className="flex items-center justify-center w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                                title="Deny"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-6 text-center text-gray-500">
+                        <ClockIcon size={32} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No pending join requests</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
-              {/* Invite Section - Host Only */}
-              {isHost && (
+              {/* Invite Section - Host Only - Only show in participants tab */}
+              {isHost && activeTab === 'participants' && (
                 <div className="p-3 border-t border-gray-200 bg-gray-50">
                   <div className="flex items-center space-x-2 mb-3">
                     <Share2 size={16} className="text-indigo-600" />
