@@ -131,10 +131,6 @@ export default function MeetingPage() {
   const [speakingParticipants, setSpeakingParticipants] = useState(new Set());
   const audioAnalyzers = useRef(new Map()); // Store audio analyzers for each participant
   
-  // Join request system
-  const [joinRequests, setJoinRequests] = useState([]);
-  const [showJoinRequests, setShowJoinRequests] = useState(false);
-  
   // Host transfer system
   const [hostTransferNotification, setHostTransferNotification] = useState(null);
   
