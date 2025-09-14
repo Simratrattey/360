@@ -409,6 +409,38 @@ router.post('/:id/regenerate-summary', authMiddleware, async (req, res) => {
 
 // Waiting Room API Endpoints
 
+// Get meeting info by roomId (for waiting room)
+router.get('/:id/info', async (req, res) => {
+  try {
+    const { id: roomId } = req.params;
+    
+    const meeting = await Meeting.findOne({ roomId })
+      .populate('organizer', 'username fullName')
+      .populate('participants', 'username fullName');
+    
+    if (!meeting) {
+      return res.status(404).json({ success: false, error: 'Meeting not found' });
+    }
+    
+    res.json({
+      success: true,
+      meeting: {
+        _id: meeting._id,
+        title: meeting.title,
+        description: meeting.description,
+        startTime: meeting.startTime,
+        organizer: meeting.organizer,
+        participants: meeting.participants,
+        roomId: meeting.roomId
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching meeting info:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch meeting information' });
+  }
+});
+
 // Request to join meeting (for waiting room)
 router.post('/:id/request-join', authMiddleware, async (req, res) => {
   try {

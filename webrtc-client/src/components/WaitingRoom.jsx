@@ -21,7 +21,7 @@ export default function WaitingRoom() {
     const loadMeetingInfo = async () => {
       try {
         setLoading(true);
-        const response = await API.get(`/meetings/${roomId}`);
+        const response = await API.get(`/meetings/${roomId}/info`);
         if (response.data.success) {
           setMeetingInfo(response.data.meeting);
         } else {

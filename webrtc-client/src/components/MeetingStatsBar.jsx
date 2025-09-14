@@ -20,7 +20,7 @@ export default function MeetingStatsBar({
   const [duration, setDuration] = useState('0:00');
   const [showParticipantsDropdown, setShowParticipantsDropdown] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [inviteLinkType, setInviteLinkType] = useState('direct'); // 'direct' or 'waiting'
+  const [inviteLinkType, setInviteLinkType] = useState('direct'); // 'direct' or 'waitingRoom'
   const [copiedLinkType, setCopiedLinkType] = useState(null);
   
   // Debug logging for participant count
@@ -200,9 +200,9 @@ export default function MeetingStatsBar({
                       <span>Direct</span>
                     </button>
                     <button
-                      onClick={() => setInviteLinkType('waiting')}
+                      onClick={() => setInviteLinkType('waitingRoom')}
                       className={`flex-1 flex items-center justify-center space-x-2 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                        inviteLinkType === 'waiting'
+                        inviteLinkType === 'waitingRoom'
                           ? 'bg-orange-100 text-orange-800 border border-orange-200'
                           : 'text-gray-600 hover:text-gray-800'
                       }`}
@@ -224,7 +224,8 @@ export default function MeetingStatsBar({
                       <button
                         onClick={async () => {
                           const links = generateMeetingLinks(roomId);
-                          const success = await copyLinkToClipboard(links[inviteLinkType], inviteLinkType);
+                          const linkToCopy = links[inviteLinkType];
+                          const success = await copyLinkToClipboard(linkToCopy, inviteLinkType === 'waitingRoom' ? 'waiting' : inviteLinkType);
                           if (success) {
                             setCopiedLinkType(inviteLinkType);
                             setTimeout(() => setCopiedLinkType(null), 2000);
