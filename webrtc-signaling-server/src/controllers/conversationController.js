@@ -322,6 +322,15 @@ export async function createConversation(req, res, next) {
           members: conversationData.members,
           createdBy: userId
         });
+
+        // Emit system message immediately if it was created
+        if (systemMessage) {
+          req.io.to(conversationId).emit('message:new', {
+            ...systemMessage.toObject(),
+            conversation: conversationId
+          });
+          console.log(`[Community] ✅ Emitted welcome system message to room ${conversationId}`);
+        }
       }
 
       res.status(201).json({ 
@@ -347,8 +356,9 @@ export async function createConversation(req, res, next) {
     await conversation.populate('members', 'username fullName avatarUrl');
 
     // Create welcome system message (only for groups, not DMs)
+    let systemMessage = null;
     if (type !== 'dm') {
-      const systemMessage = await createSystemMessage(
+      systemMessage = await createSystemMessage(
         conversation._id,
         'conversation_created',
         userId,
@@ -428,6 +438,15 @@ export async function createConversation(req, res, next) {
             console.error(`[Conversation] ❌ Failed to create notification for user ${memberId}:`, error);
           }
         }
+      }
+
+      // Emit system message immediately if it was created
+      if (systemMessage) {
+        req.io.to(conversationId).emit('message:new', {
+          ...systemMessage.toObject(),
+          conversation: conversationId
+        });
+        console.log(`[Conversation] ✅ Emitted welcome system message to room ${conversationId}`);
       }
     }
 
