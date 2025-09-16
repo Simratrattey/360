@@ -242,23 +242,23 @@ export default function ConversationDetailsModal({
   if (!isOpen || !conversation) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-2xl flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/20 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className={`relative p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor}`}>
+        <div className={`relative p-6 bg-gradient-to-br from-blue-50/80 via-purple-50/80 to-pink-50/80 backdrop-blur-sm border-b border-white/30`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className={`p-2 rounded-xl bg-gradient-to-r ${config.gradient} text-white shadow-lg`}>
-                <config.icon className="h-6 w-6" />
+            <div className="flex items-center space-x-4">
+              <div className={`p-3 rounded-2xl bg-gradient-to-br ${config.gradient} text-white shadow-xl`}>
+                <config.icon className="h-7 w-7" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{config.title}</h2>
-                <p className="text-sm text-gray-600">View and manage conversation details</p>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-primary-800 to-secondary-700 bg-clip-text text-transparent">{config.title}</h2>
+                <p className="text-sm text-secondary-600 font-medium">View and manage conversation details</p>
               </div>
             </div>
             <button 
               onClick={handleClose} 
-              className="p-2 rounded-full hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700"
+              className="p-2.5 rounded-xl hover:bg-white/60 transition-all duration-200 text-secondary-500 hover:text-secondary-700 backdrop-blur-sm"
             >
               <X className="h-5 w-5" />
             </button>
@@ -268,50 +268,54 @@ export default function ConversationDetailsModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Error/Success Messages */}
           {error && (
-            <div className="bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow-sm flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4" />
-              <span className="font-medium">{error}</span>
+            <div className="bg-gradient-to-r from-red-50/90 to-pink-50/90 backdrop-blur-sm border border-red-200/60 text-red-700 px-5 py-4 rounded-2xl shadow-lg flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="p-1 rounded-full bg-red-100">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              </div>
+              <span className="font-semibold">{error}</span>
             </div>
           )}
           {success && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl shadow-sm flex items-center space-x-2">
-              <Check className="h-4 w-4" />
-              <span className="font-medium">{success}</span>
+            <div className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 backdrop-blur-sm border border-green-200/60 text-green-700 px-5 py-4 rounded-2xl shadow-lg flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="p-1 rounded-full bg-green-100">
+                <Check className="h-4 w-4 text-green-600" />
+              </div>
+              <span className="font-semibold">{success}</span>
             </div>
           )}
 
           {/* Conversation Info */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center space-x-2">
-              <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
-                <Shield className="h-3 w-3 text-white" />
+          <div className="bg-gradient-to-br from-blue-50/60 via-white/80 to-purple-50/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/40">
+            <h3 className="text-lg font-bold text-primary-800 mb-4 flex items-center space-x-3">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 shadow-lg">
+                <Shield className="h-4 w-4 text-white" />
               </div>
               <span>Conversation Info</span>
             </h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Type:</span>
-                <span className="text-sm font-medium text-gray-900 capitalize">{conversation.type}</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Type</span>
+                <p className="text-lg font-bold text-primary-800 capitalize mt-1">{conversation.type}</p>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Members:</span>
-                <span className="text-sm font-medium text-gray-900">{conversation.members?.length || 0} total</span>
+              <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Members</span>
+                <p className="text-lg font-bold text-primary-800 mt-1">{conversation.members?.length || 0} total</p>
               </div>
               {conversation.createdAt && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Created:</span>
-                  <span className="text-sm font-medium text-gray-900">{new Date(conversation.createdAt).toLocaleDateString()}</span>
+                <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                  <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Created</span>
+                  <p className="text-lg font-bold text-primary-800 mt-1">{new Date(conversation.createdAt).toLocaleDateString()}</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Name Section */}
-          <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-900 flex items-center space-x-2">
-                <div className="p-1 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
-                  <Edit className="h-3 w-3 text-white" />
+          <div className="bg-gradient-to-br from-cyan-50/60 via-white/80 to-blue-50/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/40">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-primary-800 flex items-center space-x-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 shadow-lg">
+                  <Edit className="h-4 w-4 text-white" />
                 </div>
                 <span>
                   {conversation.type === 'dm' ? 'Direct Message' : 
@@ -321,7 +325,7 @@ export default function ConversationDetailsModal({
               {canEdit && !isEditingName && (
                 <button
                   onClick={() => setIsEditingName(true)}
-                  className="p-1 rounded-lg hover:bg-white/50 transition-all duration-200 text-blue-600 hover:text-blue-700"
+                  className="p-2.5 rounded-xl bg-white/60 hover:bg-white/80 transition-all duration-200 text-blue-600 hover:text-blue-700 shadow-sm hover:shadow-lg transform hover:scale-105"
                 >
                   <Edit className="h-4 w-4" />
                 </button>
@@ -333,23 +337,24 @@ export default function ConversationDetailsModal({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white shadow-sm"
+                  className="w-full px-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
                   placeholder="Enter name..."
                 />
                 <div className="flex space-x-2">
                   <button
                     onClick={handleSaveName}
-                    className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+                    className="flex-1 px-5 py-3.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-2xl font-bold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02] flex items-center justify-center space-x-2"
                   >
                     <Save className="h-4 w-4" />
-                    <span>Save</span>
+                    <span>Save Changes</span>
                   </button>
                   <button
                     onClick={() => {
                       setIsEditingName(false);
                       setName(conversation.name || '');
+                      setError(null);
                     }}
-                    className="px-4 py-2 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-xl font-semibold hover:from-gray-200 hover:to-gray-300 transition-all duration-200 shadow hover:shadow-lg transform hover:scale-[1.02]"
+                    className="px-5 py-3.5 bg-white/80 backdrop-blur-sm text-secondary-700 rounded-2xl font-bold hover:bg-white transition-all duration-200 shadow-lg hover:shadow-xl border border-white/60"
                   >
                     Cancel
                   </button>

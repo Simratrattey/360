@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Crown, UserPlus, UserMinus, Settings as SettingsIcon, Trash2, Users, Hash, MessageCircle, Check } from 'lucide-react';
+import { X, Crown, UserPlus, UserMinus, Settings as SettingsIcon, Trash2, Users, Hash, MessageCircle, Check, AlertCircle } from 'lucide-react';
 import API from '../../api/client';
 
 function getInitials(name) {
@@ -184,23 +184,23 @@ export default function ConversationSettingsModal({
   if (!isOpen || !conversation) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className={`bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300`}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-2xl flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className={`bg-white/95 backdrop-blur-2xl rounded-xl sm:rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm sm:max-w-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300`}>
         {/* Header */}
-        <div className={`relative p-3 sm:p-6 bg-gradient-to-r ${config.bgGradient} border-b ${config.borderColor}`}>
+        <div className={`relative p-3 sm:p-6 bg-gradient-to-br from-blue-50/80 via-purple-50/80 to-pink-50/80 backdrop-blur-sm border-b border-white/30`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className={`p-1.5 sm:p-2 rounded-xl bg-gradient-to-r ${config.gradient} text-white shadow-lg`}>
-                <SettingsIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className={`p-1.5 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br ${config.gradient} text-white shadow-xl`}>
+                <SettingsIcon className="h-5 w-5 sm:h-7 sm:w-7" />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">{config.title}</h2>
-                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Manage members, admins, and settings</p>
+                <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-primary-800 to-secondary-700 bg-clip-text text-transparent">{config.title}</h2>
+                <p className="text-xs sm:text-sm text-secondary-600 font-medium hidden sm:block">Manage members, admins, and settings</p>
               </div>
             </div>
             <button 
               onClick={handleClose} 
-              className="p-2 rounded-full hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700"
+              className="p-2 sm:p-2.5 rounded-xl hover:bg-white/60 transition-all duration-200 text-secondary-500 hover:text-secondary-700 backdrop-blur-sm"
             >
               <X className="h-5 w-5" />
             </button>
@@ -210,50 +210,60 @@ export default function ConversationSettingsModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {/* Error/Success Messages */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow">
-              {error}
+            <div className="bg-gradient-to-r from-red-50/90 to-pink-50/90 backdrop-blur-sm border border-red-200/60 text-red-700 px-5 py-4 rounded-2xl shadow-lg flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="p-1 rounded-full bg-red-100">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              </div>
+              <span className="font-semibold">{error}</span>
             </div>
           )}
           {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl shadow">
-              {success}
+            <div className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 backdrop-blur-sm border border-green-200/60 text-green-700 px-5 py-4 rounded-2xl shadow-lg flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="p-1 rounded-full bg-green-100">
+                <Check className="h-4 w-4 text-green-600" />
+              </div>
+              <span className="font-semibold">{success}</span>
             </div>
           )}
 
           {/* Conversation Info */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Conversation Info</h3>
-            <div className="bg-gradient-to-r from-gray-50 to-blue-50 p-4 rounded-xl shadow border border-gray-100">
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Type:</span> {conversation.type.charAt(0).toUpperCase() + conversation.type.slice(1)}
-              </p>
-              <p className="text-sm text-gray-600">
-                <span className="font-medium">Members:</span> {conversation.members?.length || 0}
-              </p>
+          <div className="bg-gradient-to-br from-blue-50/60 via-white/80 to-purple-50/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/40">
+            <h3 className="text-lg font-bold text-primary-800 mb-4">Conversation Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Type</span>
+                <p className="text-lg font-bold text-primary-800 capitalize mt-1">{conversation.type}</p>
+              </div>
+              <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Members</span>
+                <p className="text-lg font-bold text-primary-800 mt-1">{conversation.members?.length || 0} total</p>
+              </div>
               {conversation.createdAt && (
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium">Created:</span> {new Date(conversation.createdAt).toLocaleDateString()}
-                </p>
+                <div className="bg-white/60 backdrop-blur-sm p-4 rounded-xl border border-white/40">
+                  <span className="text-xs uppercase tracking-wider text-secondary-500 font-bold">Created</span>
+                  <p className="text-lg font-bold text-primary-800 mt-1">{new Date(conversation.createdAt).toLocaleDateString()}</p>
+                </div>
               )}
             </div>
           </div>
 
           {/* Name Update (for Groups and Communities) */}
           {(conversation.type === 'group' || conversation.type === 'community') && isAdmin && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                {conversation.type === 'group' ? 'Group Name' : 'Community Name'}
+            <div className="bg-gradient-to-br from-cyan-50/60 via-white/80 to-blue-50/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/40">
+              <h3 className="text-lg font-bold text-primary-800 mb-4">
+                {conversation.type === 'group' ? 'Update Group Name' : 'Update Community Name'}
               </h3>
-              <div className="flex space-x-2">
+              <div className="flex space-x-3">
                 <input
                   type="text"
                   value={conversation.type === 'group' ? groupName : communityName}
                   onChange={(e) => conversation.type === 'group' ? setGroupName(e.target.value) : setCommunityName(e.target.value)}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow"
+                  className="flex-1 px-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
+                  placeholder={`Enter ${conversation.type} name...`}
                 />
                 <button
                   onClick={handleUpdateName}
-                  className="px-5 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                  className="px-6 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-2xl font-bold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
                 >
                   Update
                 </button>
@@ -263,36 +273,49 @@ export default function ConversationSettingsModal({
 
           {/* Add Members (for Groups) */}
           {conversation.type === 'group' && isAdmin && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Add Members</h3>
-              <div className="relative mb-2">
+            <div className="bg-gradient-to-br from-green-50/60 via-white/80 to-emerald-50/60 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/40">
+              <h3 className="text-lg font-bold text-primary-800 mb-4 flex items-center space-x-3">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg">
+                  <UserPlus className="h-4 w-4 text-white" />
+                </div>
+                <span>Add New Members</span>
+              </h3>
+              <div className="relative mb-4">
                 <input
                   type="text"
-                  placeholder="Search users..."
+                  placeholder="Search users to add..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white shadow"
+                  className="w-full px-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
                 />
               </div>
-              <div className="max-h-32 overflow-y-auto space-y-2">
+              <div className="max-h-40 overflow-y-auto space-y-3">
                 {filteredUsers.map((user) => (
-                  <div key={user._id} className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl shadow border border-blue-100">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow">
+                  <div key={user._id} className="flex items-center justify-between p-4 bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm border border-white/40 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center space-x-4">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
                         <span className="text-white font-bold text-sm">
                           {getInitials(user.fullName || user.username)}
                         </span>
                       </div>
-                      <span className="text-sm text-gray-900 font-semibold">{user.fullName || user.username}</span>
+                      <div>
+                        <span className="text-base font-bold text-primary-800">{user.fullName || user.username}</span>
+                        {user.email && <p className="text-xs text-secondary-500">{user.email}</p>}
+                      </div>
                     </div>
                     <button
                       onClick={() => handleAddMember(user._id)}
-                      className="px-3 py-2 text-xs bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                      className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-bold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
                     >
                       Add
                     </button>
                   </div>
                 ))}
+                {filteredUsers.length === 0 && (
+                  <div className="text-center py-8">
+                    <p className="text-secondary-500 font-medium">No users available to add</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
