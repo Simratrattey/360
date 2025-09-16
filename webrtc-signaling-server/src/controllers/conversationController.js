@@ -585,33 +585,103 @@ export async function removeMember(req, res, next) {
     const { conversationId, userId } = req.params;
     const currentUserId = req.user.id;
 
-    const conversation = await Conversation.findById(conversationId).populate('members', 'username fullName avatarUrl');
+    console.log('Remove member request:', { conversationId, userId, currentUserId });
+
+    // Find conversation without populate first to check raw member data
+    const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
       return res.status(404).json({ message: 'Conversation not found' });
     }
 
-    // Check if user is admin (for groups/communities) or member (for DMs)
-    if (conversation.type !== 'dm' && !conversation.admins.some(adminId => adminId.toString() === currentUserId)) {
+    console.log('Conversation found:', {
+      id: conversation._id,
+      type: conversation.type,
+      memberCount: conversation.members.length,
+      adminCount: conversation.admins.length,
+      members: conversation.members.map(m => m.toString()),
+      admins: conversation.admins.map(a => a.toString())
+    });
+
+    // Validate user permissions
+    const isAdmin = conversation.admins.some(adminId => {
+      const adminIdStr = adminId.toString();
+      const currentUserIdStr = currentUserId.toString();
+      console.log('Checking admin permission:', { adminIdStr, currentUserIdStr, match: adminIdStr === currentUserIdStr });
+      return adminIdStr === currentUserIdStr;
+    });
+
+    if (conversation.type !== 'dm' && !isAdmin) {
       return res.status(403).json({ message: 'Only admins can remove members' });
     }
 
-    if (!conversation.members.some(memberId => memberId.toString() === userId.toString())) {
-      return res.status(400).json({ message: 'User is not a member' });
+    // Check if user to be removed is actually a member
+    const userIdStr = userId.toString();
+    const isMember = conversation.members.some(memberId => {
+      const memberIdStr = memberId.toString();
+      console.log('Checking membership:', { memberIdStr, userIdStr, match: memberIdStr === userIdStr });
+      return memberIdStr === userIdStr;
+    });
+
+    if (!isMember) {
+      console.log('User not found in members array');
+      return res.status(400).json({ message: 'User is not a member of this conversation' });
     }
 
-    // Get removed user info and remover info for notifications before removing
+    // Prevent removing the conversation creator if they are the only admin
+    if (conversation.createdBy && conversation.createdBy.toString() === userIdStr && conversation.admins.length === 1) {
+      return res.status(400).json({ message: 'Cannot remove the conversation creator when they are the only admin' });
+    }
+
+    // Get user info before removing for notifications
     const removedUser = await User.findById(userId).select('username fullName avatarUrl');
     const removerUser = await User.findById(currentUserId).select('username fullName avatarUrl');
 
-    conversation.members = conversation.members.filter(id => id.toString() !== userId.toString());
-    // Also remove from admins if they were an admin
-    conversation.admins = conversation.admins.filter(id => id.toString() !== userId.toString());
-    await conversation.save();
+    if (!removedUser) {
+      return res.status(404).json({ message: 'User to remove not found' });
+    }
 
-    // Populate members for response
-    await conversation.populate('members', 'username fullName avatarUrl');
+    console.log('Users found:', {
+      removedUser: removedUser ? removedUser.fullName : 'null',
+      removerUser: removerUser ? removerUser.fullName : 'null'
+    });
 
-    // Emit socket event for real-time updates with enhanced data
+    // Remove user from members array using MongoDB $pull operator for atomic operation
+    const memberUpdateResult = await Conversation.updateOne(
+      { _id: conversationId },
+      { 
+        $pull: { 
+          members: userId,
+          admins: userId  // Also remove from admins if they were an admin
+        }
+      }
+    );
+
+    console.log('Update result:', memberUpdateResult);
+
+    if (memberUpdateResult.modifiedCount === 0) {
+      return res.status(500).json({ message: 'Failed to remove member from conversation' });
+    }
+
+    // Get updated conversation with populated members
+    const updatedConversation = await Conversation.findById(conversationId)
+      .populate('members', 'username fullName avatarUrl')
+      .populate('admins', 'username fullName avatarUrl');
+
+    console.log('Updated conversation:', {
+      memberCount: updatedConversation.members.length,
+      adminCount: updatedConversation.admins.length
+    });
+
+    // Create system message for member removal
+    await createSystemMessage(
+      conversationId,
+      'member_removed',
+      currentUserId,
+      [userId],
+      {}
+    );
+
+    // Emit socket event for real-time updates
     if (req.io) {
       const eventData = {
         conversationId,
@@ -630,18 +700,30 @@ export async function removeMember(req, res, next) {
           username: removerUser.username,
           fullName: removerUser.fullName,
           avatarUrl: removerUser.avatarUrl
-        }
+        },
+        updatedMemberCount: updatedConversation.members.length
       };
 
-      // Emit to conversation members (they should still see this update)
+      // Emit to conversation members
       req.io.to(conversationId).emit('conversation:memberRemoved', eventData);
 
-      // Also emit to the removed user specifically (they need to know they were removed)
+      // Also emit to the removed user
       req.io.to(userId).emit('conversation:memberRemoved', eventData);
     }
 
-    res.json({ message: 'Member removed successfully', conversation });
+    console.log('Member removed successfully');
+    res.json({ 
+      message: 'Member removed successfully', 
+      conversation: updatedConversation,
+      removedUser: {
+        _id: removedUser._id,
+        username: removedUser.username,
+        fullName: removedUser.fullName
+      }
+    });
+
   } catch (err) {
+    console.error('Error in removeMember:', err);
     next(err);
   }
 }
