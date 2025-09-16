@@ -171,23 +171,23 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
   const currentConfig = getTypeConfig(conversationType);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-2xl flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white/95 backdrop-blur-2xl rounded-xl sm:rounded-2xl shadow-2xl border border-white/20 w-full max-w-sm sm:max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto flex flex-col animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className={`relative p-3 sm:p-4 bg-gradient-to-r ${currentConfig.bgGradient} border-b ${currentConfig.borderColor}`}>
+        <div className={`relative p-3 sm:p-6 bg-gradient-to-br from-blue-50/80 via-purple-50/80 to-pink-50/80 backdrop-blur-sm border-b border-white/30`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className={`p-1.5 sm:p-2 rounded-xl bg-gradient-to-r ${currentConfig.gradient} text-white shadow-lg`}>
-                <currentConfig.icon className="h-5 w-5 sm:h-6 sm:w-6" />
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className={`p-1.5 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br ${currentConfig.gradient} text-white shadow-xl`}>
+                <currentConfig.icon className="h-5 w-5 sm:h-7 sm:w-7" />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl font-bold text-gray-900">New Conversation</h2>
-                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{currentConfig.description}</p>
+                <h2 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-primary-800 to-secondary-700 bg-clip-text text-transparent">New Conversation</h2>
+                <p className="text-xs sm:text-sm text-secondary-600 font-medium hidden sm:block">{currentConfig.description}</p>
               </div>
             </div>
             <button 
               onClick={handleClose} 
-              className="p-2 rounded-full hover:bg-white/50 transition-all duration-200 text-gray-500 hover:text-gray-700"
+              className="p-2 sm:p-2.5 rounded-xl hover:bg-white/60 transition-all duration-200 text-secondary-500 hover:text-secondary-700 backdrop-blur-sm"
             >
               <X className="h-5 w-5" />
             </button>
@@ -195,8 +195,9 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
         </div>
 
         {/* Type Selector */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-50/60 via-white/80 to-blue-50/60 backdrop-blur-sm">
+          <h3 className="text-lg font-bold text-primary-800 mb-4 text-center">Choose Conversation Type</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {['dm', 'group', 'community'].map((type) => {
               const config = getTypeConfig(type);
               const isActive = conversationType === type;
@@ -204,19 +205,26 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
                 <button
                   key={type}
                   onClick={() => setConversationType(type)}
-                  className={`relative p-4 rounded-xl border-2 transition-all duration-300 ${
+                  className={`relative p-6 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 ${
                     isActive 
-                      ? `border-transparent bg-gradient-to-r ${config.gradient} text-white shadow-lg transform scale-105` 
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:shadow-md'
+                      ? `border-transparent bg-gradient-to-br ${config.gradient} text-white shadow-2xl scale-105` 
+                      : 'border-white/40 bg-white/60 backdrop-blur-sm text-secondary-700 hover:border-white/60 hover:shadow-xl'
                   }`}
                 >
-                  <div className="flex flex-col items-center space-y-2">
-                    <config.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
-                    <span className="text-xs font-medium">{config.title}</span>
+                  <div className="flex flex-col items-center space-y-3">
+                    <div className={`p-3 rounded-xl ${isActive ? 'bg-white/20' : 'bg-gradient-to-br ' + config.gradient} transition-all duration-300`}>
+                      <config.icon className={`h-6 w-6 ${isActive ? 'text-white' : 'text-white'}`} />
+                    </div>
+                    <div className="text-center">
+                      <span className="text-sm font-bold block">{config.title}</span>
+                      <span className={`text-xs ${isActive ? 'text-white/80' : 'text-secondary-500'} font-medium`}>
+                        {config.description}
+                      </span>
+                    </div>
                   </div>
                   {isActive && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full flex items-center justify-center">
-                      <Check className="h-2 w-2 text-gray-900" />
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-lg">
+                      <Check className="h-3 w-3 text-green-600" />
                     </div>
                   )}
                 </button>
@@ -227,29 +235,31 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Form Fields */}
         {(conversationType === 'group' || conversationType === 'community') && (
-          <div className="p-4 border-b border-gray-100 space-y-2">
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">
+          <div className="p-4 sm:p-6 bg-gradient-to-br from-cyan-50/60 via-white/80 to-blue-50/60 backdrop-blur-sm space-y-5">
+            <div className="space-y-3">
+              <label className="block text-base font-bold text-primary-800">
                 {conversationType === 'group' ? 'Group Name' : 'Community Name'}
+                <span className="text-red-500 ml-1">*</span>
               </label>
               <input
                 type="text"
                 placeholder={conversationType === 'group' ? 'Enter group name...' : 'Enter community name...'}
                 value={conversationType === 'group' ? groupName : communityName}
                 onChange={(e) => conversationType === 'group' ? setGroupName(e.target.value) : setCommunityName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full px-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
               />
             </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">
-                Description <span className="text-gray-400 font-normal">(Optional)</span>
+            <div className="space-y-3">
+              <label className="block text-base font-bold text-primary-800">
+                Description 
+                <span className="text-secondary-500 font-medium ml-2">(Optional)</span>
               </label>
               <textarea
                 placeholder={conversationType === 'group' ? 'Enter group description...' : 'Enter community description...'}
                 value={conversationType === 'group' ? groupDescription : communityDescription}
                 onChange={(e) => conversationType === 'group' ? setGroupDescription(e.target.value) : setCommunityDescription(e.target.value)}
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none transition-all duration-200 bg-gray-50 focus:bg-white"
+                rows={3}
+                className="w-full px-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-300 resize-none transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
               />
             </div>
           </div>
@@ -257,22 +267,25 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Selected Users for Group */}
         {conversationType === 'group' && selectedUsers.length > 0 && (
-          <div className="p-2 border-b border-gray-100">
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Selected Members ({selectedUsers.length})
-            </label>
-            <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+          <div className="p-4 sm:p-6 bg-gradient-to-br from-green-50/60 via-white/80 to-emerald-50/60 backdrop-blur-sm">
+            <h3 className="text-base font-bold text-primary-800 mb-4 flex items-center space-x-2">
+              <div className="p-1 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500">
+                <Users className="h-3 w-3 text-white" />
+              </div>
+              <span>Selected Members ({selectedUsers.length})</span>
+            </h3>
+            <div className="flex flex-wrap gap-3">
               {selectedUsers.map((user) => (
-                <div key={user._id} className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-2 rounded-full shadow-md min-w-max">
-                  <div className="h-6 w-6 rounded-full bg-white/20 flex items-center justify-center">
-                    <span className="text-xs font-semibold">
+                <div key={user._id} className="flex items-center space-x-3 bg-white/60 backdrop-blur-sm px-4 py-3 rounded-2xl shadow-lg border border-white/40 min-w-max">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-md">
+                    <span className="text-xs font-bold text-white">
                       {getInitials(user.fullName || user.username)}
                     </span>
                   </div>
-                  <span className="text-sm font-medium">{user.fullName || user.username}</span>
+                  <span className="text-sm font-bold text-primary-800">{user.fullName || user.username}</span>
                   <button
                     onClick={() => setSelectedUsers(prev => prev.filter(u => u._id !== user._id))}
-                    className="text-white/80 hover:text-white transition-colors"
+                    className="p-1 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-all duration-200 hover:scale-110"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -284,24 +297,33 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Error Display */}
         {error && (
-          <div className="p-2 border-b border-gray-100">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-2">
-              <p className="text-red-600 text-sm font-medium">{error}</p>
+          <div className="p-4 sm:p-6">
+            <div className="bg-gradient-to-r from-red-50/90 to-pink-50/90 backdrop-blur-sm border border-red-200/60 text-red-700 px-5 py-4 rounded-2xl shadow-lg flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="p-1 rounded-full bg-red-100">
+                <X className="h-4 w-4 text-red-600" />
+              </div>
+              <span className="font-semibold">{error}</span>
             </div>
           </div>
         )}
 
         {/* User Search */}
         {conversationType !== 'community' && (
-          <div className="p-2 border-b border-gray-100">
+          <div className="p-4 sm:p-6 bg-gradient-to-br from-purple-50/60 via-white/80 to-pink-50/60 backdrop-blur-sm">
+            <h3 className="text-base font-bold text-primary-800 mb-4 flex items-center space-x-2">
+              <div className="p-1 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500">
+                <Search className="h-3 w-3 text-white" />
+              </div>
+              <span>{conversationType === 'dm' ? 'Find User' : 'Search Members'}</span>
+            </h3>
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
               <input
                 type="text"
                 placeholder={conversationType === 'dm' ? 'Search users...' : 'Search users to add...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 focus:bg-white"
+                className="w-full pl-14 pr-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
               />
             </div>
           </div>
@@ -309,64 +331,67 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* User List - Modal is scrollable, user list grows naturally */}
         {conversationType !== 'community' && (
-          <div className="p-2">
+          <div className="p-4 sm:p-6">
             {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto"></div>
-                <p className="text-gray-500 mt-4 font-medium">Loading users...</p>
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto"></div>
+                <p className="text-secondary-500 mt-6 font-bold">Loading users...</p>
               </div>
             ) : filteredUsers.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="p-4 rounded-full bg-gray-100 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <User className="h-8 w-8 text-gray-400" />
+              <div className="text-center py-12">
+                <div className="p-6 rounded-2xl bg-gradient-to-br from-gray-50 to-blue-50 w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-lg">
+                  <User className="h-10 w-10 text-secondary-400" />
                 </div>
-                <p className="text-gray-500 font-medium">
+                <p className="text-secondary-500 font-bold text-lg">
                   {searchTerm ? 'No users found matching your search' : 'No users available'}
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {filteredUsers.map((user) => (
                   <button
                     key={user._id}
                     onClick={() => handleUserToggle(user)}
-                    className={`w-full flex items-center space-x-4 p-3 rounded-xl transition-all duration-200 text-left group ${
+                    className={`w-full flex items-center space-x-4 p-5 rounded-2xl transition-all duration-200 text-left group transform hover:scale-[1.02] ${
                       isUserSelected(user) 
-                        ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 shadow-md' 
-                        : 'hover:bg-gray-50 border-2 border-transparent hover:border-gray-200'
+                        ? 'bg-gradient-to-r from-blue-50/90 to-cyan-50/90 backdrop-blur-sm border-2 border-blue-200/60 shadow-xl' 
+                        : 'bg-white/60 backdrop-blur-sm border-2 border-white/40 hover:border-blue-200/60 hover:shadow-xl'
                     }`}
                   >
                     <div className="relative">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg">
+                      <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-xl">
                         {user.avatarUrl ? (
                           <img
                             src={user.avatarUrl}
                             alt={user.fullName || user.username}
-                            className="h-12 w-12 rounded-full object-cover"
+                            className="h-14 w-14 rounded-full object-cover"
                           />
                         ) : (
-                          <span className="text-white font-bold text-lg">
+                          <span className="text-white font-bold text-xl">
                             {getInitials(user.fullName || user.username)}
                           </span>
                         )}
                       </div>
                       {isUserSelected(user) && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
                           <Check className="h-3 w-3 text-white" />
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
+                      <p className="font-bold text-primary-800 truncate text-lg">
                         {user.fullName || user.username}
                       </p>
                       {user.fullName && (
-                        <p className="text-sm text-gray-500 truncate">@{user.username}</p>
+                        <p className="text-sm text-secondary-500 truncate font-medium">@{user.username}</p>
+                      )}
+                      {user.email && (
+                        <p className="text-xs text-secondary-400 truncate">{user.email}</p>
                       )}
                     </div>
                     {conversationType === 'group' && !isUserSelected(user) && (
-                      <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 transition-colors">
-                        <Plus className="h-4 w-4 text-gray-500 group-hover:text-blue-600" />
+                      <div className="p-3 rounded-xl bg-blue-100 group-hover:bg-blue-200 transition-all duration-200 shadow-md">
+                        <Plus className="h-5 w-5 text-blue-600" />
                       </div>
                     )}
                   </button>
@@ -378,22 +403,22 @@ export default function CreateConversationModal({ isOpen, onClose, onConversatio
 
         {/* Action Buttons */}
         {conversationType === 'group' && selectedUsers.length > 0 && (
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 p-4 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.04)]">
+          <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-white/30 z-10 p-4 sm:p-6">
             <button
               onClick={() => handleCreateConversation()}
               disabled={!groupName.trim()}
-              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-600 hover:to-cyan-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-8 py-4 rounded-2xl font-bold hover:from-blue-600 hover:to-cyan-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-2xl hover:shadow-3xl transform hover:scale-[1.02] text-lg"
             >
               Create Group
             </button>
           </div>
         )}
         {conversationType === 'community' && (
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 p-4 shadow-[0_-2px_8px_-2px_rgba(0,0,0,0.04)]">
+          <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-white/30 z-10 p-4 sm:p-6">
             <button
               onClick={() => handleCreateConversation([])}
               disabled={!communityName.trim()}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white px-8 py-4 rounded-2xl font-bold hover:from-green-600 hover:to-emerald-600 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 shadow-2xl hover:shadow-3xl transform hover:scale-[1.02] text-lg"
             >
               Create Community
             </button>

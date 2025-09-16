@@ -69,84 +69,96 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-96 max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-2xl flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/20 w-full max-w-lg max-h-[80vh] flex flex-col animate-in slide-in-from-bottom-4 duration-300">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">New Direct Message</h2>
+        <div className="flex items-center justify-between p-6 bg-gradient-to-br from-purple-50/80 via-pink-50/80 to-blue-50/80 backdrop-blur-sm border-b border-white/30 rounded-t-2xl">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-xl">
+              <User className="h-5 w-5" />
+            </div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-primary-800 to-secondary-700 bg-clip-text text-transparent">New Direct Message</h2>
+          </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-2 rounded-xl hover:bg-white/60 transition-all duration-200 text-secondary-500 hover:text-secondary-700 backdrop-blur-sm"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Search */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-6 bg-gradient-to-br from-purple-50/60 via-white/80 to-pink-50/60 backdrop-blur-sm">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
             <input
               type="text"
               placeholder="Search users..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-14 pr-5 py-4 border border-white/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 transition-all duration-200 bg-white/80 backdrop-blur-sm shadow-lg focus:shadow-xl text-primary-800 font-medium"
             />
           </div>
         </div>
 
         {/* User List */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="text-gray-500 mt-2">Loading users...</p>
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent mx-auto"></div>
+              <p className="text-secondary-500 mt-6 font-bold">Loading users...</p>
             </div>
           ) : error ? (
-            <div className="text-center py-8">
-              <p className="text-red-500">{error}</p>
+            <div className="text-center py-12">
+              <div className="bg-gradient-to-r from-red-50/90 to-pink-50/90 backdrop-blur-sm border border-red-200/60 text-red-700 px-5 py-4 rounded-2xl shadow-lg mb-4">
+                <span className="font-semibold">{error}</span>
+              </div>
               <button
                 onClick={fetchUsers}
-                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl font-bold hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02]"
               >
                 Retry
               </button>
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500">
+            <div className="text-center py-12">
+              <div className="p-6 rounded-2xl bg-gradient-to-br from-gray-50 to-purple-50 w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-lg">
+                <User className="h-10 w-10 text-secondary-400" />
+              </div>
+              <p className="text-secondary-500 font-bold text-lg">
                 {searchTerm ? 'No users found matching your search' : 'No users available'}
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-4">
               {filteredUsers.map((user) => (
                 <button
                   key={user._id}
                   onClick={() => handleUserSelect(user)}
-                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                  className="w-full flex items-center space-x-4 p-5 rounded-2xl bg-white/60 backdrop-blur-sm border-2 border-white/40 hover:border-purple-200/60 hover:shadow-xl transition-all duration-200 text-left group transform hover:scale-[1.02]"
                 >
-                  <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-xl">
                     {user.avatarUrl ? (
                       <img
                         src={user.avatarUrl}
                         alt={user.fullName || user.username}
-                        className="h-10 w-10 rounded-full object-cover"
+                        className="h-14 w-14 rounded-full object-cover"
                       />
                     ) : (
-                      <span className="text-blue-600 font-semibold">
+                      <span className="text-white font-bold text-xl">
                         {getInitials(user.fullName || user.username)}
                       </span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">
+                    <p className="font-bold text-primary-800 truncate text-lg">
                       {user.fullName || user.username}
                     </p>
                     {user.fullName && (
-                      <p className="text-sm text-gray-500 truncate">@{user.username}</p>
+                      <p className="text-sm text-secondary-500 truncate font-medium">@{user.username}</p>
+                    )}
+                    {user.email && (
+                      <p className="text-xs text-secondary-400 truncate">{user.email}</p>
                     )}
                   </div>
                 </button>
