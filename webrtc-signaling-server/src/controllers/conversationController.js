@@ -595,7 +595,7 @@ export async function removeMember(req, res, next) {
       return res.status(403).json({ message: 'Only admins can remove members' });
     }
 
-    if (!conversation.members.some(memberId => memberId.toString() === userId)) {
+    if (!conversation.members.some(memberId => memberId.toString() === userId.toString())) {
       return res.status(400).json({ message: 'User is not a member' });
     }
 
@@ -603,9 +603,9 @@ export async function removeMember(req, res, next) {
     const removedUser = await User.findById(userId).select('username fullName avatarUrl');
     const removerUser = await User.findById(currentUserId).select('username fullName avatarUrl');
 
-    conversation.members = conversation.members.filter(id => id.toString() !== userId);
+    conversation.members = conversation.members.filter(id => id.toString() !== userId.toString());
     // Also remove from admins if they were an admin
-    conversation.admins = conversation.admins.filter(id => id.toString() !== userId);
+    conversation.admins = conversation.admins.filter(id => id.toString() !== userId.toString());
     await conversation.save();
 
     // Populate members for response
