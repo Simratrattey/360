@@ -304,15 +304,15 @@ export default function ChatWindow({
                         className="flex justify-center my-6"
                       >
                         <div 
-                          className={`px-4 py-3 rounded-lg text-sm font-medium max-w-sm text-center shadow-md backdrop-blur-sm ${
+                          className={`px-6 py-4 rounded-2xl text-base font-medium max-w-md text-center shadow-xl backdrop-blur-sm border transition-all duration-200 ${
                             isDeletionNotice
-                              ? 'bg-red-100/80 text-red-700 border border-red-200/60' 
+                              ? 'bg-red-50/90 text-red-700 border-red-200/60' 
                               : isWelcomeMessage
-                              ? 'bg-green-100/80 text-green-700 border border-green-200/60'
-                              : 'bg-blue-100/80 text-blue-700 border border-blue-200/60'
+                              ? 'bg-gradient-to-r from-blue-50 to-purple-50 text-primary-800 border-white/20'
+                              : 'bg-white/80 text-secondary-700 border-white/20'
                           }`}
                         >
-                          {isWelcomeMessage && <span className="text-green-600 mr-1">🎉</span>}
+                          {isWelcomeMessage && <span className="text-blue-500 mr-2">🎉</span>}
                           {msg.text}
                         </div>
                       </div>

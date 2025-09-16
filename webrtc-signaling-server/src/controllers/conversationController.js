@@ -86,6 +86,13 @@ async function createSystemMessage(conversationId, systemMessageType, actionBy, 
     });
 
     await systemMessage.save();
+    
+    // Update conversation's lastMessage to show in sidebar
+    await Conversation.findByIdAndUpdate(conversationId, {
+      lastMessage: systemMessage._id,
+      updatedAt: new Date()
+    });
+    
     return systemMessage;
   } catch (error) {
     console.error('Error creating system message:', error);
@@ -325,11 +332,25 @@ export async function createConversation(req, res, next) {
 
         // Emit system message immediately if it was created
         if (systemMessage) {
+          // Populate the system message with sender info for proper display
+          await systemMessage.populate('systemMessageData.actionBy', 'fullName username');
+          
           req.io.to(conversationId).emit('message:new', {
             ...systemMessage.toObject(),
             conversation: conversationId
           });
           console.log(`[Community] ✅ Emitted welcome system message to room ${conversationId}`);
+
+          // Also emit conversation update to refresh sidebar preview
+          const updatedConversation = await Conversation.findById(conversationId)
+            .populate('members', 'username fullName avatarUrl')
+            .populate('lastMessage');
+          
+          req.io.emit('conversation:updated', {
+            ...updatedConversation.toObject(),
+            lastMessage: systemMessage.toObject()
+          });
+          console.log(`[Community] ✅ Emitted conversation update for sidebar refresh`);
         }
       }
 
@@ -442,11 +463,25 @@ export async function createConversation(req, res, next) {
 
       // Emit system message immediately if it was created
       if (systemMessage) {
+        // Populate the system message with sender info for proper display
+        await systemMessage.populate('systemMessageData.actionBy', 'fullName username');
+        
         req.io.to(conversationId).emit('message:new', {
           ...systemMessage.toObject(),
           conversation: conversationId
         });
         console.log(`[Conversation] ✅ Emitted welcome system message to room ${conversationId}`);
+
+        // Also emit conversation update to refresh sidebar preview
+        const updatedConversation = await Conversation.findById(conversationId)
+          .populate('members', 'username fullName avatarUrl')
+          .populate('lastMessage');
+        
+        req.io.emit('conversation:updated', {
+          ...updatedConversation.toObject(),
+          lastMessage: systemMessage.toObject()
+        });
+        console.log(`[Conversation] ✅ Emitted conversation update for sidebar refresh`);
       }
     }
 

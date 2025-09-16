@@ -1701,6 +1701,36 @@ export default function MessagesPage() {
       }
     });
 
+    // Real-time conversation update events (for sidebar refresh)
+    chatSocket.on('conversation:updated', (updatedConversation) => {
+      console.log('🔄 [CONVERSATION-UPDATED] Event received!');
+      console.log('🔄 [CONVERSATION-UPDATED] Data:', JSON.stringify(updatedConversation, null, 2));
+      
+      // Update the conversation in sidebar with new lastMessage
+      setAllConversations(prev => {
+        const newSections = prev.map(section => ({
+          ...section,
+          items: section.items.map(conv => {
+            if (conv._id === updatedConversation._id) {
+              console.log('🔄 [CONVERSATION-UPDATED] Updating conversation in sidebar');
+              return {
+                ...conv,
+                ...updatedConversation,
+                lastMessage: updatedConversation.lastMessage,
+                updatedAt: updatedConversation.updatedAt || new Date().toISOString()
+              };
+            }
+            return conv;
+          }),
+          _lastUpdated: Date.now() // Trigger re-render
+        }));
+        
+        console.log('🔄 [CONVERSATION-UPDATED] Updated sidebar sections');
+        allConversationsRef.current = newSections;
+        return newSections;
+      });
+    });
+
     chatSocket.on('conversation:deleted', ({ conversationId, deletedBy, conversationName, conversationType }) => {
       console.log('🔥 [CONVERSATION-DELETED] Event received!');
       console.log('🔥 [CONVERSATION-DELETED] Data:', { conversationId, deletedBy, conversationName, conversationType });
@@ -1774,6 +1804,7 @@ export default function MessagesPage() {
       chatSocket.off('conversation:adminAdded');
       chatSocket.off('conversation:adminRemoved');
       chatSocket.off('conversation:created');
+      chatSocket.off('conversation:updated');
       chatSocket.off('conversation:deleted');
     };
   }, [chatSocket.socket, user.id]);
