@@ -396,35 +396,48 @@ function MessageBubble({
     const fileSize = formatFileSize(msg.file.size || 0);
     const fileUrl = constructFileUrl(msg.file);
     
-    // Unified file display - no previews, just clean file card
+    // Enhanced file display with modern design
     return (
-      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 max-w-sm">
-        <div className="flex items-center space-x-3 flex-1 min-w-0">
-          <div className="text-2xl flex-shrink-0">{fileIcon}</div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900 truncate">{msg.file.name}</p>
-            <p className="text-xs text-gray-500">{fileSize}</p>
+      <div className="max-w-sm">
+        <div className="flex items-center justify-between p-4 bg-gradient-to-br from-white/90 via-blue-50/60 to-purple-50/60 backdrop-blur-sm rounded-2xl border border-white/40 shadow-xl hover:shadow-2xl transition-all duration-300 group">
+          <div className="flex items-center space-x-4 flex-1 min-w-0">
+            <div className="relative">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                <span className="text-2xl">{fileIcon}</span>
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center shadow-md">
+                <FileText className="h-2.5 w-2.5 text-white" />
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-primary-800 truncate leading-tight">{msg.file.name}</p>
+              <p className="text-xs text-secondary-500 font-medium mt-0.5">{fileSize}</p>
+              <div className="flex items-center space-x-1 mt-1">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-green-600 font-medium">Ready</span>
+              </div>
+            </div>
           </div>
+          <button
+            onClick={() => {
+              if (fileUrl) {
+                downloadFile(fileUrl, msg.file.name, msg.file.type);
+              } else {
+                // Fallback download method
+                const token = localStorage.getItem('token');
+                const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
+                const cleanFilename = msg.file.url?.split('/').pop()?.split('?')[0] || msg.file.name;
+                const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
+                const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
+                window.open(urlWithToken, '_blank');
+              }
+            }}
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl text-sm font-bold flex-shrink-0 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105 group-hover:scale-105"
+          >
+            <Download size={16} />
+            <span>Download</span>
+          </button>
         </div>
-        <button
-          onClick={() => {
-            if (fileUrl) {
-              downloadFile(fileUrl, msg.file.name, msg.file.type);
-            } else {
-              // Fallback download method
-              const token = localStorage.getItem('token');
-              const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8181';
-              const cleanFilename = msg.file.url?.split('/').pop()?.split('?')[0] || msg.file.name;
-              const directUrl = `${baseUrl}/uploads/messages/${cleanFilename}`;
-              const urlWithToken = token ? `${directUrl}?token=${encodeURIComponent(token)}` : directUrl;
-              window.open(urlWithToken, '_blank');
-            }
-          }}
-          className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm flex-shrink-0 transition-colors duration-200 flex items-center space-x-1"
-        >
-          <Download size={14} />
-          <span>Download</span>
-        </button>
       </div>
     );
   };

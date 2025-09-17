@@ -297,25 +297,32 @@ export default function ChatInput({
     >
       {/* Drag overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 bg-blue-500/20 border-2 border-dashed border-blue-400 rounded-lg flex items-center justify-center z-10 backdrop-blur-sm">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-2 bg-blue-500 rounded-full flex items-center justify-center">
-              <Paperclip className="h-8 w-8 text-white" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 via-purple-500/20 to-pink-500/30 border-2 border-dashed border-blue-400/80 rounded-2xl flex items-center justify-center z-10 backdrop-blur-2xl animate-in fade-in duration-300">
+          <div className="text-center p-8">
+            <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl animate-pulse">
+              <Paperclip className="h-10 w-10 text-white" />
             </div>
-            <p className="text-blue-700 font-medium text-lg">Drop files here</p>
-            <p className="text-blue-600 text-sm">Release to upload</p>
+            <p className="text-blue-800 font-bold text-xl mb-2">Drop files here</p>
+            <p className="text-blue-700 font-medium">Release to upload • Max 50MB</p>
+            <div className="flex items-center justify-center space-x-2 mt-4">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
           </div>
         </div>
       )}
 
       {/* File error message */}
       {fileError && (
-        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-gradient-to-r from-red-50 to-pink-50 border border-red-200 text-red-700 rounded-xl shadow-sm flex items-center space-x-2">
-          <AlertCircle className="h-4 w-4" />
-          <span className="text-sm font-medium">{fileError}</span>
+        <div className="mb-3 sm:mb-4 p-4 sm:p-5 bg-gradient-to-r from-red-50/90 to-pink-50/90 backdrop-blur-sm border border-red-200/60 text-red-700 rounded-2xl shadow-xl flex items-center space-x-3 animate-in slide-in-from-top-2 duration-300">
+          <div className="p-2 rounded-xl bg-red-100">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+          </div>
+          <span className="text-sm font-bold flex-1">{fileError}</span>
           <button 
             onClick={() => setFileError(null)} 
-            className="ml-auto text-red-500 hover:text-red-700"
+            className="p-1.5 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 transition-all duration-200 hover:scale-110"
           >
             <X className="h-4 w-4" />
           </button>
@@ -324,33 +331,37 @@ export default function ChatInput({
 
       {/* File preview */}
       {uploadFile && (
-        <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-gray-200">
+        <div className="mb-3 sm:mb-4 p-4 sm:p-5 bg-gradient-to-br from-blue-50/90 via-white/80 to-purple-50/90 backdrop-blur-sm rounded-2xl border border-white/40 shadow-xl animate-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-4">
               {uploadFile.type && uploadFile.type.startsWith('image/') ? (
                 <div className="relative">
                   <img 
                     src={URL.createObjectURL(uploadFile)} 
                     alt={uploadFile.name} 
-                    className="h-12 w-12 rounded-lg object-cover shadow-md" 
+                    className="h-16 w-16 rounded-2xl object-cover shadow-xl border-2 border-white/60" 
                   />
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-xs text-white font-bold">IMG</span>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center shadow-lg">
+                    <ImageIcon className="h-3 w-3 text-white" />
                   </div>
                 </div>
               ) : (
-                <div className="h-12 w-12 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center shadow-md">
-                  <span className="text-2xl">{getFileIcon('other', uploadFile.type)}</span>
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-xl border-2 border-white/60">
+                  <span className="text-3xl">{getFileIcon('other', uploadFile.type)}</span>
                 </div>
               )}
               <div>
-                <p className="text-sm font-semibold text-gray-900 truncate max-w-xs">{uploadFile.name}</p>
-                <p className="text-xs text-gray-500">{formatFileSize(uploadFile.size)}</p>
+                <p className="text-base font-bold text-primary-800 truncate max-w-xs mb-1">{uploadFile.name}</p>
+                <p className="text-sm text-secondary-500 font-medium">{formatFileSize(uploadFile.size)}</p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-green-600 font-bold">Ready to send</span>
+                </div>
               </div>
             </div>
             <button 
               onClick={onRemoveFile} 
-              className="p-2 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all duration-200"
+              className="p-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-110 disabled:opacity-50"
               disabled={isSending}
             >
               <X className="h-4 w-4" />
@@ -359,14 +370,17 @@ export default function ChatInput({
           
           {/* Upload progress bar */}
           {isSending && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                <span>Uploading...</span>
-                <span>{uploadProgress}%</span>
+            <div className="mt-4 p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-white/40">
+              <div className="flex items-center justify-between text-sm text-primary-800 mb-3">
+                <div className="flex items-center space-x-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <span className="font-bold">Uploading...</span>
+                </div>
+                <span className="font-bold text-blue-600">{uploadProgress}%</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200/60 rounded-full h-3 overflow-hidden">
                 <div 
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 h-3 rounded-full transition-all duration-500 shadow-inner animate-pulse"
                   style={{ width: `${uploadProgress}%` }}
                 ></div>
               </div>
@@ -394,37 +408,61 @@ export default function ChatInput({
           
           {/* Attachment menu */}
           {showAttachmentMenu && (
-            <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl py-2 min-w-[180px] z-50">
+            <div className="absolute bottom-full left-0 mb-3 bg-white/95 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl py-3 min-w-[200px] z-50 animate-in slide-in-from-bottom-2 duration-300">
+              <div className="px-4 py-2 border-b border-gray-100">
+                <p className="text-xs font-bold text-primary-800 uppercase tracking-wider">Attach Files</p>
+              </div>
+              
               <button
                 onClick={() => handleAttachmentSelect('image')}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+                className="w-full px-4 py-3 text-left text-sm text-primary-800 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 flex items-center space-x-3 transition-all duration-200 font-medium hover:shadow-sm"
               >
-                <ImageIcon className="h-4 w-4 text-green-500" />
-                <span>Photos</span>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500">
+                  <ImageIcon className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold">Photos</span>
+                  <p className="text-xs text-secondary-500">JPEG, PNG, GIF, WebP</p>
+                </div>
               </button>
               
               <button
                 onClick={() => handleAttachmentSelect('video')}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+                className="w-full px-4 py-3 text-left text-sm text-primary-800 hover:bg-gradient-to-r hover:from-red-50 hover:to-pink-50 flex items-center space-x-3 transition-all duration-200 font-medium hover:shadow-sm"
               >
-                <Camera className="h-4 w-4 text-red-500" />
-                <span>Videos</span>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-red-500 to-pink-500">
+                  <Camera className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold">Videos</span>
+                  <p className="text-xs text-secondary-500">MP4, WebM, AVI, MOV</p>
+                </div>
               </button>
               
               <button
                 onClick={() => handleAttachmentSelect('document')}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+                className="w-full px-4 py-3 text-left text-sm text-primary-800 hover:bg-gradient-to-r hover:from-blue-50 hover:to-cyan-50 flex items-center space-x-3 transition-all duration-200 font-medium hover:shadow-sm"
               >
-                <FileText className="h-4 w-4 text-blue-500" />
-                <span>Documents</span>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
+                  <FileText className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold">Documents</span>
+                  <p className="text-xs text-secondary-500">PDF, Word, Excel, PowerPoint</p>
+                </div>
               </button>
               
               <button
                 onClick={() => handleAttachmentSelect('any')}
-                className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-3 transition-colors"
+                className="w-full px-4 py-3 text-left text-sm text-primary-800 hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 flex items-center space-x-3 transition-all duration-200 font-medium hover:shadow-sm"
               >
-                <Paperclip className="h-4 w-4 text-gray-500" />
-                <span>Any File</span>
+                <div className="p-2 rounded-xl bg-gradient-to-br from-gray-500 to-blue-500">
+                  <Paperclip className="h-4 w-4 text-white" />
+                </div>
+                <div>
+                  <span className="font-bold">Any File</span>
+                  <p className="text-xs text-secondary-500">All supported formats</p>
+                </div>
               </button>
             </div>
           )}
